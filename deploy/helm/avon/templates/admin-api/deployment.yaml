@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "avon.adminApi.fullname" . }}
+  labels:
+    {{- include "avon.adminApi.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.adminApi.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "avon.adminApi.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.adminApi.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "avon.adminApi.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "avon.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.adminApi.podSecurityContext | nindent 8 }}
+      containers:
+        - name: admin-api
+          securityContext:
+            {{- toYaml .Values.adminApi.securityContext | nindent 12 }}
+          image: {{ include "avon.image" (dict "global" .Values.global "image" .Values.adminApi.image) }}
+          imagePullPolicy: {{ .Values.adminApi.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.adminApi.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "avon.adminApi.fullname" . }}-config
+            - secretRef:
+                name: {{ include "avon.fullname" . }}-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.adminApi.resources | nindent 12 }}
+      {{- with .Values.adminApi.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.adminApi.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.adminApi.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

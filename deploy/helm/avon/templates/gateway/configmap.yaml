@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "avon.gateway.fullname" . }}-config
+  labels:
+    {{- include "avon.gateway.labels" . | nindent 4 }}
+data:
+  RUST_LOG: "info"
+  GATEWAY_PORT: "{{ .Values.gateway.service.port }}"
+  AUTH_SERVICE_URL: "{{ include "avon.auth.fullname" . }}:{{ .Values.auth.service.port }}"
+  CA_SERVICE_URL: "{{ include "avon.ca.fullname" . }}:{{ .Values.ca.service.port }}"
+  PULSE_SERVICE_URL: "{{ include "avon.pulse.fullname" . }}:{{ .Values.pulse.service.port }}"

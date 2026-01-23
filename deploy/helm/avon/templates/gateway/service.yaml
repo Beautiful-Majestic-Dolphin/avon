@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "avon.gateway.fullname" . }}
+  labels:
+    {{- include "avon.gateway.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.gateway.service.type }}
+  ports:
+    - port: {{ .Values.gateway.service.port }}
+      targetPort: udp
+      protocol: {{ .Values.gateway.service.protocol }}
+      name: udp
+  selector:
+    {{- include "avon.gateway.selectorLabels" . | nindent 4 }}

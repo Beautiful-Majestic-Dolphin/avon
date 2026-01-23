@@ -1,0 +1,83 @@
+AVON - Authenticated Vector Ownership Network
+=============================================
+
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+SERVICES DEPLOYED:
+------------------
+
+1. Gateway (UDP)
+   {{- if eq .Values.gateway.service.type "LoadBalancer" }}
+   External IP: Run `kubectl get svc {{ include "avon.gateway.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'`
+   {{- end }}
+   Port: {{ .Values.gateway.service.port }}/UDP
+
+2. Auth Service (gRPC)
+   Internal: {{ include "avon.auth.fullname" . }}:{{ .Values.auth.service.port }}
+
+3. Certificate Authority (gRPC)
+   Internal: {{ include "avon.ca.fullname" . }}:{{ .Values.ca.service.port }}
+
+4. Pulse Manager (gRPC)
+   Internal: {{ include "avon.pulse.fullname" . }}:{{ .Values.pulse.service.port }}
+
+5. Policy Engine (HTTP)
+   Internal: {{ include "avon.policyEngine.fullname" . }}:{{ .Values.policyEngine.service.port }}
+
+6. Admin API (HTTP)
+   Internal: {{ include "avon.adminApi.fullname" . }}:{{ .Values.adminApi.service.port }}
+   {{- if .Values.adminApi.ingress.enabled }}
+   External: 
+   {{- range .Values.adminApi.ingress.hosts }}
+     - http{{ if $.Values.adminApi.ingress.tls }}s{{ end }}://{{ .host }}
+   {{- end }}
+   {{- end }}
+
+GETTING STARTED:
+----------------
+
+1. Wait for all pods to be ready:
+   kubectl get pods -n {{ .Release.Namespace }} -l "app.kubernetes.io/instance={{ .Release.Name }}" -w
+
+2. Check service status:
+   kubectl get svc -n {{ .Release.Namespace }} -l "app.kubernetes.io/instance={{ .Release.Name }}"
+
+3. View logs for a specific service:
+   kubectl logs -n {{ .Release.Namespace }} -l "app.kubernetes.io/component=gateway" -f
+   kubectl logs -n {{ .Release.Namespace }} -l "app.kubernetes.io/component=auth" -f
+   kubectl logs -n {{ .Release.Namespace }} -l "app.kubernetes.io/component=admin-api" -f
+
+CONFIGURATION:
+--------------
+
+To customize your installation, create a values file and upgrade:
+
+  helm upgrade {{ .Release.Name }} avon/avon -f my-values.yaml
+
+For more information, visit: https://github.com/avon/avon
+
+{{- if .Values.postgresql.enabled }}
+
+DATABASE:
+---------
+PostgreSQL is deployed as part of this release.
+Connection: {{ include "avon.postgresql.host" . }}:5432
+{{- end }}
+
+{{- if .Values.redis.enabled }}
+
+CACHE:
+------
+Redis is deployed as part of this release.
+Connection: {{ include "avon.redis.host" . }}:6379
+{{- end }}
+
+SECURITY NOTES:
+---------------
+- Ensure you have set strong passwords for PostgreSQL and Redis in production
+- Update the JWT_SECRET in the secrets configuration
+- Consider enabling TLS for the Admin API ingress
+- Review and customize NetworkPolicy rules for your environment

@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "avon.ca.fullname" . }}
+  labels:
+    {{- include "avon.ca.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "avon.ca.fullname" . }}
+  replicas: {{ .Values.ca.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "avon.ca.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.ca.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "avon.ca.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "avon.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.ca.podSecurityContext | nindent 8 }}
+      containers:
+        - name: ca
+          securityContext:
+            {{- toYaml .Values.ca.securityContext | nindent 12 }}
+          image: {{ include "avon.image" (dict "global" .Values.global "image" .Values.ca.image) }}
+          imagePullPolicy: {{ .Values.ca.image.pullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.ca.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "avon.ca.fullname" . }}-config
+            - secretRef:
+                name: {{ include "avon.fullname" . }}-secrets
+          {{- if .Values.ca.persistence.enabled }}
+          volumeMounts:
+            - name: ca-data
+              mountPath: /data
+          {{- end }}
+          livenessProbe:
+            exec:
+              command:
+                - /usr/local/bin/avon-ca
+                - --health-check
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - /usr/local/bin/avon-ca
+                - --health-check
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.ca.resources | nindent 12 }}
+      {{- with .Values.ca.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ca.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ca.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if .Values.ca.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: ca-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if or .Values.ca.persistence.storageClass .Values.global.storageClass }}
+        storageClassName: {{ .Values.ca.persistence.storageClass | default .Values.global.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.ca.persistence.size }}
+  {{- end }}
