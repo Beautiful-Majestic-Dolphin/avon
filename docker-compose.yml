@@ -1,0 +1,161 @@
+services:
+  # Infrastructure Services
+  postgres:
+    image: postgres:16-bookworm
+    container_name: avon-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-avon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-avon_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-avon}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - avon-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-avon}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-bookworm
+    container_name: avon-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - avon-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Rust Control Plane Services
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.gateway
+    container_name: avon-gateway
+    environment:
+      RUST_LOG: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    ports:
+      - "4600:4600/udp"
+    networks:
+      - avon-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  auth:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.auth
+    container_name: avon-auth
+    environment:
+      RUST_LOG: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
+    ports:
+      - "50051:50051"
+    networks:
+      - avon-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ca:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.ca
+    container_name: avon-ca
+    environment:
+      RUST_LOG: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    ports:
+      - "50052:50052"
+    networks:
+      - avon-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  pulse:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.pulse
+    container_name: avon-pulse
+    environment:
+      RUST_LOG: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    ports:
+      - "50053:50053"
+    networks:
+      - avon-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Python Services
+  policy-engine:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.policy-engine
+    container_name: avon-policy-engine
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    ports:
+      - "8081:8081"
+    networks:
+      - avon-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  admin-api:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.admin-api
+    container_name: avon-admin-api
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
+    ports:
+      - "8080:8080"
+    networks:
+      - avon-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+networks:
+  avon-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

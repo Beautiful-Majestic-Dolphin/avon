@@ -1,0 +1,36 @@
+# AVON Policy Engine Service Dockerfile
+
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -u 1000 -m avon
+
+# Copy project files
+COPY services/policy-engine/pyproject.toml services/policy-engine/README.md ./
+COPY services/policy-engine/src/ ./src/
+
+# Install dependencies
+RUN pip install --no-cache-dir -e .
+
+# Set ownership
+RUN chown -R avon:avon /app
+
+# Switch to non-root user
+USER avon
+
+# Expose service port
+EXPOSE 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import policy_engine; print('healthy')" || exit 1
+
+# Run the policy engine
+CMD ["python", "-m", "policy_engine.main"]
