@@ -11,6 +11,7 @@
 //! - **Signature**: Ed25519 digital signatures
 //! - **PQC**: Post-quantum cryptography (CRYSTALS-Kyber KEM, CRYSTALS-Dilithium)
 //! - **Hybrid**: Hybrid classical+PQC cryptography (X25519+Kyber, Ed25519+Dilithium)
+//! - **Token**: Rotating authentication tokens for device identity
 //!
 //! # Example
 //!
@@ -39,6 +40,7 @@ pub mod kdf;
 pub mod pqc;
 pub mod random;
 pub mod signature;
+pub mod token;
 
 pub use error::CryptoError;
 
