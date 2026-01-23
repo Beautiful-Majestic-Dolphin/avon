@@ -33,6 +33,9 @@ zeroize = { version = "1.7", features = ["derive"] }
 hex = "0.4"
 dashmap = "5.5"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 tss-esapi = { version = "7.5", optional = true }
 
