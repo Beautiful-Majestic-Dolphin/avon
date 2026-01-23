@@ -1,0 +1,84 @@
+syntax = "proto3";
+package avon.v1;
+
+import "avon/v1/control.proto";
+
+service PulseService {
+  rpc SchedulePulse(SchedulePulseRequest) returns (SchedulePulseResponse);
+  rpc RecordPulse(RecordPulseRequest) returns (RecordPulseResult);
+  rpc GetDeviceLiveness(LivenessRequest) returns (LivenessResponse);
+  rpc TriggerRotation(RotationRequest) returns (RotationResponse);
+}
+
+message SchedulePulseRequest {
+  bytes device_id = 1;
+  int64 scheduled_at = 2;
+}
+
+message SchedulePulseResponse {
+  bool success = 1;
+  bytes server_nonce = 2;
+  int64 pulse_id = 3;
+  string error_message = 4;
+}
+
+message RecordPulseRequest {
+  bytes device_id = 1;
+  int64 pulse_id = 2;
+  bytes client_nonce = 3;
+  bytes auth_tag = 4;
+  DevicePosture posture = 5;
+}
+
+message RecordPulseResult {
+  bool success = 1;
+  bool rotation_required = 2;
+  bytes new_server_nonce = 3;
+  string error_message = 4;
+}
+
+message LivenessRequest {
+  bytes device_id = 1;
+}
+
+message LivenessResponse {
+  LivenessStatus status = 1;
+  int64 last_seen = 2;
+  int64 last_pulse_at = 3;
+  int32 missed_pulses = 4;
+}
+
+enum LivenessStatus {
+  LIVENESS_STATUS_UNKNOWN = 0;
+  LIVENESS_STATUS_ONLINE = 1;
+  LIVENESS_STATUS_STALE = 2;
+  LIVENESS_STATUS_OFFLINE = 3;
+}
+
+message RotationRequest {
+  bytes device_id = 1;
+  bool force = 2;
+}
+
+message RotationResponse {
+  bool success = 1;
+  bytes server_nonce = 2;
+  int64 rotation_id = 3;
+  string error_message = 4;
+}
+
+message OutboundPulse {
+  bytes device_id = 1;
+  bytes server_nonce = 2;
+  int64 pulse_id = 3;
+  int64 timestamp = 4;
+  bool rotation_requested = 5;
+}
+
+message PulseAck {
+  bytes device_id = 1;
+  int64 pulse_id = 2;
+  bytes client_nonce = 3;
+  bytes auth_tag = 4;
+  DevicePosture posture = 5;
+}
