@@ -4,6 +4,7 @@
 //! including:
 //!
 //! - **AEAD**: Authenticated encryption using AES-256-GCM
+//! - **ECDH**: X25519 Diffie-Hellman key exchange
 //! - **KDF**: Key derivation using HKDF with SHA-256 and SHA-384
 //! - **HMAC**: Message authentication using HMAC-SHA256
 //! - **Random**: Cryptographically secure random number generation
@@ -27,6 +28,7 @@
 //! ```
 
 pub mod aead;
+pub mod ecdh;
 pub mod error;
 pub mod hmac;
 pub mod kdf;
