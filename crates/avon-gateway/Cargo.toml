@@ -10,6 +10,10 @@ description = "AVON UDP Gateway Service"
 name = "avon-gateway"
 path = "src/main.rs"
 
+[lib]
+name = "avon_gateway"
+path = "src/lib.rs"
+
 [dependencies]
 tokio.workspace = true
 serde.workspace = true
@@ -20,3 +24,11 @@ anyhow.workspace = true
 avon-crypto.workspace = true
 avon-protocol.workspace = true
 avon-common.workspace = true
+metrics = "0.22"
+metrics-exporter-prometheus = "0.13"
+dashmap = "5.5"
+governor = "0.6"
+tonic = "0.11"
+config = "0.14"
+clap = { version = "4.4", features = ["derive"] }
+prost.workspace = true
