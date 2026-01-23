@@ -1,0 +1,12 @@
+[package]
+name = "avon-protocol"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Wire protocol definitions for AVON"
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+avon-crypto.workspace = true

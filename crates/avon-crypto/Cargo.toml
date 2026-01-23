@@ -1,0 +1,11 @@
+[package]
+name = "avon-crypto"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Cryptographic primitives for AVON"
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true

@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/avon-crypto",
+    "crates/avon-protocol",
+    "crates/avon-common",
+    "crates/avon-agent",
+    "crates/avon-gateway",
+    "crates/avon-auth",
+    "crates/avon-ca",
+    "crates/avon-pulse",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+authors = ["AVON Team"]
+license = "MIT"
+
+[workspace.dependencies]
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Internal crates
+avon-crypto = { path = "crates/avon-crypto" }
+avon-protocol = { path = "crates/avon-protocol" }
+avon-common = { path = "crates/avon-common" }

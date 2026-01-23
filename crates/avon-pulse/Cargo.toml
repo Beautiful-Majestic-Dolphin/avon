@@ -1,0 +1,22 @@
+[package]
+name = "avon-pulse"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "AVON Pulse Manager Service"
+
+[[bin]]
+name = "avon-pulse"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+avon-crypto.workspace = true
+avon-protocol.workspace = true
+avon-common.workspace = true
