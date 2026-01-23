@@ -9,6 +9,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod agent;
 mod config;
+mod control;
 mod identity;
 
 use agent::AvonAgent;
