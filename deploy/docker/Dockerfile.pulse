@@ -4,11 +4,17 @@
 # Stage 1: Build
 FROM rust:1.75-bookworm AS builder
 
+# Install protobuf compiler for proto compilation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 
 # Copy workspace files
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
+COPY proto/ proto/
 
 # Build release binary
 RUN cargo build --release --package avon-pulse
@@ -19,6 +25,7 @@ FROM debian:bookworm-slim
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -33,12 +40,16 @@ RUN chown avon:avon /usr/local/bin/avon-pulse
 # Switch to non-root user
 USER avon
 
+WORKDIR /app
+
 # Expose gRPC port
 EXPOSE 50053
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD /usr/local/bin/avon-pulse --health-check || exit 1
+# Environment variables
+ENV PULSE_INTERVAL_SECS=30
+ENV ROTATION_INTERVAL_SECS=3600
+ENV STALE_THRESHOLD_SECS=90
+ENV OFFLINE_THRESHOLD_SECS=300
 
 # Run the pulse service
 ENTRYPOINT ["/usr/local/bin/avon-pulse"]
