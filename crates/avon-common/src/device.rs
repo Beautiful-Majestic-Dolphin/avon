@@ -36,10 +36,32 @@ impl DeviceId {
         Self(Uuid::from_bytes(*bytes))
     }
 
+    /// Creates a DeviceId from a byte slice, returning an error if the slice is not 16 bytes.
+    pub fn try_from_slice(bytes: &[u8]) -> Result<Self, &'static str> {
+        if bytes.len() != 16 {
+            return Err("DeviceId must be exactly 16 bytes");
+        }
+        let mut arr = [0u8; 16];
+        arr.copy_from_slice(bytes);
+        Ok(Self::from_bytes(&arr))
+    }
+
+    /// Creates a DeviceId from a UUID.
+    #[must_use]
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
+
     /// Returns the DeviceId as a 16-byte array.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8; 16] {
         self.0.as_bytes()
+    }
+
+    /// Returns the underlying UUID.
+    #[must_use]
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
     }
 }
 

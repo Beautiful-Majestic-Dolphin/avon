@@ -5,15 +5,18 @@ fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=../../proto/avon/v1/common.proto");
     println!("cargo:rerun-if-changed=../../proto/avon/v1/control.proto");
     println!("cargo:rerun-if-changed=../../proto/avon/v1/tunnel.proto");
+    println!("cargo:rerun-if-changed=../../proto/avon/v1/auth_service.proto");
 
-    // Compile the proto files
-    prost_build::Config::new()
+    // Use tonic_build to compile all proto files (it includes prost internally)
+    // This generates both message types and gRPC service code
+    tonic_build::configure()
         .out_dir("src/generated")
-        .compile_protos(
+        .compile(
             &[
                 "../../proto/avon/v1/common.proto",
                 "../../proto/avon/v1/control.proto",
                 "../../proto/avon/v1/tunnel.proto",
+                "../../proto/avon/v1/auth_service.proto",
             ],
             &["../../proto"],
         )?;
