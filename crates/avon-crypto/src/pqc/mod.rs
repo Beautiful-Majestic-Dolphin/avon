@@ -7,6 +7,7 @@
 //! # Available Algorithms
 //!
 //! - **Kyber**: CRYSTALS-Kyber Key Encapsulation Mechanism (KEM)
+//! - **Dilithium**: CRYSTALS-Dilithium Digital Signature Algorithm
 //!
 //! # Example
 //!
@@ -26,8 +27,13 @@
 //! assert_eq!(shared_secret_sender.as_bytes(), shared_secret_receiver.as_bytes());
 //! ```
 
+pub mod dilithium;
 pub mod kyber;
 
+pub use dilithium::{
+    DilithiumKeyPair, DilithiumSignature, DilithiumSigningKey, DilithiumVerifyingKey,
+    DILITHIUM3_PUBLIC_KEY_BYTES, DILITHIUM3_SECRET_KEY_BYTES, DILITHIUM3_SIGNATURE_BYTES,
+};
 pub use kyber::{
     KyberCiphertext, KyberKeyPair, KyberPublicKey, KyberSecretKey, KyberSharedSecret,
     KYBER768_CIPHERTEXT_BYTES, KYBER768_PUBLIC_KEY_BYTES, KYBER768_SECRET_KEY_BYTES,
