@@ -9,6 +9,7 @@
 //! - **HMAC**: Message authentication using HMAC-SHA256
 //! - **Random**: Cryptographically secure random number generation
 //! - **Signature**: Ed25519 digital signatures
+//! - **PQC**: Post-quantum cryptography (CRYSTALS-Kyber KEM)
 //!
 //! # Example
 //!
@@ -33,6 +34,7 @@ pub mod ecdh;
 pub mod error;
 pub mod hmac;
 pub mod kdf;
+pub mod pqc;
 pub mod random;
 pub mod signature;
 
