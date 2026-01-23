@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package avon.v1;
+
+import "avon/v1/control.proto";
+
+service PolicyService {
+  rpc EvaluatePolicy(EvaluatePolicyRequest) returns (EvaluatePolicyResponse);
+  rpc GetDevicePods(GetDevicePodsRequest) returns (GetDevicePodsResponse);
+  rpc InvalidateCache(InvalidateCacheRequest) returns (InvalidateCacheResponse);
+}
+
+message EvaluatePolicyRequest {
+  bytes source_device_id = 1;
+  bytes destination_device_id = 2;
+  DevicePosture source_posture = 3;
+  DevicePosture destination_posture = 4;
+  map<string, string> context = 5;
+}
+
+message EvaluatePolicyResponse {
+  PolicyAction action = 1;
+  string policy_id = 2;
+  string reason = 3;
+  double evaluation_time_ms = 4;
+  int32 matched_policies_count = 5;
+  repeated string source_pods = 6;
+  repeated string destination_pods = 7;
+}
+
+enum PolicyAction {
+  POLICY_ACTION_UNSPECIFIED = 0;
+  POLICY_ACTION_ALLOW = 1;
+  POLICY_ACTION_DENY = 2;
+}
+
+message GetDevicePodsRequest {
+  bytes device_id = 1;
+  bool expand_hierarchy = 2;
+}
+
+message GetDevicePodsResponse {
+  repeated string pod_ids = 1;
+}
+
+message InvalidateCacheRequest {
+  oneof target {
+    string device_id = 1;
+    string pod_id = 2;
+    bool all = 3;
+  }
+}
+
+message InvalidateCacheResponse {
+  bool success = 1;
+  string message = 2;
+}
