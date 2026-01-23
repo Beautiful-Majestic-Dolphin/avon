@@ -12,6 +12,8 @@
 //! - **PQC**: Post-quantum cryptography (CRYSTALS-Kyber KEM, CRYSTALS-Dilithium)
 //! - **Hybrid**: Hybrid classical+PQC cryptography (X25519+Kyber, Ed25519+Dilithium)
 //! - **Token**: Rotating authentication tokens for device identity
+//! - **Tunnel**: High-performance tunnel encryption with atomic nonce counter
+//! - **Session**: Session key derivation for tunnel establishment
 //!
 //! # Example
 //!
@@ -39,8 +41,10 @@ pub mod hybrid;
 pub mod kdf;
 pub mod pqc;
 pub mod random;
+pub mod session;
 pub mod signature;
 pub mod token;
+pub mod tunnel;
 
 pub use error::CryptoError;
 
