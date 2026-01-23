@@ -10,6 +10,10 @@ description = "AVON Certificate Authority"
 name = "avon-ca"
 path = "src/main.rs"
 
+[lib]
+name = "avon_ca"
+path = "src/lib.rs"
+
 [dependencies]
 tokio.workspace = true
 serde.workspace = true
@@ -20,3 +24,37 @@ anyhow.workspace = true
 avon-crypto.workspace = true
 avon-protocol.workspace = true
 avon-common.workspace = true
+prost.workspace = true
+
+# gRPC
+tonic = "0.11"
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chrono"] }
+
+# Certificate handling
+rcgen = "0.13"
+x509-parser = "0.16"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+time = "0.3"
+num-traits = "0.2"
+
+# UUID
+uuid = { version = "1.7", features = ["v4", "serde"] }
+
+# Metrics and config
+metrics = "0.22"
+metrics-exporter-prometheus = "0.13"
+config = "0.14"
+clap = { version = "4.4", features = ["derive", "env"] }
+
+# Concurrent data structures
+dashmap = "5.5"
+
+# JSON serialization
+serde_json = "1.0"
+
+# Async streams
+futures = "0.3"
