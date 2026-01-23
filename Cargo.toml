@@ -26,6 +26,9 @@ thiserror = "1.0"
 anyhow = "1.0"
 # Pin base64ct to avoid edition2024 requirement
 base64ct = "1.6"
+# Protocol Buffers
+prost = "0.12"
+prost-types = "0.12"
 
 # Internal crates
 avon-crypto = { path = "crates/avon-crypto" }
