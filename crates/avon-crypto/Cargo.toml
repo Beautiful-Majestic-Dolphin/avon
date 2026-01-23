@@ -9,3 +9,13 @@ description = "Cryptographic primitives for AVON"
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
+ring = "0.17"
+aes-gcm = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
+sha2 = "0.10"
+rand = "0.8"
+zeroize = { version = "1.7", features = ["derive"] }
+
+[dev-dependencies]
+hex = "0.4"
