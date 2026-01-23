@@ -1,0 +1,83 @@
+syntax = "proto3";
+package avon.v1;
+
+import "avon/v1/common.proto";
+
+service CaService {
+  rpc IssueCertificate(IssueCertRequest) returns (IssueCertResponse);
+  rpc VerifyCertificate(VerifyCertRequest) returns (VerifyCertResponse);
+  rpc GetOcspResponse(OcspRequest) returns (OcspResponse);
+  rpc RevokeCertificate(RevokeCertRequest) returns (RevokeCertResponse);
+  rpc GetCaCertificates(GetCaCertsRequest) returns (GetCaCertsResponse);
+}
+
+message IssueCertRequest {
+  bytes device_id = 1;
+  bytes public_key_classical = 2;
+  bytes public_key_pqc = 3;
+  int64 lifetime_secs = 4;
+}
+
+message IssueCertResponse {
+  bool success = 1;
+  bytes certificate_der = 2;
+  bytes signature_classical = 3;
+  bytes signature_pqc = 4;
+  bytes ocsp_staple = 5;
+  int64 expires_at = 6;
+  uint64 serial_number = 7;
+  string error_message = 8;
+}
+
+message VerifyCertRequest {
+  bytes certificate_der = 1;
+  bool check_revocation = 2;
+}
+
+message VerifyCertResponse {
+  bool valid = 1;
+  bytes device_id = 2;
+  int64 not_before = 3;
+  int64 not_after = 4;
+  uint64 serial_number = 5;
+  string error_message = 6;
+}
+
+message OcspRequest {
+  uint64 serial_number = 1;
+}
+
+message OcspResponse {
+  bool found = 1;
+  bytes ocsp_response = 2;
+  int64 this_update = 3;
+  int64 next_update = 4;
+  CertificateStatus status = 5;
+}
+
+enum CertificateStatus {
+  CERTIFICATE_STATUS_UNKNOWN = 0;
+  CERTIFICATE_STATUS_GOOD = 1;
+  CERTIFICATE_STATUS_REVOKED = 2;
+  CERTIFICATE_STATUS_EXPIRED = 3;
+}
+
+message RevokeCertRequest {
+  uint64 serial_number = 1;
+  string reason = 2;
+}
+
+message RevokeCertResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message GetCaCertsRequest {
+}
+
+message GetCaCertsResponse {
+  bytes root_certificate_der = 1;
+  bytes intermediate_certificate_der = 2;
+  bytes root_public_key = 3;
+  bytes intermediate_public_key = 4;
+}
