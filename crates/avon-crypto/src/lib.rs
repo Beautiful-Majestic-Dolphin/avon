@@ -8,6 +8,7 @@
 //! - **KDF**: Key derivation using HKDF with SHA-256 and SHA-384
 //! - **HMAC**: Message authentication using HMAC-SHA256
 //! - **Random**: Cryptographically secure random number generation
+//! - **Signature**: Ed25519 digital signatures
 //!
 //! # Example
 //!
@@ -33,6 +34,7 @@ pub mod error;
 pub mod hmac;
 pub mod kdf;
 pub mod random;
+pub mod signature;
 
 pub use error::CryptoError;
 
