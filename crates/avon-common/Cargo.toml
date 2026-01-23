@@ -1,0 +1,12 @@
+[package]
+name = "avon-common"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Shared types and utilities for AVON"
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
