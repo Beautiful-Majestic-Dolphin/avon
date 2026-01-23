@@ -408,3 +408,781 @@ pub struct TunnelConfirm {
     #[prost(bytes = "vec", tag = "1")]
     pub encrypted_verify: ::prost::alloc::vec::Vec<u8>,
 }
+/// VerifyDeviceRequest is sent to verify a device's authentication.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VerifyDeviceRequest {
+    /// The device's unique identifier.
+    #[prost(bytes = "vec", tag = "1")]
+    pub device_id: ::prost::alloc::vec::Vec<u8>,
+    /// The authentication tag computed by the device.
+    #[prost(bytes = "vec", tag = "2")]
+    pub auth_tag: ::prost::alloc::vec::Vec<u8>,
+    /// The data that was authenticated (used to verify the tag).
+    #[prost(bytes = "vec", tag = "3")]
+    pub authenticated_data: ::prost::alloc::vec::Vec<u8>,
+}
+/// VerifyDeviceResponse contains the result of device verification.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VerifyDeviceResponse {
+    /// Whether the authentication was valid.
+    #[prost(bool, tag = "1")]
+    pub valid: bool,
+    /// The device ID (echoed back for confirmation).
+    #[prost(bytes = "vec", tag = "2")]
+    pub device_id: ::prost::alloc::vec::Vec<u8>,
+    /// The current token sequence number.
+    #[prost(uint64, tag = "3")]
+    pub token_sequence: u64,
+    /// Error message if verification failed.
+    #[prost(string, tag = "4")]
+    pub error_message: ::prost::alloc::string::String,
+}
+/// EnrollDeviceRequest is sent to enroll a new device.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EnrollDeviceRequest {
+    /// The enrollment token (single-use, provided out-of-band).
+    #[prost(string, tag = "1")]
+    pub enrollment_token: ::prost::alloc::string::String,
+    /// The device's hardware fingerprint.
+    #[prost(bytes = "vec", tag = "2")]
+    pub hardware_fingerprint: ::prost::alloc::vec::Vec<u8>,
+    /// The device's hybrid public key for key exchange.
+    #[prost(message, optional, tag = "3")]
+    pub device_public_key: ::core::option::Option<HybridPublicKey>,
+    /// Human-readable device name.
+    #[prost(string, tag = "4")]
+    pub device_name: ::prost::alloc::string::String,
+}
+/// EnrollDeviceResponse contains the result of device enrollment.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EnrollDeviceResponse {
+    /// Whether enrollment was successful.
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+    /// The assigned device ID.
+    #[prost(bytes = "vec", tag = "2")]
+    pub device_id: ::prost::alloc::vec::Vec<u8>,
+    /// The initial authentication token.
+    #[prost(bytes = "vec", tag = "3")]
+    pub initial_token: ::prost::alloc::vec::Vec<u8>,
+    /// The server's hybrid public key for key exchange.
+    #[prost(message, optional, tag = "4")]
+    pub server_public_key: ::core::option::Option<HybridPublicKey>,
+    /// Error message if enrollment failed.
+    #[prost(string, tag = "5")]
+    pub error_message: ::prost::alloc::string::String,
+}
+/// RotateTokenRequest is sent to rotate a device's authentication token.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RotateTokenRequest {
+    /// The device's unique identifier.
+    #[prost(bytes = "vec", tag = "1")]
+    pub device_id: ::prost::alloc::vec::Vec<u8>,
+    /// The current authentication tag (proves possession of current token).
+    #[prost(bytes = "vec", tag = "2")]
+    pub current_auth_tag: ::prost::alloc::vec::Vec<u8>,
+    /// Server nonce for token derivation.
+    #[prost(bytes = "vec", tag = "3")]
+    pub server_nonce: ::prost::alloc::vec::Vec<u8>,
+    /// Client nonce for token derivation.
+    #[prost(bytes = "vec", tag = "4")]
+    pub client_nonce: ::prost::alloc::vec::Vec<u8>,
+    /// Timestamp for replay protection.
+    #[prost(message, optional, tag = "5")]
+    pub timestamp: ::core::option::Option<Timestamp>,
+}
+/// RotateTokenResponse contains the result of token rotation.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RotateTokenResponse {
+    /// Whether rotation was successful.
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+    /// The new token sequence number.
+    #[prost(uint64, tag = "2")]
+    pub new_sequence: u64,
+    /// Acknowledgment data (signed by server).
+    #[prost(bytes = "vec", tag = "3")]
+    pub acknowledgment: ::prost::alloc::vec::Vec<u8>,
+    /// Error message if rotation failed.
+    #[prost(string, tag = "4")]
+    pub error_message: ::prost::alloc::string::String,
+}
+/// GetDeviceStateRequest is sent to retrieve device state.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetDeviceStateRequest {
+    /// The device's unique identifier.
+    #[prost(bytes = "vec", tag = "1")]
+    pub device_id: ::prost::alloc::vec::Vec<u8>,
+}
+/// GetDeviceStateResponse contains the device's current state.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetDeviceStateResponse {
+    /// Whether the device was found.
+    #[prost(bool, tag = "1")]
+    pub found: bool,
+    /// The device's unique identifier.
+    #[prost(bytes = "vec", tag = "2")]
+    pub device_id: ::prost::alloc::vec::Vec<u8>,
+    /// Human-readable device name.
+    #[prost(string, tag = "3")]
+    pub device_name: ::prost::alloc::string::String,
+    /// Current token sequence number.
+    #[prost(uint64, tag = "4")]
+    pub token_sequence: u64,
+    /// Device status (active, suspended, revoked).
+    #[prost(string, tag = "5")]
+    pub status: ::prost::alloc::string::String,
+    /// Last seen timestamp.
+    #[prost(message, optional, tag = "6")]
+    pub last_seen: ::core::option::Option<Timestamp>,
+    /// Last known IP address.
+    #[prost(string, tag = "7")]
+    pub last_known_ip: ::prost::alloc::string::String,
+}
+/// RevokeDeviceRequest is sent to revoke a device's access.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RevokeDeviceRequest {
+    /// The device's unique identifier.
+    #[prost(bytes = "vec", tag = "1")]
+    pub device_id: ::prost::alloc::vec::Vec<u8>,
+    /// Reason for revocation.
+    #[prost(string, tag = "2")]
+    pub reason: ::prost::alloc::string::String,
+}
+/// RevokeDeviceResponse contains the result of device revocation.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RevokeDeviceResponse {
+    /// Whether revocation was successful.
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+    /// Error message if revocation failed.
+    #[prost(string, tag = "2")]
+    pub error_message: ::prost::alloc::string::String,
+}
+/// Generated client implementations.
+pub mod auth_service_client {
+    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
+    /// AuthService handles device authentication and enrollment for the AVON network.
+    #[derive(Debug, Clone)]
+    pub struct AuthServiceClient<T> {
+        inner: tonic::client::Grpc<T>,
+    }
+    impl AuthServiceClient<tonic::transport::Channel> {
+        /// Attempt to create a new client by connecting to a given endpoint.
+        pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
+        where
+            D: TryInto<tonic::transport::Endpoint>,
+            D::Error: Into<StdError>,
+        {
+            let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
+            Ok(Self::new(conn))
+        }
+    }
+    impl<T> AuthServiceClient<T>
+    where
+        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T::Error: Into<StdError>,
+        T::ResponseBody: Body<Data = Bytes> + Send + 'static,
+        <T::ResponseBody as Body>::Error: Into<StdError> + Send,
+    {
+        pub fn new(inner: T) -> Self {
+            let inner = tonic::client::Grpc::new(inner);
+            Self { inner }
+        }
+        pub fn with_origin(inner: T, origin: Uri) -> Self {
+            let inner = tonic::client::Grpc::with_origin(inner, origin);
+            Self { inner }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> AuthServiceClient<InterceptedService<T, F>>
+        where
+            F: tonic::service::Interceptor,
+            T::ResponseBody: Default,
+            T: tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                >,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + Send + Sync,
+        {
+            AuthServiceClient::new(InterceptedService::new(inner, interceptor))
+        }
+        /// Compress requests with the given encoding.
+        ///
+        /// This requires the server to support it otherwise it might respond with an
+        /// error.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.send_compressed(encoding);
+            self
+        }
+        /// Enable decompressing responses.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.accept_compressed(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
+        /// VerifyDevice verifies a device's authentication tag against its current token.
+        pub async fn verify_device(
+            &mut self,
+            request: impl tonic::IntoRequest<super::VerifyDeviceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::VerifyDeviceResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/avon.v1.AuthService/VerifyDevice",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("avon.v1.AuthService", "VerifyDevice"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// EnrollDevice enrolls a new device using an enrollment token.
+        pub async fn enroll_device(
+            &mut self,
+            request: impl tonic::IntoRequest<super::EnrollDeviceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::EnrollDeviceResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/avon.v1.AuthService/EnrollDevice",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("avon.v1.AuthService", "EnrollDevice"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// RotateToken rotates a device's authentication token.
+        pub async fn rotate_token(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RotateTokenRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::RotateTokenResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/avon.v1.AuthService/RotateToken",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("avon.v1.AuthService", "RotateToken"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// GetDeviceState retrieves the current state of a device.
+        pub async fn get_device_state(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetDeviceStateRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetDeviceStateResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/avon.v1.AuthService/GetDeviceState",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("avon.v1.AuthService", "GetDeviceState"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// RevokeDevice revokes a device's access to the network.
+        pub async fn revoke_device(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RevokeDeviceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::RevokeDeviceResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/avon.v1.AuthService/RevokeDevice",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("avon.v1.AuthService", "RevokeDevice"));
+            self.inner.unary(req, path, codec).await
+        }
+    }
+}
+/// Generated server implementations.
+pub mod auth_service_server {
+    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    use tonic::codegen::*;
+    /// Generated trait containing gRPC methods that should be implemented for use with AuthServiceServer.
+    #[async_trait]
+    pub trait AuthService: Send + Sync + 'static {
+        /// VerifyDevice verifies a device's authentication tag against its current token.
+        async fn verify_device(
+            &self,
+            request: tonic::Request<super::VerifyDeviceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::VerifyDeviceResponse>,
+            tonic::Status,
+        >;
+        /// EnrollDevice enrolls a new device using an enrollment token.
+        async fn enroll_device(
+            &self,
+            request: tonic::Request<super::EnrollDeviceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::EnrollDeviceResponse>,
+            tonic::Status,
+        >;
+        /// RotateToken rotates a device's authentication token.
+        async fn rotate_token(
+            &self,
+            request: tonic::Request<super::RotateTokenRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::RotateTokenResponse>,
+            tonic::Status,
+        >;
+        /// GetDeviceState retrieves the current state of a device.
+        async fn get_device_state(
+            &self,
+            request: tonic::Request<super::GetDeviceStateRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetDeviceStateResponse>,
+            tonic::Status,
+        >;
+        /// RevokeDevice revokes a device's access to the network.
+        async fn revoke_device(
+            &self,
+            request: tonic::Request<super::RevokeDeviceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::RevokeDeviceResponse>,
+            tonic::Status,
+        >;
+    }
+    /// AuthService handles device authentication and enrollment for the AVON network.
+    #[derive(Debug)]
+    pub struct AuthServiceServer<T: AuthService> {
+        inner: _Inner<T>,
+        accept_compression_encodings: EnabledCompressionEncodings,
+        send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
+    }
+    struct _Inner<T>(Arc<T>);
+    impl<T: AuthService> AuthServiceServer<T> {
+        pub fn new(inner: T) -> Self {
+            Self::from_arc(Arc::new(inner))
+        }
+        pub fn from_arc(inner: Arc<T>) -> Self {
+            let inner = _Inner(inner);
+            Self {
+                inner,
+                accept_compression_encodings: Default::default(),
+                send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
+            }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> InterceptedService<Self, F>
+        where
+            F: tonic::service::Interceptor,
+        {
+            InterceptedService::new(Self::new(inner), interceptor)
+        }
+        /// Enable decompressing requests with the given encoding.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.accept_compression_encodings.enable(encoding);
+            self
+        }
+        /// Compress responses with the given encoding, if the client supports it.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.send_compression_encodings.enable(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
+    }
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for AuthServiceServer<T>
+    where
+        T: AuthService,
+        B: Body + Send + 'static,
+        B::Error: Into<StdError> + Send + 'static,
+    {
+        type Response = http::Response<tonic::body::BoxBody>;
+        type Error = std::convert::Infallible;
+        type Future = BoxFuture<Self::Response, Self::Error>;
+        fn poll_ready(
+            &mut self,
+            _cx: &mut Context<'_>,
+        ) -> Poll<std::result::Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn call(&mut self, req: http::Request<B>) -> Self::Future {
+            let inner = self.inner.clone();
+            match req.uri().path() {
+                "/avon.v1.AuthService/VerifyDevice" => {
+                    #[allow(non_camel_case_types)]
+                    struct VerifyDeviceSvc<T: AuthService>(pub Arc<T>);
+                    impl<
+                        T: AuthService,
+                    > tonic::server::UnaryService<super::VerifyDeviceRequest>
+                    for VerifyDeviceSvc<T> {
+                        type Response = super::VerifyDeviceResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::VerifyDeviceRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as AuthService>::verify_device(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = VerifyDeviceSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/avon.v1.AuthService/EnrollDevice" => {
+                    #[allow(non_camel_case_types)]
+                    struct EnrollDeviceSvc<T: AuthService>(pub Arc<T>);
+                    impl<
+                        T: AuthService,
+                    > tonic::server::UnaryService<super::EnrollDeviceRequest>
+                    for EnrollDeviceSvc<T> {
+                        type Response = super::EnrollDeviceResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::EnrollDeviceRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as AuthService>::enroll_device(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = EnrollDeviceSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/avon.v1.AuthService/RotateToken" => {
+                    #[allow(non_camel_case_types)]
+                    struct RotateTokenSvc<T: AuthService>(pub Arc<T>);
+                    impl<
+                        T: AuthService,
+                    > tonic::server::UnaryService<super::RotateTokenRequest>
+                    for RotateTokenSvc<T> {
+                        type Response = super::RotateTokenResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RotateTokenRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as AuthService>::rotate_token(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RotateTokenSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/avon.v1.AuthService/GetDeviceState" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetDeviceStateSvc<T: AuthService>(pub Arc<T>);
+                    impl<
+                        T: AuthService,
+                    > tonic::server::UnaryService<super::GetDeviceStateRequest>
+                    for GetDeviceStateSvc<T> {
+                        type Response = super::GetDeviceStateResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetDeviceStateRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as AuthService>::get_device_state(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetDeviceStateSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/avon.v1.AuthService/RevokeDevice" => {
+                    #[allow(non_camel_case_types)]
+                    struct RevokeDeviceSvc<T: AuthService>(pub Arc<T>);
+                    impl<
+                        T: AuthService,
+                    > tonic::server::UnaryService<super::RevokeDeviceRequest>
+                    for RevokeDeviceSvc<T> {
+                        type Response = super::RevokeDeviceResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RevokeDeviceRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as AuthService>::revoke_device(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RevokeDeviceSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                _ => {
+                    Box::pin(async move {
+                        Ok(
+                            http::Response::builder()
+                                .status(200)
+                                .header("grpc-status", "12")
+                                .header("content-type", "application/grpc")
+                                .body(empty_body())
+                                .unwrap(),
+                        )
+                    })
+                }
+            }
+        }
+    }
+    impl<T: AuthService> Clone for AuthServiceServer<T> {
+        fn clone(&self) -> Self {
+            let inner = self.inner.clone();
+            Self {
+                inner,
+                accept_compression_encodings: self.accept_compression_encodings,
+                send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
+            }
+        }
+    }
+    impl<T: AuthService> Clone for _Inner<T> {
+        fn clone(&self) -> Self {
+            Self(Arc::clone(&self.0))
+        }
+    }
+    impl<T: std::fmt::Debug> std::fmt::Debug for _Inner<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:?}", self.0)
+        }
+    }
+    impl<T: AuthService> tonic::server::NamedService for AuthServiceServer<T> {
+        const NAME: &'static str = "avon.v1.AuthService";
+    }
+}
