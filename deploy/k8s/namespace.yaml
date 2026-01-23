@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: avon-system
+  labels:
+    app.kubernetes.io/name: avon
+    app.kubernetes.io/component: system
+    app.kubernetes.io/managed-by: kubectl
