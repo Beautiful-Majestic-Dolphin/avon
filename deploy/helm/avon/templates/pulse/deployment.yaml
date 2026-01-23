@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "avon.pulse.fullname" . }}
+  labels:
+    {{- include "avon.pulse.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.pulse.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "avon.pulse.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.pulse.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "avon.pulse.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "avon.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.pulse.podSecurityContext | nindent 8 }}
+      containers:
+        - name: pulse
+          securityContext:
+            {{- toYaml .Values.pulse.securityContext | nindent 12 }}
+          image: {{ include "avon.image" (dict "global" .Values.global "image" .Values.pulse.image) }}
+          imagePullPolicy: {{ .Values.pulse.image.pullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.pulse.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "avon.pulse.fullname" . }}-config
+            - secretRef:
+                name: {{ include "avon.fullname" . }}-secrets
+          livenessProbe:
+            exec:
+              command:
+                - /usr/local/bin/avon-pulse
+                - --health-check
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - /usr/local/bin/avon-pulse
+                - --health-check
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.pulse.resources | nindent 12 }}
+      {{- with .Values.pulse.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pulse.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pulse.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

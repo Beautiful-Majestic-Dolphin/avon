@@ -1,0 +1,26 @@
+apiVersion: v2
+name: avon
+version: 0.1.0
+appVersion: "1.0.0"
+description: "AVON - Authenticated Vector Ownership Network"
+type: application
+keywords:
+  - zero-trust
+  - network-access
+  - post-quantum
+  - security
+maintainers:
+  - name: AVON Team
+home: https://github.com/avon/avon
+sources:
+  - https://github.com/avon/avon
+
+dependencies:
+  - name: postgresql
+    version: "14.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "avon.auth.fullname" . }}
+  labels:
+    {{- include "avon.auth.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.auth.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "avon.auth.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.auth.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "avon.auth.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "avon.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.auth.podSecurityContext | nindent 8 }}
+      containers:
+        - name: auth
+          securityContext:
+            {{- toYaml .Values.auth.securityContext | nindent 12 }}
+          image: {{ include "avon.image" (dict "global" .Values.global "image" .Values.auth.image) }}
+          imagePullPolicy: {{ .Values.auth.image.pullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.auth.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "avon.auth.fullname" . }}-config
+            - secretRef:
+                name: {{ include "avon.fullname" . }}-secrets
+          livenessProbe:
+            exec:
+              command:
+                - /usr/local/bin/avon-auth
+                - --health-check
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - /usr/local/bin/avon-auth
+                - --health-check
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.auth.resources | nindent 12 }}
+      {{- with .Values.auth.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.auth.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.auth.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

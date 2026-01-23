@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "avon.policyEngine.fullname" . }}
+  labels:
+    {{- include "avon.policyEngine.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.policyEngine.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "avon.policyEngine.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.policyEngine.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "avon.policyEngine.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "avon.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.policyEngine.podSecurityContext | nindent 8 }}
+      containers:
+        - name: policy-engine
+          securityContext:
+            {{- toYaml .Values.policyEngine.securityContext | nindent 12 }}
+          image: {{ include "avon.image" (dict "global" .Values.global "image" .Values.policyEngine.image) }}
+          imagePullPolicy: {{ .Values.policyEngine.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.policyEngine.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "avon.policyEngine.fullname" . }}-config
+            - secretRef:
+                name: {{ include "avon.fullname" . }}-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.policyEngine.resources | nindent 12 }}
+      {{- with .Values.policyEngine.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.policyEngine.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.policyEngine.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
