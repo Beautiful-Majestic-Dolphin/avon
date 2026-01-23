@@ -10,3 +10,9 @@ description = "Wire protocol definitions for AVON"
 serde.workspace = true
 thiserror.workspace = true
 avon-crypto.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+bytes = "1.5"
+
+[build-dependencies]
+prost-build = "0.12"
