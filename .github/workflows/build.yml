@@ -1,0 +1,230 @@
+# AVON Build and Push
+#
+# Builds and pushes Docker images and Helm charts on version tags.
+# Triggered by tags matching 'v*' (e.g., v1.0.0, v0.1.0-beta).
+
+name: Build and Push
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  build-rust-services:
+    name: Build Rust Services
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [gateway, auth, ca, pulse, agent]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == format('refs/tags/{0}', github.event.repository.default_branch) }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT_SHA=${{ github.sha }}
+
+  build-python-services:
+    name: Build Python Services
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [policy-engine, admin-api]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == format('refs/tags/{0}', github.event.repository.default_branch) }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT_SHA=${{ github.sha }}
+
+  helm-package:
+    name: Package and Push Helm Chart
+    needs: [build-rust-services, build-python-services]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.14.0
+
+      - name: Login to OCI Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+      - name: Update chart version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix
+          sed -i "s/^version:.*/version: ${VERSION}/" deploy/helm/avon/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" deploy/helm/avon/Chart.yaml
+
+      - name: Update image tags in values
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          # Update default image tags to use the release version
+          sed -i "s/tag: latest/tag: ${VERSION}/" deploy/helm/avon/values.yaml
+
+      - name: Package Helm chart
+        run: |
+          helm dependency update deploy/helm/avon
+          helm package deploy/helm/avon
+
+      - name: Push to OCI registry
+        run: |
+          helm push avon-*.tgz oci://${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/charts
+
+      - name: Upload chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-chart
+          path: avon-*.tgz
+          retention-days: 30
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-rust-services, build-python-services, helm-package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Helm chart
+        uses: actions/download-artifact@v4
+        with:
+          name: helm-chart
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          cat << 'EOF' > release_notes.md
+          ## AVON ${{ github.ref_name }}
+
+          ### Docker Images
+
+          All images are available at `ghcr.io/${{ github.repository }}/`:
+
+          | Service | Image |
+          |---------|-------|
+          | Gateway | `ghcr.io/${{ github.repository }}/gateway:${{ github.ref_name }}` |
+          | Auth | `ghcr.io/${{ github.repository }}/auth:${{ github.ref_name }}` |
+          | CA | `ghcr.io/${{ github.repository }}/ca:${{ github.ref_name }}` |
+          | Pulse | `ghcr.io/${{ github.repository }}/pulse:${{ github.ref_name }}` |
+          | Agent | `ghcr.io/${{ github.repository }}/agent:${{ github.ref_name }}` |
+          | Policy Engine | `ghcr.io/${{ github.repository }}/policy-engine:${{ github.ref_name }}` |
+          | Admin API | `ghcr.io/${{ github.repository }}/admin-api:${{ github.ref_name }}` |
+
+          ### Helm Chart
+
+          ```bash
+          helm pull oci://ghcr.io/${{ github.repository }}/charts/avon --version ${{ github.ref_name }}
+          ```
+
+          Or install directly:
+
+          ```bash
+          helm install avon oci://ghcr.io/${{ github.repository }}/charts/avon --version ${{ github.ref_name }}
+          ```
+
+          ### Changelog
+
+          See [CHANGELOG.md](./CHANGELOG.md) for details.
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.md
+          files: |
+            avon-*.tgz
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
