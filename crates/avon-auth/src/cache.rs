@@ -114,7 +114,7 @@ impl AuthCache {
         let json = serde_json::to_string(state)
             .map_err(|e| CacheError::SerializationError(e.to_string()))?;
 
-        conn.set_ex(&key, &json, self.ttl_secs).await?;
+        conn.set_ex::<_, _, ()>(&key, &json, self.ttl_secs).await?;
 
         debug!(?id, "Cached device state");
         Ok(())
@@ -125,7 +125,7 @@ impl AuthCache {
         let key = Self::device_key(id);
         let mut conn = self.connection.clone();
 
-        conn.del(&key).await?;
+        conn.del::<_, ()>(&key).await?;
 
         debug!(?id, "Invalidated device cache");
         Ok(())
@@ -144,7 +144,7 @@ impl AuthCache {
         let channel = Self::rotation_channel();
 
         let message = format!("{}:{}", id.as_uuid(), new_sequence);
-        conn.publish(channel, &message).await?;
+        conn.publish::<_, _, ()>(channel, &message).await?;
 
         debug!(?id, new_sequence, "Published token rotation");
         Ok(())
