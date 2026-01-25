@@ -1,0 +1,23 @@
+# E2E Test Artifacts
+
+# Test results
+results/
+*.xml
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Virtual environment (if running locally)
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log

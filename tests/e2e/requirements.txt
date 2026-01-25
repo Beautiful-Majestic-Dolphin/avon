@@ -1,0 +1,27 @@
+# AVON E2E Test Requirements
+
+# Testing framework
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-timeout>=2.2.0
+pytest-xdist>=3.5.0  # Parallel test execution
+
+# HTTP client
+aiohttp>=3.9.0
+httpx>=0.26.0
+
+# gRPC client
+grpcio>=1.60.0
+grpcio-tools>=1.60.0
+
+# Database clients (for test setup/verification)
+asyncpg>=0.29.0
+redis>=5.0.0
+
+# Utilities
+tenacity>=8.2.0  # Retry logic
+python-dateutil>=2.8.0
+pydantic>=2.5.0
+
+# Test output
+rich>=13.7.0  # Pretty console output
