@@ -1,0 +1,142 @@
+# AVON Development Environment Values
+# Use with: helm install avon ./avon -f values-dev.yaml
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: "standard"
+
+# Development: Single replicas for all services
+gateway:
+  replicaCount: 1
+  logLevel: debug
+  image:
+    tag: dev
+    pullPolicy: Always
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+auth:
+  replicaCount: 1
+  logLevel: debug
+  image:
+    tag: dev
+    pullPolicy: Always
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+ca:
+  replicaCount: 1
+  logLevel: debug
+  image:
+    tag: dev
+    pullPolicy: Always
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+pulse:
+  replicaCount: 1
+  logLevel: debug
+  image:
+    tag: dev
+    pullPolicy: Always
+  pulseInterval: "5s"
+  tokenRotationInterval: "15s"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+policyEngine:
+  replicaCount: 1
+  logLevel: debug
+  image:
+    tag: dev
+    pullPolicy: Always
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+adminApi:
+  replicaCount: 1
+  logLevel: debug
+  image:
+    tag: dev
+    pullPolicy: Always
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: admin.avon.dev
+        paths:
+          - path: /
+            pathType: Prefix
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "dev-password-change-me"
+    database: avon
+  primary:
+    persistence:
+      size: 1Gi
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "dev-password-change-me"
+  master:
+    persistence:
+      size: 256Mi
+
+networkPolicy:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+monitoring:
+  serviceMonitor:
+    enabled: false
+  grafana:
+    enabled: false
+
+secrets:
+  jwtSecret: "dev-jwt-secret-change-me-in-production"
+  databaseUrl: "postgresql://postgres:dev-password-change-me@avon-postgresql:5432/avon"
+  redisUrl: "redis://:dev-password-change-me@avon-redis-master:6379"

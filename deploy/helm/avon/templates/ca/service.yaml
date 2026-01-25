@@ -6,10 +6,15 @@ metadata:
     {{- include "avon.ca.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.ca.service.type }}
+  clusterIP: None
   ports:
     - port: {{ .Values.ca.service.port }}
       targetPort: grpc
       protocol: TCP
       name: grpc
+    - port: 9090
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
   selector:
     {{- include "avon.ca.selectorLabels" . | nindent 4 }}

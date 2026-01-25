@@ -1,0 +1,191 @@
+# AVON Production Environment Values
+# Use with: helm install avon ./avon -f values-production.yaml
+#
+# IMPORTANT: Before deploying to production, ensure:
+# 1. All secrets are managed externally (Vault, AWS Secrets Manager, etc.)
+# 2. TLS certificates are properly configured
+# 3. Network policies are reviewed and enabled
+# 4. Resource limits are tuned for your workload
+# 5. Monitoring and alerting are configured
+
+global:
+  imageRegistry: "your-registry.example.com"
+  imagePullSecrets:
+    - name: regcred
+  storageClass: "gp3"
+
+# Production: High availability configuration
+gateway:
+  replicaCount: 3
+  logLevel: warn
+  image:
+    tag: ""  # Set via CI/CD
+    pullPolicy: IfNotPresent
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 60
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  podAnnotations:
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: gateway
+
+auth:
+  replicaCount: 3
+  logLevel: warn
+  image:
+    tag: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+ca:
+  replicaCount: 3
+  logLevel: warn
+  image:
+    tag: ""
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: "gp3"
+  hsm:
+    enabled: true
+    provider: "aws-cloudhsm"
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+pulse:
+  replicaCount: 3
+  logLevel: warn
+  image:
+    tag: ""
+    pullPolicy: IfNotPresent
+  pulseInterval: "10s"
+  tokenRotationInterval: "30s"
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+policyEngine:
+  replicaCount: 3
+  logLevel: warn
+  image:
+    tag: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+adminApi:
+  replicaCount: 3
+  logLevel: warn
+  image:
+    tag: ""
+    pullPolicy: IfNotPresent
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/rate-limit: "100"
+      nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    hosts:
+      - host: admin.avon.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: admin-tls-prod
+        hosts:
+          - admin.avon.example.com
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# Production databases should be managed externally (RDS, ElastiCache, etc.)
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+# External database configuration (required when postgresql.enabled=false)
+externalDatabase:
+  host: "your-rds-endpoint.region.rds.amazonaws.com"
+  port: 5432
+  database: avon
+  existingSecret: avon-database-secret
+  existingSecretPasswordKey: password
+  existingSecretUsernameKey: username
+
+# External Redis configuration (required when redis.enabled=false)
+externalRedis:
+  host: "your-elasticache-endpoint.region.cache.amazonaws.com"
+  port: 6379
+  existingSecret: avon-redis-secret
+  existingSecretPasswordKey: password
+
+networkPolicy:
+  enabled: true
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: prometheus
+    interval: 15s
+    scrapeTimeout: 10s
+  grafana:
+    enabled: true
+    dashboardLabels:
+      grafana_dashboard: "1"
+
+# All secrets should reference external secret management
+secrets:
+  existingSecret: avon-secrets
