@@ -1,0 +1,26 @@
+# AVON Code Owners
+# These owners will be requested for review when someone opens a pull request
+# that modifies code that they own.
+
+# Default owners for everything
+* @ShaneDolphin
+
+# Rust crates
+/crates/ @ShaneDolphin
+
+# Cryptography requires extra scrutiny
+/crates/avon-crypto/ @ShaneDolphin
+
+# Python services
+/services/ @ShaneDolphin
+
+# Infrastructure and deployment
+/deploy/ @ShaneDolphin
+/.github/ @ShaneDolphin
+
+# Protocol definitions
+/proto/ @ShaneDolphin
+
+# Documentation
+/docs/ @ShaneDolphin
+*.md @ShaneDolphin
