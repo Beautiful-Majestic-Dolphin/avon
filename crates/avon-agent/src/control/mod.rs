@@ -29,7 +29,6 @@ use tokio::time::timeout;
 
 use crate::identity::IdentityManager;
 
-use self::posture::PostureCollector;
 use self::pulse::PulseHandler;
 use self::requests::ControlResponse;
 
@@ -43,23 +42,12 @@ struct PendingRequest {
 }
 
 /// Connection state with the control plane.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ConnectionState {
     pub connected: bool,
     pub current_address: Option<SocketAddr>,
     pub last_response: Option<Instant>,
     pub consecutive_failures: u32,
-}
-
-impl Default for ConnectionState {
-    fn default() -> Self {
-        Self {
-            connected: false,
-            current_address: None,
-            last_response: None,
-            consecutive_failures: 0,
-        }
-    }
 }
 
 /// Client for communicating with the AVON control plane.

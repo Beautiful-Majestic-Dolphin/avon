@@ -2,6 +2,11 @@
 //!
 //! Cross-platform client installed on devices for secure network access.
 
+// Allow dead code as many components are scaffolded but not yet wired up
+#![allow(dead_code)]
+// Allow tunnel/tunnel.rs module naming
+#![allow(clippy::module_inception)]
+
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};

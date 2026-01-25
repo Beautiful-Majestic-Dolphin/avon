@@ -13,7 +13,7 @@ use avon_crypto::random::random_bytes_fixed;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::info;
 
 use crate::db::PulseDatabase;
 
