@@ -27,7 +27,7 @@ avon-common.workspace = true
 metrics = "0.22"
 metrics-exporter-prometheus = "0.13"
 dashmap = "5.5"
-governor = "0.6"
+governor = "0.10"
 tonic = "0.11"
 config = "0.14"
 clap = { version = "4.4", features = ["derive"] }
