@@ -9,6 +9,7 @@ members = [
     "crates/avon-auth",
     "crates/avon-ca",
     "crates/avon-pulse",
+    "crates/avon-integration-tests",
 ]
 
 [workspace.package]

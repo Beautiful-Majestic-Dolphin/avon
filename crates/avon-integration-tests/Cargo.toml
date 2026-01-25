@@ -1,0 +1,27 @@
+[package]
+name = "avon-integration-tests"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "AVON Integration Tests"
+publish = false
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+avon-common.workspace = true
+avon-crypto.workspace = true
+avon-protocol.workspace = true
+
+tempfile = "3.10"
+uuid = { version = "1.7", features = ["v4"] }
+rand = "0.8"
+futures = "0.3"
+
+[dev-dependencies]
+tokio-test = "0.4"
