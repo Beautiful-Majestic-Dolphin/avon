@@ -391,7 +391,7 @@ impl TestEnvironment {
 
     pub async fn register_device(&self, device_id: DeviceId, name: &str) {
         let mut devices = self.devices.write().await;
-        devices.insert(device_id.clone(), TestDeviceState {
+        devices.insert(device_id, TestDeviceState {
             device_id,
             name: name.to_string(),
             status: "active".to_string(),
@@ -432,7 +432,7 @@ impl TestEnvironment {
     pub async fn create_pod(&self, name: &str) -> Pod {
         let pod = Pod::new(name.to_string());
         let mut pods = self.pods.write().await;
-        pods.insert(pod.id.clone(), pod.clone());
+        pods.insert(pod.id, pod.clone());
         pod
     }
 
@@ -440,7 +440,7 @@ impl TestEnvironment {
         let mut devices = self.devices.write().await;
         if let Some(device) = devices.get_mut(device_id) {
             if !device.pod_ids.contains(pod_id) {
-                device.pod_ids.push(pod_id.clone());
+                device.pod_ids.push(*pod_id);
             }
         }
     }
@@ -454,14 +454,14 @@ impl TestEnvironment {
         let policy = if action == "allow" {
             Policy::allow(
                 format!("{}-to-{}", source_pod, dest_pod),
-                source_pod.clone(),
-                dest_pod.clone(),
+                *source_pod,
+                *dest_pod,
             )
         } else {
             Policy::deny(
                 format!("{}-to-{}-deny", source_pod, dest_pod),
-                source_pod.clone(),
-                dest_pod.clone(),
+                *source_pod,
+                *dest_pod,
             )
         };
 
@@ -564,7 +564,7 @@ impl TestAgent {
         let enrollment = self.env.consume_enrollment(token).await;
         match enrollment {
             Some(_info) => {
-                self.env.register_device(self.device_id.clone(), &self.name).await;
+                self.env.register_device(self.device_id, &self.name).await;
                 *self.connected.write().await = true;
                 tracing::info!(device_id = %self.device_id, "Agent enrolled successfully");
                 Ok(())
@@ -595,13 +595,13 @@ impl TestAgent {
 
         let session_id = SessionId::new();
         let tunnel = TunnelState {
-            session_id: session_id.clone(),
+            session_id,
             peer_device: peer_device_id,
             data_buffer: Vec::new(),
         };
 
         let mut tunnels = self.tunnels.write().await;
-        tunnels.insert(session_id.clone(), tunnel);
+        tunnels.insert(session_id, tunnel);
 
         tracing::info!(
             device_id = %self.device_id,
