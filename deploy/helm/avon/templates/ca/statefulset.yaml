@@ -12,10 +12,15 @@ spec:
       {{- include "avon.ca.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.ca.podAnnotations }}
       annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        checksum/config: {{ include (print $.Template.BasePath "/ca/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/common/secrets.yaml") . | sha256sum }}
+        {{- with .Values.ca.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
         {{- include "avon.ca.selectorLabels" . | nindent 8 }}
     spec:
@@ -36,6 +41,23 @@ spec:
             - name: grpc
               containerPort: {{ .Values.ca.service.port }}
               protocol: TCP
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: AVON_LOG_LEVEL
+              value: {{ .Values.ca.logLevel | default "info" | quote }}
+            - name: AVON_GRPC_PORT
+              value: {{ .Values.ca.service.port | quote }}
+            - name: AVON_HEALTH_PORT
+              value: "8080"
+            - name: AVON_METRICS_PORT
+              value: "9090"
+            - name: AVON_DATA_DIR
+              value: "/data"
           envFrom:
             - configMapRef:
                 name: {{ include "avon.ca.fullname" . }}-config
@@ -47,19 +69,21 @@ spec:
               mountPath: /data
           {{- end }}
           livenessProbe:
-            exec:
-              command:
-                - /usr/local/bin/avon-ca
-                - --health-check
+            httpGet:
+              path: /health
+              port: health
             initialDelaySeconds: 10
             periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
-            exec:
-              command:
-                - /usr/local/bin/avon-ca
-                - --health-check
+            httpGet:
+              path: /ready
+              port: health
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.ca.resources | nindent 12 }}
       {{- with .Values.ca.nodeSelector }}
@@ -69,6 +93,15 @@ spec:
       {{- with .Values.ca.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if not .Values.ca.affinity }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "avon.ca.selectorLabels" . | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
       {{- end }}
       {{- with .Values.ca.tolerations }}
       tolerations:

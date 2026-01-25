@@ -4,12 +4,20 @@ metadata:
   name: {{ include "avon.gateway.fullname" . }}
   labels:
     {{- include "avon.gateway.labels" . | nindent 4 }}
+  {{- with .Values.gateway.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   type: {{ .Values.gateway.service.type }}
   ports:
     - port: {{ .Values.gateway.service.port }}
-      targetPort: udp
-      protocol: {{ .Values.gateway.service.protocol }}
-      name: udp
+      targetPort: control
+      protocol: {{ .Values.gateway.service.protocol | default "UDP" }}
+      name: control
+    - port: 9090
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
   selector:
     {{- include "avon.gateway.selectorLabels" . | nindent 4 }}

@@ -206,6 +206,22 @@ redis:
     persistence:
       size: 1Gi
 
+# External database configuration (used when postgresql.enabled=false)
+externalDatabase:
+  host: ""
+  port: 5432
+  database: avon
+  existingSecret: ""
+  existingSecretPasswordKey: password
+  existingSecretUsernameKey: username
+
+# External Redis configuration (used when redis.enabled=false)
+externalRedis:
+  host: ""
+  port: 6379
+  existingSecret: ""
+  existingSecretPasswordKey: password
+
 serviceAccount:
   create: true
   annotations: {}
@@ -222,3 +238,13 @@ secrets:
   jwtSecret: ""
   databaseUrl: ""
   redisUrl: ""
+
+monitoring:
+  serviceMonitor:
+    enabled: false
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+  grafana:
+    enabled: false
+    dashboardLabels: {}
