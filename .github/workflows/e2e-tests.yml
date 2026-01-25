@@ -1,0 +1,192 @@
+# AVON End-to-End Tests
+#
+# Runs the complete E2E test suite in Docker Compose.
+# Triggered on PRs to main and manually via workflow_dispatch.
+
+name: E2E Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'services/**'
+      - 'proto/**'
+      - 'tests/e2e/**'
+      - 'deploy/docker/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/e2e-tests.yml'
+  workflow_dispatch:
+    inputs:
+      test_args:
+        description: 'Additional pytest arguments'
+        required: false
+        default: ''
+      keep_artifacts:
+        description: 'Keep test artifacts on failure'
+        required: false
+        default: 'true'
+
+env:
+  COMPOSE_PROJECT_NAME: avon-e2e-ci
+
+jobs:
+  e2e-tests:
+    name: E2E Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build Docker images
+        working-directory: tests/e2e
+        run: |
+          docker compose -f docker-compose.e2e.yml build
+
+      - name: Start infrastructure
+        working-directory: tests/e2e
+        run: |
+          docker compose -f docker-compose.e2e.yml up -d postgres redis
+          sleep 10
+
+      - name: Wait for PostgreSQL
+        working-directory: tests/e2e
+        run: |
+          for i in {1..30}; do
+            if docker compose -f docker-compose.e2e.yml exec -T postgres pg_isready -U avon; then
+              echo "PostgreSQL is ready"
+              break
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+
+      - name: Wait for Redis
+        working-directory: tests/e2e
+        run: |
+          for i in {1..30}; do
+            if docker compose -f docker-compose.e2e.yml exec -T redis redis-cli ping; then
+              echo "Redis is ready"
+              break
+            fi
+            echo "Waiting for Redis..."
+            sleep 2
+          done
+
+      - name: Start control plane services
+        working-directory: tests/e2e
+        run: |
+          docker compose -f docker-compose.e2e.yml up -d gateway auth ca pulse policy-engine admin-api
+          sleep 20
+
+      - name: Start test agents
+        working-directory: tests/e2e
+        run: |
+          docker compose -f docker-compose.e2e.yml up -d agent-1 agent-2
+          sleep 15
+
+      - name: Show running containers
+        working-directory: tests/e2e
+        run: |
+          docker compose -f docker-compose.e2e.yml ps
+
+      - name: Run E2E tests
+        id: e2e_tests
+        working-directory: tests/e2e
+        run: |
+          docker compose -f docker-compose.e2e.yml run \
+            --rm \
+            test-runner \
+            python -m pytest scenarios/ \
+              -v \
+              --tb=short \
+              --junitxml=/app/results/results.xml \
+              --timeout=120 \
+              ${{ github.event.inputs.test_args || '-m "not slow"' }}
+        continue-on-error: true
+
+      - name: Copy test results
+        if: always()
+        working-directory: tests/e2e
+        run: |
+          mkdir -p results
+          docker compose -f docker-compose.e2e.yml cp test-runner:/app/results/. ./results/ || true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: tests/e2e/results/
+          retention-days: 7
+
+      - name: Collect logs on failure
+        if: failure() || steps.e2e_tests.outcome == 'failure'
+        working-directory: tests/e2e
+        run: |
+          mkdir -p logs
+          docker compose -f docker-compose.e2e.yml logs gateway > logs/gateway.log 2>&1 || true
+          docker compose -f docker-compose.e2e.yml logs auth > logs/auth.log 2>&1 || true
+          docker compose -f docker-compose.e2e.yml logs ca > logs/ca.log 2>&1 || true
+          docker compose -f docker-compose.e2e.yml logs pulse > logs/pulse.log 2>&1 || true
+          docker compose -f docker-compose.e2e.yml logs policy-engine > logs/policy-engine.log 2>&1 || true
+          docker compose -f docker-compose.e2e.yml logs admin-api > logs/admin-api.log 2>&1 || true
+          docker compose -f docker-compose.e2e.yml logs agent-1 > logs/agent-1.log 2>&1 || true
+          docker compose -f docker-compose.e2e.yml logs agent-2 > logs/agent-2.log 2>&1 || true
+
+      - name: Upload logs on failure
+        if: failure() || steps.e2e_tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-service-logs
+          path: tests/e2e/logs/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        working-directory: tests/e2e
+        run: |
+          docker compose -f docker-compose.e2e.yml down -v --remove-orphans
+
+      - name: Check test outcome
+        if: steps.e2e_tests.outcome == 'failure'
+        run: exit 1
+
+  e2e-tests-full:
+    name: E2E Full Test Suite (Manual)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run full E2E test suite
+        working-directory: tests/e2e
+        run: |
+          ./run_e2e.sh ${{ github.event.inputs.test_args }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-full-test-results
+          path: tests/e2e/results/
+          retention-days: 14

@@ -1,0 +1,33 @@
+# AVON E2E Test Runner
+# Python-based test runner for end-to-end integration tests
+
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    netcat-openbsd \
+    iputils-ping \
+    dnsutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy test library
+COPY lib/ /app/lib/
+
+# Copy test scenarios
+COPY scenarios/ /app/scenarios/
+
+# Create results directory
+RUN mkdir -p /app/results
+
+# Set Python path
+ENV PYTHONPATH=/app
+
+# Default command runs all tests
+CMD ["python", "-m", "pytest", "scenarios/", "-v", "--tb=short", "--junitxml=/app/results/results.xml"]

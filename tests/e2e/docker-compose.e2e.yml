@@ -1,0 +1,315 @@
+# AVON End-to-End Test Environment
+# This compose file creates a complete AVON deployment for integration testing
+
+services:
+  # ===================
+  # Infrastructure
+  # ===================
+  postgres:
+    image: postgres:16-bookworm
+    container_name: avon-e2e-postgres
+    environment:
+      POSTGRES_USER: avon
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: avon_e2e
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U avon"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - avon-e2e
+    tmpfs:
+      - /var/lib/postgresql/data  # Use tmpfs for faster tests
+
+  redis:
+    image: redis:7-bookworm
+    container_name: avon-e2e-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - avon-e2e
+
+  # ===================
+  # Control Plane Services
+  # ===================
+  gateway:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.gateway
+    container_name: avon-e2e-gateway
+    environment:
+      RUST_LOG: info,avon=debug
+      DATABASE_URL: postgres://avon:test_password@postgres:5432/avon_e2e
+      REDIS_URL: redis://redis:6379
+      LISTEN_ADDR: 0.0.0.0:4600
+    ports:
+      - "4600:4600/udp"
+    networks:
+      - avon-e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/avon-gateway", "--health-check"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  auth:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.auth
+    container_name: avon-e2e-auth
+    environment:
+      RUST_LOG: info,avon=debug
+      DATABASE_URL: postgres://avon:test_password@postgres:5432/avon_e2e
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: e2e_test_jwt_secret_not_for_production
+      GRPC_ADDR: 0.0.0.0:50051
+      HEALTH_ADDR: 0.0.0.0:8080
+    ports:
+      - "50051:50051"
+      - "8080:8080"
+    networks:
+      - avon-e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  ca:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.ca
+    container_name: avon-e2e-ca
+    environment:
+      RUST_LOG: info,avon=debug
+      DATABASE_URL: postgres://avon:test_password@postgres:5432/avon_e2e
+      REDIS_URL: redis://redis:6379
+      GRPC_ADDR: 0.0.0.0:50052
+    ports:
+      - "50052:50052"
+    networks:
+      - avon-e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  pulse:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.pulse
+    container_name: avon-e2e-pulse
+    environment:
+      RUST_LOG: info,avon=debug
+      DATABASE_URL: postgres://avon:test_password@postgres:5432/avon_e2e
+      REDIS_URL: redis://redis:6379
+      GRPC_ADDR: 0.0.0.0:50053
+    ports:
+      - "50053:50053"
+    networks:
+      - avon-e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ===================
+  # Python Services
+  # ===================
+  policy-engine:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.policy-engine
+    container_name: avon-e2e-policy-engine
+    environment:
+      LOG_LEVEL: debug
+      DATABASE_URL: postgres://avon:test_password@postgres:5432/avon_e2e
+      REDIS_URL: redis://redis:6379
+      HOST: 0.0.0.0
+      PORT: 8081
+    ports:
+      - "8081:8081"
+    networks:
+      - avon-e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  admin-api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.admin-api
+    container_name: avon-e2e-admin-api
+    environment:
+      LOG_LEVEL: debug
+      DATABASE_URL: postgres://avon:test_password@postgres:5432/avon_e2e
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: e2e_test_jwt_secret_not_for_production
+      HOST: 0.0.0.0
+      PORT: 8082
+    ports:
+      - "8082:8082"
+    networks:
+      - avon-e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ===================
+  # AVON Agents (Test Endpoints)
+  # ===================
+  agent-1:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.agent
+    container_name: avon-e2e-agent-1
+    hostname: agent-1
+    environment:
+      RUST_LOG: info,avon=debug
+      AGENT_NAME: agent-1
+      CONTROL_PLANE_ADDR: gateway:4600
+      AUTH_ADDR: auth:50051
+      CA_ADDR: ca:50052
+      DATA_DIR: /var/lib/avon
+      CONTROL_API_ADDR: 0.0.0.0:8090
+    cap_add:
+      - NET_ADMIN  # Required for TUN device
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      avon-e2e:
+        ipv4_address: 172.28.0.50
+    depends_on:
+      gateway:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+
+  agent-2:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.agent
+    container_name: avon-e2e-agent-2
+    hostname: agent-2
+    environment:
+      RUST_LOG: info,avon=debug
+      AGENT_NAME: agent-2
+      CONTROL_PLANE_ADDR: gateway:4600
+      AUTH_ADDR: auth:50051
+      CA_ADDR: ca:50052
+      DATA_DIR: /var/lib/avon
+      CONTROL_API_ADDR: 0.0.0.0:8090
+    cap_add:
+      - NET_ADMIN  # Required for TUN device
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      avon-e2e:
+        ipv4_address: 172.28.0.51
+    depends_on:
+      gateway:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+
+  # Additional agent for multi-peer tests
+  agent-3:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.agent
+    container_name: avon-e2e-agent-3
+    hostname: agent-3
+    environment:
+      RUST_LOG: info,avon=debug
+      AGENT_NAME: agent-3
+      CONTROL_PLANE_ADDR: gateway:4600
+      AUTH_ADDR: auth:50051
+      CA_ADDR: ca:50052
+      DATA_DIR: /var/lib/avon
+      CONTROL_API_ADDR: 0.0.0.0:8090
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      avon-e2e:
+        ipv4_address: 172.28.0.52
+    depends_on:
+      gateway:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    profiles:
+      - multi-peer  # Only start when explicitly requested
+
+  # ===================
+  # Test Runner
+  # ===================
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-runner
+    container_name: avon-e2e-test-runner
+    environment:
+      ADMIN_API_URL: http://admin-api:8082
+      POLICY_ENGINE_URL: http://policy-engine:8081
+      AUTH_URL: auth:50051
+      GATEWAY_URL: gateway:4600
+      AGENT_1_URL: http://agent-1:8090
+      AGENT_2_URL: http://agent-2:8090
+      AGENT_3_URL: http://agent-3:8090
+      POSTGRES_URL: postgres://avon:test_password@postgres:5432/avon_e2e
+      REDIS_URL: redis://redis:6379
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./scenarios:/app/scenarios:ro
+      - ./lib:/app/lib:ro
+      - ./results:/app/results
+    networks:
+      - avon-e2e
+    depends_on:
+      - admin-api
+      - policy-engine
+      - agent-1
+      - agent-2
+
+networks:
+  avon-e2e:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
