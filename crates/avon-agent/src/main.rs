@@ -11,6 +11,7 @@ mod agent;
 mod config;
 mod control;
 mod identity;
+mod nat;
 mod tunnel;
 
 use agent::AvonAgent;
