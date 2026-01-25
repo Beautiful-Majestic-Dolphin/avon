@@ -95,6 +95,7 @@ pub enum CertificateStatus {
 }
 
 pub struct CertificateAuthority {
+    #[allow(dead_code)] // Will be used for root certificate operations
     root_keypair: HybridSigningKeyPair,
     intermediate_keypair: HybridSigningKeyPair,
     root_cert_der: Vec<u8>,

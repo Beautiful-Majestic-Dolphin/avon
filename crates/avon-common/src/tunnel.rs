@@ -4,6 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::device::DeviceId;
 
@@ -28,9 +29,7 @@ impl SessionId {
     /// Creates a new random SessionId.
     #[must_use]
     pub fn new() -> Self {
-        let mut bytes = [0u8; 16];
-        getrandom(&mut bytes);
-        Self(bytes)
+        Self(*Uuid::new_v4().as_bytes())
     }
 
     /// Creates a SessionId from a 16-byte array.
@@ -58,19 +57,6 @@ impl std::fmt::Display for SessionId {
             write!(f, "{:02x}", byte)?;
         }
         Ok(())
-    }
-}
-
-fn getrandom(dest: &mut [u8]) {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let seed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos() as u64;
-    let mut state = seed;
-    for byte in dest.iter_mut() {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
-        *byte = (state >> 33) as u8;
     }
 }
 

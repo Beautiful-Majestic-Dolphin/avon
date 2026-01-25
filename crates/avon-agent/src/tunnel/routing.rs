@@ -39,7 +39,7 @@ impl RoutingTable {
         // Add reverse mapping for cleanup
         self.reverse
             .entry(session_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(destination);
 
         tracing::debug!(%destination, session_id = %hex::encode(session_id), "Added route");
