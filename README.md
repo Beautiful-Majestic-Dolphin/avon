@@ -1,3 +1,11 @@
+___  _    __ ____  _   __
+   /   || |  / // __ \/ | / /
+  / /| || | / // / / /  |/ / 
+ / ___ || |/ // /_/ / /|  /  
+/_/  |_||___/ \____/_/ |_/   
+                              
+   Own Your Corners.
+
 # AVON - Authenticated Vector Ownership Network
 
 [![CI](https://github.com/ShaneDolphin/avons-corners/actions/workflows/ci.yml/badge.svg)](https://github.com/ShaneDolphin/avons-corners/actions/workflows/ci.yml)
