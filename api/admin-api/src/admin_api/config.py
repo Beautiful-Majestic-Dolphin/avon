@@ -35,5 +35,10 @@ class Settings(BaseSettings):
     
     control_plane_addresses: list[str] = ["gateway.avon.local:8443"]
 
+    # SCIM provisioning settings
+    scim_enabled: bool = False
+    scim_page_size_default: int = 100
+    scim_page_size_max: int = 1000
+
 
 settings = Settings()

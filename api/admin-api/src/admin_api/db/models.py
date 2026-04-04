@@ -33,6 +33,8 @@ class DbPod(BaseModel):
     name: str
     parent_id: Optional[UUID] = None
     description: Optional[str] = None
+    external_id: Optional[str] = None
+    managed_by: str = "local"
     created_at: datetime
     updated_at: datetime
 
@@ -63,6 +65,8 @@ class DbUser(BaseModel):
     full_name: Optional[str] = None
     is_active: bool = True
     is_admin: bool = False
+    external_id: Optional[str] = None
+    managed_by: str = "local"
     created_at: datetime
     updated_at: datetime
     last_login_at: Optional[datetime] = None
@@ -112,6 +116,18 @@ class DbTunnel(BaseModel):
     bytes_received: int = 0
     created_at: datetime
     updated_at: datetime
+
+
+class DbScimToken(BaseModel):
+    """SCIM bearer token database model."""
+
+    id: UUID
+    token_hash: str
+    description: str
+    created_by: UUID
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+    is_active: bool = True
 
 
 class DbActivityLog(BaseModel):

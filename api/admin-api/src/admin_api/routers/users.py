@@ -302,6 +302,12 @@ async def update_user(
             detail="User not found",
         )
 
+    if user.managed_by == "scim":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is managed by SCIM. Modify via your identity provider.",
+        )
+
     updates = []
     params: list = [user_id]
     param_idx = 2
