@@ -148,7 +148,69 @@ impl HardwareFingerprint {
         serials
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    fn collect_disk_serials() -> Vec<String> {
+        use std::process::Command;
+
+        let mut serials = Vec::new();
+
+        // Try system_profiler for NVMe disk info (JSON output)
+        if let Ok(output) = Command::new("system_profiler")
+            .args(["SPNVMeDataType", "-json"])
+            .output()
+        {
+            if output.status.success() {
+                if let Ok(stdout) = String::from_utf8(output.stdout) {
+                    // Parse JSON to extract serial numbers
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                        if let Some(nvme_items) = json.get("SPNVMeDataType").and_then(|v| v.as_array()) {
+                            for item in nvme_items {
+                                if let Some(serial) = item.get("device_serial")
+                                    .and_then(|v| v.as_str())
+                                {
+                                    let serial = serial.trim().to_string();
+                                    if !serial.is_empty() {
+                                        serials.push(format!("nvme-{}", serial));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also try SATA/ATA disks
+        if let Ok(output) = Command::new("system_profiler")
+            .args(["SPSerialATADataType", "-json"])
+            .output()
+        {
+            if output.status.success() {
+                if let Ok(stdout) = String::from_utf8(output.stdout) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                        if let Some(sata_items) = json.get("SPSerialATADataType").and_then(|v| v.as_array()) {
+                            for item in sata_items {
+                                if let Some(serial) = item.get("device_serial")
+                                    .and_then(|v| v.as_str())
+                                {
+                                    let serial = serial.trim().to_string();
+                                    if !serial.is_empty() {
+                                        serials.push(format!("ata-{}", serial));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        serials.sort();
+        serials.truncate(5);
+        serials
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     fn collect_disk_serials() -> Vec<String> {
         Vec::new()
     }
@@ -182,7 +244,34 @@ impl HardwareFingerprint {
             .filter(|mac| mac != "00:00:00:00:00:00")
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    fn get_mac_address(interface: &str) -> Option<String> {
+        use std::process::Command;
+
+        Command::new("ifconfig")
+            .arg(interface)
+            .output()
+            .ok()
+            .and_then(|output| {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("ether ") {
+                        let mac = trimmed
+                            .strip_prefix("ether ")
+                            .unwrap_or("")
+                            .trim()
+                            .to_uppercase();
+                        if mac != "00:00:00:00:00:00" && !mac.is_empty() {
+                            return Some(mac);
+                        }
+                    }
+                }
+                None
+            })
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     fn get_mac_address(_interface: &str) -> Option<String> {
         None
     }
