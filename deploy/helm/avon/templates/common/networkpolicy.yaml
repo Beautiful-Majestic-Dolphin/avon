@@ -30,6 +30,65 @@ spec:
     - ports:
         - protocol: UDP
           port: {{ .Values.gateway.service.port }}
+    {{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "istio") }}
+    # Allow Istio sidecar and control plane traffic
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "avon.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 15006
+        - protocol: TCP
+          port: 15001
+        - protocol: TCP
+          port: 15021
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 15017
+    # Allow Istio ingress gateway to reach admin-api
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+          podSelector:
+            matchLabels:
+              istio: ingressgateway
+      ports:
+        - protocol: TCP
+          port: {{ .Values.adminApi.service.port }}
+    {{- end }}
+    {{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "linkerd") }}
+    # Allow Linkerd proxy and control plane traffic
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "avon.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 4143
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd
+      ports:
+        - protocol: TCP
+          port: 4191
+    {{- end }}
+    {{- if .Values.serviceMesh.enabled }}
+    # Allow Prometheus to scrape metrics
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+    {{- end }}
   egress:
     # Allow traffic to within the namespace
     - to:
@@ -61,4 +120,46 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+    {{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "istio") }}
+    # Allow egress to istiod for xDS and certificate signing
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 15012
+        - protocol: TCP
+          port: 15014
+    {{- end }}
+    {{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "linkerd") }}
+    # Allow egress to Linkerd control plane
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd
+      ports:
+        - protocol: TCP
+          port: 8086
+        - protocol: TCP
+          port: 8090
+    {{- end }}
+    {{- if not .Values.postgresql.enabled }}
+    # Allow traffic to external PostgreSQL
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ .Values.externalDatabase.port | default 5432 }}
+    {{- end }}
+    {{- if not .Values.redis.enabled }}
+    # Allow traffic to external Redis
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ .Values.externalRedis.port | default 6379 }}
+    {{- end }}
 {{- end }}

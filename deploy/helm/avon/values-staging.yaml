@@ -146,6 +146,24 @@ podDisruptionBudget:
   enabled: true
   minAvailable: 1
 
+serviceMesh:
+  enabled: true
+  provider: "istio"
+  mtls:
+    mode: "PERMISSIVE"
+  istio:
+    gateway:
+      enabled: true
+      hosts:
+        - admin.staging.avon.example.com
+      tls:
+        mode: SIMPLE
+        credentialName: admin-tls
+    authorization:
+      enabled: true
+    serviceEntries:
+      enabled: true
+
 monitoring:
   serviceMonitor:
     enabled: true
