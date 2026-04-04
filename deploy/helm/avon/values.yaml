@@ -249,6 +249,13 @@ monitoring:
     enabled: false
     dashboardLabels: {}
 
+# Analytics configuration
+analytics:
+  enabled: false
+  prometheusUrl: "http://prometheus-server:9090"
+  collectionIntervalSeconds: 300
+  retentionDays: 7
+
 # Service Mesh configuration
 serviceMesh:
   enabled: false
