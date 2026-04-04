@@ -49,6 +49,9 @@ enum Commands {
         /// Data directory for storing identity
         #[arg(short, long)]
         data_dir: Option<PathBuf>,
+        /// Require FIDO2 hardware security key attestation during enrollment
+        #[arg(long)]
+        fido2: bool,
     },
     /// Show agent status
     Status {
@@ -84,20 +87,36 @@ async fn main() -> anyhow::Result<()> {
             token,
             control_plane,
             data_dir,
+            fido2,
         } => {
             tracing::info!("Starting device enrollment...");
-            
+
             let data_dir = data_dir.unwrap_or_else(AgentConfig::default_data_dir);
-            
+
+            // Perform FIDO2 attestation if requested
+            if fido2 {
+                if identity::fido2::is_authenticator_available() {
+                    tracing::info!("FIDO2 authenticator detected");
+                } else {
+                    eprintln!("Warning: --fido2 specified but no FIDO2 authenticator detected.");
+                    eprintln!("Please insert your hardware security key and try again.");
+                    std::process::exit(1);
+                }
+            }
+
             match identity::IdentityManager::enroll(&token, &control_plane, &data_dir).await {
                 Ok(identity) => {
                     tracing::info!(
                         device_id = %identity.device_id(),
+                        fido2 = fido2,
                         "Device enrolled successfully"
                     );
                     println!("Device enrolled successfully!");
                     println!("Device ID: {}", identity.device_id());
                     println!("Data directory: {}", data_dir.display());
+                    if fido2 {
+                        println!("FIDO2 attestation: verified");
+                    }
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "Enrollment failed");

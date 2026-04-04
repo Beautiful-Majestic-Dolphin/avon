@@ -57,6 +57,7 @@ class DeviceEnrollmentRequest(BaseModel):
     device_type: str = Field(..., pattern="^(linux|windows|macos|ios|android)$")
     assigned_pods: list[UUID] = Field(default_factory=list)
     description: Optional[str] = None
+    require_fido2: bool = False
 
 
 class EnrollmentTokenResponse(BaseModel):
@@ -65,6 +66,7 @@ class EnrollmentTokenResponse(BaseModel):
     token: str
     device_name: str
     device_type: str
+    require_fido2: bool = False
     expires_at: datetime
     installation_url: str
     installation_instructions: str

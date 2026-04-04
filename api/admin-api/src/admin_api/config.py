@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = 7
     
     cors_origins: list[str] = ["*"]
+
+    # WebAuthn / FIDO2 settings
+    webauthn_rp_id: str = "admin.avon.local"
+    webauthn_rp_name: str = "AVON Admin Console"
+    webauthn_origin: str = "https://admin.avon.local"
+    mfa_token_expire_minutes: int = 5
     
     enrollment_token_expire_hours: int = 24
     installation_package_base_url: str = "https://install.avon.local"
