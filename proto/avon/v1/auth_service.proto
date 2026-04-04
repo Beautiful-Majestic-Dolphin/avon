@@ -53,6 +53,10 @@ message EnrollDeviceRequest {
   HybridPublicKey device_public_key = 3;
   // Human-readable device name.
   string device_name = 4;
+  // FIDO2 attestation object from makeCredential (optional, required if token mandates it).
+  bytes fido2_attestation_object = 5;
+  // FIDO2 client data JSON from makeCredential (optional, required if token mandates it).
+  bytes fido2_client_data_json = 6;
 }
 
 // EnrollDeviceResponse contains the result of device enrollment.
@@ -67,6 +71,8 @@ message EnrollDeviceResponse {
   HybridPublicKey server_public_key = 4;
   // Error message if enrollment failed.
   string error_message = 5;
+  // Whether FIDO2 attestation was verified during enrollment.
+  bool fido2_attested = 6;
 }
 
 // RotateTokenRequest is sent to rotate a device's authentication token.

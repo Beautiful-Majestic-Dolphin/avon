@@ -12,6 +12,7 @@ from admin_api.db.models import (
     DbPod,
     DbPolicy,
     DbUser,
+    DbWebAuthnCredential,
     DbEnrollmentToken,
     DbTunnel,
     DbActivityLog,
@@ -680,3 +681,90 @@ class ActivityQueries:
             limit,
         )
         return [DbActivityLog(**dict(row)) for row in rows]
+
+
+class WebAuthnQueries:
+    """Database queries for WebAuthn credentials."""
+
+    @staticmethod
+    async def user_has_credentials(conn: asyncpg.Connection, user_id: UUID) -> bool:
+        """Check if a user has any WebAuthn credentials registered."""
+        row = await conn.fetchrow(
+            "SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1) AS has_creds",
+            user_id,
+        )
+        return row["has_creds"] if row else False
+
+    @staticmethod
+    async def get_credentials_for_user(
+        conn: asyncpg.Connection, user_id: UUID
+    ) -> list[DbWebAuthnCredential]:
+        """Get all WebAuthn credentials for a user."""
+        rows = await conn.fetch(
+            "SELECT * FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at",
+            user_id,
+        )
+        return [DbWebAuthnCredential(**dict(row)) for row in rows]
+
+    @staticmethod
+    async def get_credential_by_credential_id(
+        conn: asyncpg.Connection, credential_id: bytes
+    ) -> Optional[DbWebAuthnCredential]:
+        """Get a WebAuthn credential by its credential_id bytes."""
+        row = await conn.fetchrow(
+            "SELECT * FROM webauthn_credentials WHERE credential_id = $1",
+            credential_id,
+        )
+        return DbWebAuthnCredential(**dict(row)) if row else None
+
+    @staticmethod
+    async def create_credential(
+        conn: asyncpg.Connection,
+        user_id: UUID,
+        credential_id: bytes,
+        public_key: bytes,
+        sign_count: int,
+        transports: list[str],
+        aaguid: Optional[bytes],
+        name: str,
+    ) -> DbWebAuthnCredential:
+        """Store a new WebAuthn credential."""
+        row = await conn.fetchrow(
+            """INSERT INTO webauthn_credentials
+               (user_id, credential_id, public_key, sign_count, transports, aaguid, name)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               RETURNING *""",
+            user_id,
+            credential_id,
+            public_key,
+            sign_count,
+            transports,
+            aaguid,
+            name,
+        )
+        return DbWebAuthnCredential(**dict(row))
+
+    @staticmethod
+    async def update_sign_count(
+        conn: asyncpg.Connection, credential_id: bytes, new_count: int
+    ) -> None:
+        """Update sign_count and last_used_at after successful authentication."""
+        await conn.execute(
+            """UPDATE webauthn_credentials
+               SET sign_count = $2, last_used_at = NOW()
+               WHERE credential_id = $1""",
+            credential_id,
+            new_count,
+        )
+
+    @staticmethod
+    async def delete_credential(
+        conn: asyncpg.Connection, credential_uuid: UUID, user_id: UUID
+    ) -> bool:
+        """Delete a credential by its UUID. Returns True if deleted."""
+        result = await conn.execute(
+            "DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2",
+            credential_uuid,
+            user_id,
+        )
+        return result == "DELETE 1"

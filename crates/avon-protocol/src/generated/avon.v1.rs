@@ -455,6 +455,12 @@ pub struct EnrollDeviceRequest {
     /// Human-readable device name.
     #[prost(string, tag = "4")]
     pub device_name: ::prost::alloc::string::String,
+    /// FIDO2 attestation object from makeCredential (optional, required if token mandates it).
+    #[prost(bytes = "vec", tag = "5")]
+    pub fido2_attestation_object: ::prost::alloc::vec::Vec<u8>,
+    /// FIDO2 client data JSON from makeCredential (optional, required if token mandates it).
+    #[prost(bytes = "vec", tag = "6")]
+    pub fido2_client_data_json: ::prost::alloc::vec::Vec<u8>,
 }
 /// EnrollDeviceResponse contains the result of device enrollment.
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -475,6 +481,9 @@ pub struct EnrollDeviceResponse {
     /// Error message if enrollment failed.
     #[prost(string, tag = "5")]
     pub error_message: ::prost::alloc::string::String,
+    /// Whether FIDO2 attestation was verified during enrollment.
+    #[prost(bool, tag = "6")]
+    pub fido2_attested: bool,
 }
 /// RotateTokenRequest is sent to rotate a device's authentication token.
 #[allow(clippy::derive_partial_eq_without_eq)]

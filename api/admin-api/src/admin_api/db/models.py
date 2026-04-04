@@ -68,6 +68,21 @@ class DbUser(BaseModel):
     last_login_at: Optional[datetime] = None
 
 
+class DbWebAuthnCredential(BaseModel):
+    """WebAuthn credential database model."""
+
+    id: UUID
+    user_id: UUID
+    credential_id: bytes
+    public_key: bytes
+    sign_count: int = 0
+    transports: list[str] = []
+    aaguid: Optional[bytes] = None
+    name: str = "Security Key"
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+
+
 class DbEnrollmentToken(BaseModel):
     """Enrollment token database model."""
 
@@ -76,6 +91,7 @@ class DbEnrollmentToken(BaseModel):
     device_name: str
     device_type: str
     assigned_pods: list[UUID]
+    require_fido2: bool = False
     expires_at: datetime
     created_by: UUID
     consumed_at: Optional[datetime] = None

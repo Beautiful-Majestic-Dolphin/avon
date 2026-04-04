@@ -19,6 +19,7 @@ from admin_api.routers import (
     users_router,
     dashboard_router,
 )
+from admin_api.routers.webauthn import router as webauthn_router
 
 logger = structlog.get_logger()
 
@@ -86,6 +87,7 @@ app.include_router(policies_router, prefix="/api/v1/policies", tags=["policies"]
 app.include_router(tunnels_router, prefix="/api/v1/tunnels", tags=["tunnels"])
 app.include_router(users_router, prefix="/api/v1/users", tags=["users"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["dashboard"])
+app.include_router(webauthn_router, prefix="/api/v1/webauthn", tags=["webauthn"])
 
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
