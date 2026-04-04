@@ -30,6 +30,7 @@ class EnrollmentService:
         assigned_pods: list[UUID],
         created_by: UUID,
         expires_hours: Optional[int] = None,
+        require_fido2: bool = False,
     ) -> EnrollmentTokenResponse:
         """Create a new device enrollment.
         
@@ -58,6 +59,7 @@ class EnrollmentService:
             assigned_pods=assigned_pods,
             expires_at=expires_at,
             created_by=created_by,
+            require_fido2=require_fido2,
         )
 
         installation_url = self.installation_service.get_installation_url(
@@ -82,6 +84,7 @@ class EnrollmentService:
             token=token,
             device_name=name,
             device_type=device_type,
+            require_fido2=require_fido2,
             expires_at=expires_at,
             installation_url=installation_url,
             installation_instructions=installation_instructions,

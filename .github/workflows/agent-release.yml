@@ -1,0 +1,347 @@
+# AVON Agent Release
+#
+# Builds native agent binaries for all supported platforms, signs and
+# packages installers, and attaches them to the GitHub Release created
+# by build.yml.
+#
+# Triggered by version tags (v*) alongside build.yml. Both workflows
+# independently upload to the same release -- softprops/action-gh-release
+# is idempotent and handles concurrent access.
+
+name: Agent Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build native agent binaries for all platforms
+  # ---------------------------------------------------------------------------
+  build-agent:
+    name: Build Agent (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            binary: avon-agent
+            cross: false
+            strip: true
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            binary: avon-agent
+            cross: true
+            strip: false
+          - target: x86_64-apple-darwin
+            runner: macos-13
+            binary: avon-agent
+            cross: false
+            strip: true
+          - target: aarch64-apple-darwin
+            runner: macos-14
+            binary: avon-agent
+            cross: false
+            strip: true
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            binary: avon-agent.exe
+            cross: false
+            strip: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates -> target"
+          key: release-${{ matrix.target }}
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Cross-compilation for Linux ARM64
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build with cross
+        if: matrix.cross
+        run: cross build --release -p avon-agent --target ${{ matrix.target }}
+
+      # Native builds for all other targets
+      - name: Build natively
+        if: ${{ !matrix.cross }}
+        run: cargo build --release -p avon-agent --target ${{ matrix.target }}
+
+      # Strip debug symbols (reduces binary size ~50%)
+      - name: Strip binary
+        if: matrix.strip
+        run: strip target/${{ matrix.target }}/release/${{ matrix.binary }}
+
+      # Compute checksums
+      - name: Compute SHA256 (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          shasum -a 256 target/${{ matrix.target }}/release/${{ matrix.binary }} \
+            > target/${{ matrix.target }}/release/${{ matrix.binary }}.sha256
+
+      - name: Compute SHA256 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $hash = Get-FileHash "target/${{ matrix.target }}/release/${{ matrix.binary }}" -Algorithm SHA256
+          "$($hash.Hash.ToLower())  ${{ matrix.binary }}" | Out-File -FilePath "target/${{ matrix.target }}/release/${{ matrix.binary }}.sha256" -Encoding utf8
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/${{ matrix.binary }}
+            target/${{ matrix.target }}/release/${{ matrix.binary }}.sha256
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Package macOS universal binary + .pkg installer
+  # ---------------------------------------------------------------------------
+  package-macos:
+    name: Package macOS Universal
+    needs: build-agent
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Intel binary
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-x86_64-apple-darwin
+          path: artifacts/intel
+
+      - name: Download ARM binary
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-aarch64-apple-darwin
+          path: artifacts/arm
+
+      - name: Create universal binary
+        run: |
+          mkdir -p target/universal
+          lipo -create \
+            -output target/universal/avon-agent \
+            artifacts/intel/avon-agent \
+            artifacts/arm/avon-agent
+          chmod +x target/universal/avon-agent
+          echo "=== Universal binary info ==="
+          file target/universal/avon-agent
+          lipo -info target/universal/avon-agent
+
+      # Import signing certificates (conditional on secrets being available)
+      - name: Import signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          MACOS_KEYCHAIN_PWD: ${{ secrets.MACOS_KEYCHAIN_PWD }}
+        run: |
+          # Create temporary keychain
+          security create-keychain -p "$MACOS_KEYCHAIN_PWD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PWD" build.keychain
+
+          # Import certificate
+          echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
+          security import certificate.p12 -k build.keychain \
+            -P "$MACOS_CERTIFICATE_PWD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productsign
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$MACOS_KEYCHAIN_PWD" build.keychain
+
+          # Clean up certificate file
+          rm -f certificate.p12
+
+      # Build .pkg installer (with or without signing)
+      - name: Build signed .pkg
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          chmod +x deploy/macos/build-pkg.sh
+          ./deploy/macos/build-pkg.sh \
+            --sign "Developer ID Application: AVON" \
+            --notarize \
+            --version "$VERSION"
+
+      - name: Build unsigned .pkg
+        if: env.MACOS_CERTIFICATE == ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          chmod +x deploy/macos/build-pkg.sh
+          ./deploy/macos/build-pkg.sh --version "$VERSION"
+
+      - name: Prepare macOS artifact
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PKG_FILE=$(find deploy/macos/build/output -name "*.pkg" | head -1)
+          if [ -n "$PKG_FILE" ]; then
+            cp "$PKG_FILE" "avon-agent-${VERSION}-macos-universal.pkg"
+          fi
+          # Also provide the universal binary as a standalone download
+          cp target/universal/avon-agent "avon-agent-macos-universal"
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-macos-package
+          path: |
+            avon-agent-*-macos-universal.pkg
+            avon-agent-macos-universal
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Package Linux tar.gz archives
+  # ---------------------------------------------------------------------------
+  package-linux:
+    name: Package Linux Archives
+    needs: build-agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download x86_64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-x86_64-unknown-linux-gnu
+          path: artifacts/x86_64
+
+      - name: Download aarch64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-aarch64-unknown-linux-gnu
+          path: artifacts/aarch64
+
+      - name: Create archives
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # x86_64 archive
+          mkdir -p "avon-agent-${VERSION}-linux-x86_64"
+          cp artifacts/x86_64/avon-agent "avon-agent-${VERSION}-linux-x86_64/"
+          chmod +x "avon-agent-${VERSION}-linux-x86_64/avon-agent"
+          tar czf "avon-agent-${VERSION}-linux-x86_64.tar.gz" "avon-agent-${VERSION}-linux-x86_64"
+
+          # aarch64 archive
+          mkdir -p "avon-agent-${VERSION}-linux-aarch64"
+          cp artifacts/aarch64/avon-agent "avon-agent-${VERSION}-linux-aarch64/"
+          chmod +x "avon-agent-${VERSION}-linux-aarch64/avon-agent"
+          tar czf "avon-agent-${VERSION}-linux-aarch64.tar.gz" "avon-agent-${VERSION}-linux-aarch64"
+
+      - name: Upload Linux archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-linux-packages
+          path: avon-agent-*-linux-*.tar.gz
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Package Windows zip
+  # ---------------------------------------------------------------------------
+  package-windows:
+    name: Package Windows Archive
+    needs: build-agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-x86_64-pc-windows-msvc
+          path: artifacts/windows
+
+      - name: Create archive
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p "avon-agent-${VERSION}-windows-x86_64"
+          cp artifacts/windows/avon-agent.exe "avon-agent-${VERSION}-windows-x86_64/"
+          zip -r "avon-agent-${VERSION}-windows-x86_64.zip" "avon-agent-${VERSION}-windows-x86_64"
+
+      - name: Upload Windows archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-windows-package
+          path: avon-agent-*-windows-*.zip
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Publish all release assets to GitHub Release
+  # ---------------------------------------------------------------------------
+  publish-release-assets:
+    name: Publish Release Assets
+    needs: [package-macos, package-linux, package-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download macOS package
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-macos-package
+          path: release-assets
+
+      - name: Download Linux packages
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-linux-packages
+          path: release-assets
+
+      - name: Download Windows package
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-windows-package
+          path: release-assets
+
+      - name: Generate checksums
+        working-directory: release-assets
+        run: |
+          echo "=== Release Assets ==="
+          ls -la
+          sha256sum avon-agent-*.tar.gz avon-agent-*.pkg avon-agent-*.zip 2>/dev/null \
+            | tee checksums.sha256 || true
+          echo ""
+          echo "=== Checksums ==="
+          cat checksums.sha256
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release-assets/avon-agent-*-linux-x86_64.tar.gz
+            release-assets/avon-agent-*-linux-aarch64.tar.gz
+            release-assets/avon-agent-*-macos-universal.pkg
+            release-assets/avon-agent-*-windows-x86_64.zip
+            release-assets/checksums.sha256
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

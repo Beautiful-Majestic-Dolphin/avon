@@ -1,0 +1,106 @@
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "linkerd") }}
+---
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: {{ include "avon.auth.fullname" . }}-grpc
+  labels:
+    {{- include "avon.auth.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: auth
+  port: {{ .Values.auth.service.port }}
+  proxyProtocol: gRPC
+---
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: {{ include "avon.auth.fullname" . }}-health
+  labels:
+    {{- include "avon.auth.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: auth
+  port: 8080
+  proxyProtocol: HTTP/1
+---
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: {{ include "avon.ca.fullname" . }}-grpc
+  labels:
+    {{- include "avon.ca.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: ca
+  port: {{ .Values.ca.service.port }}
+  proxyProtocol: gRPC
+---
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: {{ include "avon.ca.fullname" . }}-health
+  labels:
+    {{- include "avon.ca.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: ca
+  port: 8080
+  proxyProtocol: HTTP/1
+---
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: {{ include "avon.pulse.fullname" . }}-grpc
+  labels:
+    {{- include "avon.pulse.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: pulse
+  port: {{ .Values.pulse.service.port }}
+  proxyProtocol: gRPC
+---
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: {{ include "avon.pulse.fullname" . }}-health
+  labels:
+    {{- include "avon.pulse.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: pulse
+  port: 8080
+  proxyProtocol: HTTP/1
+---
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: {{ include "avon.policyEngine.fullname" . }}-http
+  labels:
+    {{- include "avon.policyEngine.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: policy-engine
+  port: {{ .Values.policyEngine.service.port }}
+  proxyProtocol: HTTP/1
+---
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: {{ include "avon.adminApi.fullname" . }}-http
+  labels:
+    {{- include "avon.adminApi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: admin-api
+  port: {{ .Values.adminApi.service.port }}
+  proxyProtocol: HTTP/1
+{{- end }}

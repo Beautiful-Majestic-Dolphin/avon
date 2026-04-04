@@ -213,6 +213,15 @@ jobs:
           helm install avon oci://ghcr.io/${{ github.repository }}/charts/avon --version ${{ github.ref_name }}
           ```
 
+          ### Native Agent Binaries
+
+          Platform-specific agent binaries are attached to this release:
+          - **Linux** (x86_64, aarch64): \`.tar.gz\` archives
+          - **macOS** (Universal ARM + Intel): \`.pkg\` installer
+          - **Windows** (x86_64): \`.zip\` archive (experimental)
+
+          Verify downloads with \`checksums.sha256\`.
+
           ### Changelog
 
           See [CHANGELOG.md](./CHANGELOG.md) for details.

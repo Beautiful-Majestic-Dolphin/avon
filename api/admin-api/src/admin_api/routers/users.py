@@ -1,6 +1,6 @@
 """User management endpoints for AVON Admin API."""
 
-from typing import Optional
+from typing import Optional, Union
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -9,10 +9,11 @@ import asyncpg
 import structlog
 
 from admin_api.auth.dependencies import get_current_user, get_current_admin, CurrentUser
-from admin_api.auth.jwt import create_token_pair, refresh_access_token
+from admin_api.auth.jwt import create_mfa_token, create_token_pair, refresh_access_token
 from admin_api.db.connection import get_db
-from admin_api.db.queries import UserQueries, ActivityQueries
+from admin_api.db.queries import UserQueries, ActivityQueries, WebAuthnQueries
 from admin_api.schemas.common import (
+    MfaRequiredResponse,
     TokenResponse,
     LoginRequest,
     RefreshTokenRequest,
@@ -39,12 +40,17 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=Union[TokenResponse, MfaRequiredResponse])
 async def login(
     login_request: LoginRequest,
     db: asyncpg.Connection = Depends(get_db),
-) -> TokenResponse:
-    """Authenticate user and return tokens."""
+) -> Union[TokenResponse, MfaRequiredResponse]:
+    """Authenticate user and return tokens.
+
+    If the user has registered FIDO2 hardware security keys, returns an
+    MfaRequiredResponse with a short-lived mfa_token instead. The client
+    must complete the WebAuthn authentication flow to obtain JWT tokens.
+    """
     user = await UserQueries.get_user_by_email(db, login_request.email)
     if user is None:
         raise HTTPException(
@@ -64,6 +70,19 @@ async def login(
             detail="User account is disabled",
         )
 
+    # Check if user has registered FIDO2 hardware security keys
+    has_webauthn = await WebAuthnQueries.user_has_credentials(db, user.id)
+    if has_webauthn:
+        # User must complete MFA with their hardware key
+        mfa_token = create_mfa_token(user.id, user.email, user.is_admin)
+        logger.info("mfa_required", user_id=str(user.id), email=user.email)
+        return MfaRequiredResponse(
+            mfa_required=True,
+            mfa_token=mfa_token,
+            mfa_methods=["webauthn"],
+        )
+
+    # No FIDO2 keys registered -- proceed with password-only login
     await UserQueries.update_last_login(db, user.id)
 
     token_pair = create_token_pair(user.id, user.email, user.is_admin)
@@ -281,6 +300,12 @@ async def update_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
+        )
+
+    if user.managed_by == "scim":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is managed by SCIM. Modify via your identity provider.",
         )
 
     updates = []

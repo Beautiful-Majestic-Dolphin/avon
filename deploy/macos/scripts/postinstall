@@ -1,0 +1,56 @@
+#!/bin/bash
+# AVON Agent macOS post-install script
+# Creates directories, installs the LaunchDaemon, and starts the service
+
+set -e
+
+INSTALL_DIR="/usr/local/bin"
+DATA_DIR="/Library/Application Support/AVON"
+LOG_DIR="/Library/Logs/AVON"
+PLIST_SRC="/usr/local/share/avon/ai.avon.agent.plist"
+PLIST_DST="/Library/LaunchDaemons/ai.avon.agent.plist"
+SERVICE_LABEL="ai.avon.agent"
+
+echo "AVON Agent: Running post-install..."
+
+# Create data directory
+if [ ! -d "$DATA_DIR" ]; then
+    echo "Creating data directory: $DATA_DIR"
+    mkdir -p "$DATA_DIR"
+    chmod 755 "$DATA_DIR"
+fi
+
+# Create log directory
+if [ ! -d "$LOG_DIR" ]; then
+    echo "Creating log directory: $LOG_DIR"
+    mkdir -p "$LOG_DIR"
+    chmod 755 "$LOG_DIR"
+fi
+
+# Install LaunchDaemon plist
+echo "Installing LaunchDaemon plist..."
+cp "$PLIST_SRC" "$PLIST_DST"
+chown root:wheel "$PLIST_DST"
+chmod 644 "$PLIST_DST"
+
+# Ensure binary is executable
+chmod 755 "$INSTALL_DIR/avon-agent"
+
+# Load and start the service
+echo "Starting AVON agent service..."
+launchctl bootstrap system "$PLIST_DST"
+
+# Verify service is running
+sleep 2
+if launchctl list "$SERVICE_LABEL" &>/dev/null; then
+    echo "AVON Agent: Service started successfully."
+else
+    echo "AVON Agent: Warning - service may not have started. Check logs at $LOG_DIR"
+fi
+
+echo "AVON Agent: Post-install complete."
+echo "  Binary:  $INSTALL_DIR/avon-agent"
+echo "  Data:    $DATA_DIR"
+echo "  Logs:    $LOG_DIR"
+echo "  Service: $SERVICE_LABEL"
+exit 0

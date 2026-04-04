@@ -1,4 +1,4 @@
-{{- if .Values.adminApi.ingress.enabled -}}
+{{- if and .Values.adminApi.ingress.enabled (not (and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "istio"))) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

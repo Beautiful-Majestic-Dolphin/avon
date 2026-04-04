@@ -168,6 +168,12 @@ async def update_pod(
             detail="Pod not found",
         )
 
+    if existing.managed_by == "scim":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Pod is managed by SCIM. Modify via your identity provider.",
+        )
+
     pod = await PodQueries.update_pod(
         db,
         pod_id=pod_id,

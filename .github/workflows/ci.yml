@@ -55,6 +55,46 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  agent-platform-check:
+    name: Agent Platform Check (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos
+            runner: macos-14
+          - os: windows
+            runner: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates -> target"
+          key: ${{ matrix.os }}
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run clippy on agent
+        run: cargo clippy -p avon-agent --all-targets -- -D warnings
+
+      - name: Run agent tests
+        run: cargo test -p avon-agent
+        env:
+          RUST_LOG: debug
+
   python-check:
     name: Python Checks
     runs-on: ubuntu-latest

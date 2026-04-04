@@ -1,0 +1,71 @@
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "istio") }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "avon.auth.fullname" . }}
+  labels:
+    {{- include "avon.auth.labels" . | nindent 4 }}
+spec:
+  host: {{ include "avon.auth.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "avon.ca.fullname" . }}
+  labels:
+    {{- include "avon.ca.labels" . | nindent 4 }}
+spec:
+  host: {{ include "avon.ca.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "avon.pulse.fullname" . }}
+  labels:
+    {{- include "avon.pulse.labels" . | nindent 4 }}
+spec:
+  host: {{ include "avon.pulse.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "avon.policyEngine.fullname" . }}
+  labels:
+    {{- include "avon.policyEngine.labels" . | nindent 4 }}
+spec:
+  host: {{ include "avon.policyEngine.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "avon.adminApi.fullname" . }}
+  labels:
+    {{- include "avon.adminApi.labels" . | nindent 4 }}
+spec:
+  host: {{ include "avon.adminApi.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+{{- end }}
