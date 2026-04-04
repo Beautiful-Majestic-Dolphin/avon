@@ -1,0 +1,13 @@
+# Cross-compilation configuration for avon-agent
+#
+# These settings are used when building for a different target architecture.
+# In CI, the `cross` tool is used for Linux ARM64, which manages its own
+# toolchain and ignores these settings.
+#
+# For local cross-compilation on Linux:
+#   apt install gcc-aarch64-linux-gnu
+#   rustup target add aarch64-unknown-linux-gnu
+#   cargo build --release -p avon-agent --target aarch64-unknown-linux-gnu
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
