@@ -1,0 +1,11 @@
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "istio") }}
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: {{ include "avon.fullname" . }}-mtls
+  labels:
+    {{- include "avon.labels" . | nindent 4 }}
+spec:
+  mtls:
+    mode: {{ .Values.serviceMesh.mtls.mode | default "STRICT" }}
+{{- end }}

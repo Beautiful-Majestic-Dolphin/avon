@@ -51,6 +51,24 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class MfaRequiredResponse(BaseModel):
+    """Response when MFA is required to complete login."""
+
+    mfa_required: bool = True
+    mfa_token: str
+    mfa_methods: list[str] = ["webauthn"]
+
+
+class WebAuthnCredentialResponse(BaseModel):
+    """Response for a registered WebAuthn credential."""
+
+    id: UUID
+    name: str
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+    transports: list[str] = []
+
+
 class LoginRequest(BaseModel):
     """Login request."""
 

@@ -23,11 +23,28 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = 7
     
     cors_origins: list[str] = ["*"]
+
+    # WebAuthn / FIDO2 settings
+    webauthn_rp_id: str = "admin.avon.local"
+    webauthn_rp_name: str = "AVON Admin Console"
+    webauthn_origin: str = "https://admin.avon.local"
+    mfa_token_expire_minutes: int = 5
     
     enrollment_token_expire_hours: int = 24
     installation_package_base_url: str = "https://install.avon.local"
     
     control_plane_addresses: list[str] = ["gateway.avon.local:8443"]
+
+    # SCIM provisioning settings
+    scim_enabled: bool = False
+    scim_page_size_default: int = 100
+    scim_page_size_max: int = 1000
+
+    # Analytics settings
+    analytics_enabled: bool = False
+    analytics_prometheus_url: str = "http://prometheus:9090"
+    analytics_collection_interval_seconds: int = 300
+    analytics_retention_days: int = 7
 
 
 settings = Settings()

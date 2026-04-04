@@ -221,6 +221,7 @@ impl AuthService for AuthServiceImpl {
                     initial_token: vec![],
                     server_public_key: None,
                     error_message: "Hardware fingerprint mismatch".to_string(),
+                    fido2_attested: false,
                 }));
             }
         }
@@ -239,6 +240,7 @@ impl AuthService for AuthServiceImpl {
                 initial_token: vec![],
                 server_public_key: None,
                 error_message: "Device already enrolled".to_string(),
+                fido2_attested: false,
             }));
         }
 
@@ -275,6 +277,7 @@ impl AuthService for AuthServiceImpl {
             initial_token: initial_token.to_vec(),
             server_public_key: None, // TODO: Generate hybrid key pair
             error_message: String::new(),
+            fido2_attested: false,
         }))
     }
 

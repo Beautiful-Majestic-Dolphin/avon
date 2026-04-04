@@ -37,6 +37,7 @@
 pub mod cache;
 pub mod config;
 pub mod db;
+pub mod fido2;
 pub mod service;
 
 // Re-export main types

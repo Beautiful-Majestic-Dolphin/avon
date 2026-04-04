@@ -33,6 +33,8 @@ class DbPod(BaseModel):
     name: str
     parent_id: Optional[UUID] = None
     description: Optional[str] = None
+    external_id: Optional[str] = None
+    managed_by: str = "local"
     created_at: datetime
     updated_at: datetime
 
@@ -63,9 +65,26 @@ class DbUser(BaseModel):
     full_name: Optional[str] = None
     is_active: bool = True
     is_admin: bool = False
+    external_id: Optional[str] = None
+    managed_by: str = "local"
     created_at: datetime
     updated_at: datetime
     last_login_at: Optional[datetime] = None
+
+
+class DbWebAuthnCredential(BaseModel):
+    """WebAuthn credential database model."""
+
+    id: UUID
+    user_id: UUID
+    credential_id: bytes
+    public_key: bytes
+    sign_count: int = 0
+    transports: list[str] = []
+    aaguid: Optional[bytes] = None
+    name: str = "Security Key"
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
 
 
 class DbEnrollmentToken(BaseModel):
@@ -76,6 +95,7 @@ class DbEnrollmentToken(BaseModel):
     device_name: str
     device_type: str
     assigned_pods: list[UUID]
+    require_fido2: bool = False
     expires_at: datetime
     created_by: UUID
     consumed_at: Optional[datetime] = None
@@ -96,6 +116,18 @@ class DbTunnel(BaseModel):
     bytes_received: int = 0
     created_at: datetime
     updated_at: datetime
+
+
+class DbScimToken(BaseModel):
+    """SCIM bearer token database model."""
+
+    id: UUID
+    token_hash: str
+    description: str
+    created_by: UUID
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+    is_active: bool = True
 
 
 class DbActivityLog(BaseModel):

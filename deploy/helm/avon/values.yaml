@@ -248,3 +248,35 @@ monitoring:
   grafana:
     enabled: false
     dashboardLabels: {}
+
+# Analytics configuration
+analytics:
+  enabled: false
+  prometheusUrl: "http://prometheus-server:9090"
+  collectionIntervalSeconds: 300
+  retentionDays: 7
+
+# Service Mesh configuration
+serviceMesh:
+  enabled: false
+  provider: "none"  # none | istio | linkerd
+  mtls:
+    mode: "STRICT"  # STRICT | PERMISSIVE
+  # Istio-specific settings
+  istio:
+    revision: ""
+    gateway:
+      enabled: true
+      hosts:
+        - admin.avon.local
+      tls:
+        mode: SIMPLE
+        credentialName: admin-tls
+    authorization:
+      enabled: true
+    serviceEntries:
+      enabled: true
+  # Linkerd-specific settings
+  linkerd:
+    authorization:
+      enabled: true

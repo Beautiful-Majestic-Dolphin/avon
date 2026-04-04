@@ -234,3 +234,31 @@ Return the Redis hostname
 {{- .Values.externalRedis.host }}
 {{- end }}
 {{- end }}
+
+{{/*
+Service mesh sidecar annotations for non-gateway services
+*/}}
+{{- define "avon.meshAnnotations" -}}
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "istio") }}
+sidecar.istio.io/inject: "true"
+{{- if .Values.serviceMesh.istio.revision }}
+istio.io/rev: {{ .Values.serviceMesh.istio.revision | quote }}
+{{- end }}
+traffic.sidecar.istio.io/excludeInboundPorts: "9090"
+{{- end }}
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "linkerd") }}
+linkerd.io/inject: enabled
+{{- end }}
+{{- end }}
+
+{{/*
+Service mesh sidecar annotations for gateway (sidecar DISABLED)
+*/}}
+{{- define "avon.meshAnnotations.gateway" -}}
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "istio") }}
+sidecar.istio.io/inject: "false"
+{{- end }}
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "linkerd") }}
+linkerd.io/inject: disabled
+{{- end }}
+{{- end }}

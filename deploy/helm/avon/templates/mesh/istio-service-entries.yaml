@@ -1,0 +1,38 @@
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "istio") .Values.serviceMesh.istio.serviceEntries.enabled }}
+{{- if not .Values.postgresql.enabled }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: {{ include "avon.fullname" . }}-external-postgresql
+  labels:
+    {{- include "avon.labels" . | nindent 4 }}
+spec:
+  hosts:
+    - {{ .Values.externalDatabase.host | quote }}
+  ports:
+    - number: {{ .Values.externalDatabase.port | default 5432 }}
+      name: tcp-postgresql
+      protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: DNS
+{{- end }}
+{{- if not .Values.redis.enabled }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: {{ include "avon.fullname" . }}-external-redis
+  labels:
+    {{- include "avon.labels" . | nindent 4 }}
+spec:
+  hosts:
+    - {{ .Values.externalRedis.host | quote }}
+  ports:
+    - number: {{ .Values.externalRedis.port | default 6379 }}
+      name: tcp-redis
+      protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: DNS
+{{- end }}
+{{- end }}

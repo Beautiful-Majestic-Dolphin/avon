@@ -3,6 +3,7 @@
 //! Handles device identity, authentication tokens, and cryptographic operations.
 //! Supports both TPM-backed and software-based keystores.
 
+pub mod fido2;
 pub mod hardware;
 pub mod software;
 #[cfg(any(target_os = "linux", target_os = "windows"))]

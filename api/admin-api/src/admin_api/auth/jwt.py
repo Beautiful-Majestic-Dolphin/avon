@@ -147,3 +147,36 @@ def refresh_access_token(refresh_token: str) -> Optional[str]:
         email=token_data.email,
         is_admin=token_data.is_admin,
     )
+
+
+def create_mfa_token(
+    user_id: UUID,
+    email: str,
+    is_admin: bool = False,
+) -> str:
+    """Create a short-lived MFA challenge token.
+
+    Issued after password verification when the user has FIDO2 keys registered.
+    This token proves password auth passed but FIDO2 key tap is still required.
+    It cannot be used as an access token (type is 'mfa_challenge').
+    """
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.mfa_token_expire_minutes
+    )
+    to_encode = {
+        "sub": str(user_id),
+        "email": email,
+        "is_admin": is_admin,
+        "exp": expire,
+        "type": "mfa_challenge",
+    }
+    return jwt.encode(
+        to_encode,
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+
+def verify_mfa_token(token: str) -> Optional[TokenData]:
+    """Verify an MFA challenge token. Returns None if invalid/expired."""
+    return verify_token(token, expected_type="mfa_challenge")

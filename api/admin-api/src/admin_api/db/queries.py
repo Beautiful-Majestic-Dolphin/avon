@@ -12,7 +12,9 @@ from admin_api.db.models import (
     DbPod,
     DbPolicy,
     DbUser,
+    DbWebAuthnCredential,
     DbEnrollmentToken,
+    DbScimToken,
     DbTunnel,
     DbActivityLog,
 )
@@ -273,6 +275,53 @@ class PodQueries:
         row = await conn.fetchrow("SELECT COUNT(*) as count FROM pods")
         return row["count"] if row else 0
 
+    @staticmethod
+    async def get_pod_by_external_id(
+        conn: asyncpg.Connection, external_id: str
+    ) -> Optional[DbPod]:
+        """Get a pod by its external IdP identifier."""
+        row = await conn.fetchrow(
+            "SELECT * FROM pods WHERE external_id = $1", external_id
+        )
+        return DbPod(**dict(row)) if row else None
+
+    @staticmethod
+    async def search_pods(
+        conn: asyncpg.Connection,
+        column: str,
+        operator: str,
+        value: str,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> tuple[list[DbPod], int]:
+        """Search pods with SCIM filter. Returns (pods, total_count)."""
+        allowed_columns = {"name", "external_id"}
+        if column not in allowed_columns:
+            return [], 0
+
+        if operator == "eq":
+            where = f"{column} = $1"
+            params = [value]
+        elif operator == "co":
+            where = f"{column} ILIKE $1"
+            params = [f"%{value}%"]
+        elif operator == "sw":
+            where = f"{column} ILIKE $1"
+            params = [f"{value}%"]
+        else:
+            return [], 0
+
+        count_row = await conn.fetchrow(
+            f"SELECT COUNT(*) AS total FROM pods WHERE {where}", *params
+        )
+        total = count_row["total"] if count_row else 0
+
+        rows = await conn.fetch(
+            f"SELECT * FROM pods WHERE {where} ORDER BY created_at OFFSET ${len(params)+1} LIMIT ${len(params)+2}",
+            *params, offset, limit,
+        )
+        return [DbPod(**dict(row)) for row in rows], total
+
 
 class PolicyQueries:
     """Database queries for policies."""
@@ -490,6 +539,104 @@ class UserQueries:
         )
         return [DbUser(**dict(row)) for row in rows]
 
+    @staticmethod
+    async def get_user_by_external_id(
+        conn: asyncpg.Connection, external_id: str
+    ) -> Optional[DbUser]:
+        """Get a user by their external IdP identifier."""
+        row = await conn.fetchrow(
+            "SELECT * FROM users WHERE external_id = $1", external_id
+        )
+        return DbUser(**dict(row)) if row else None
+
+    @staticmethod
+    async def search_users(
+        conn: asyncpg.Connection,
+        column: str,
+        operator: str,
+        value: str,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> tuple[list[DbUser], int]:
+        """Search users with SCIM filter. Returns (users, total_count)."""
+        allowed_columns = {"email", "external_id", "full_name"}
+        if column not in allowed_columns:
+            return [], 0
+
+        if operator == "eq":
+            where = f"{column} = $1"
+            params = [value]
+        elif operator == "co":
+            where = f"{column} ILIKE $1"
+            params = [f"%{value}%"]
+        elif operator == "sw":
+            where = f"{column} ILIKE $1"
+            params = [f"{value}%"]
+        else:
+            return [], 0
+
+        count_row = await conn.fetchrow(
+            f"SELECT COUNT(*) AS total FROM users WHERE {where}", *params
+        )
+        total = count_row["total"] if count_row else 0
+
+        rows = await conn.fetch(
+            f"SELECT * FROM users WHERE {where} ORDER BY created_at OFFSET ${len(params)+1} LIMIT ${len(params)+2}",
+            *params, offset, limit,
+        )
+        return [DbUser(**dict(row)) for row in rows], total
+
+    @staticmethod
+    async def count_users(conn: asyncpg.Connection) -> int:
+        """Count total users."""
+        row = await conn.fetchrow("SELECT COUNT(*) AS total FROM users")
+        return row["total"] if row else 0
+
+    @staticmethod
+    async def update_user(
+        conn: asyncpg.Connection,
+        user_id: UUID,
+        email: Optional[str] = None,
+        full_name: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        is_admin: Optional[bool] = None,
+        external_id: Optional[str] = None,
+        managed_by: Optional[str] = None,
+        hashed_password: Optional[str] = None,
+    ) -> Optional[DbUser]:
+        """Update a user's fields. Only non-None values are updated."""
+        updates = []
+        params: list = [user_id]
+        idx = 2
+
+        for field, value in [
+            ("email", email),
+            ("full_name", full_name),
+            ("is_active", is_active),
+            ("is_admin", is_admin),
+            ("external_id", external_id),
+            ("managed_by", managed_by),
+            ("hashed_password", hashed_password),
+        ]:
+            if value is not None:
+                updates.append(f"{field} = ${idx}")
+                params.append(value)
+                idx += 1
+
+        if not updates:
+            return await UserQueries.get_user(conn, user_id)
+
+        updates.append("updated_at = NOW()")
+        query = f"UPDATE users SET {', '.join(updates)} WHERE id = $1 RETURNING *"
+        row = await conn.fetchrow(query, *params)
+        return DbUser(**dict(row)) if row else None
+
+    @staticmethod
+    async def delete_user(conn: asyncpg.Connection, user_id: UUID) -> bool:
+        """Delete a user. Returns True if deleted."""
+        result = await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+        return result == "DELETE 1"
+
 
 class EnrollmentQueries:
     """Database queries for enrollment tokens."""
@@ -680,3 +827,204 @@ class ActivityQueries:
             limit,
         )
         return [DbActivityLog(**dict(row)) for row in rows]
+
+
+class WebAuthnQueries:
+    """Database queries for WebAuthn credentials."""
+
+    @staticmethod
+    async def user_has_credentials(conn: asyncpg.Connection, user_id: UUID) -> bool:
+        """Check if a user has any WebAuthn credentials registered."""
+        row = await conn.fetchrow(
+            "SELECT EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id = $1) AS has_creds",
+            user_id,
+        )
+        return row["has_creds"] if row else False
+
+    @staticmethod
+    async def get_credentials_for_user(
+        conn: asyncpg.Connection, user_id: UUID
+    ) -> list[DbWebAuthnCredential]:
+        """Get all WebAuthn credentials for a user."""
+        rows = await conn.fetch(
+            "SELECT * FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at",
+            user_id,
+        )
+        return [DbWebAuthnCredential(**dict(row)) for row in rows]
+
+    @staticmethod
+    async def get_credential_by_credential_id(
+        conn: asyncpg.Connection, credential_id: bytes
+    ) -> Optional[DbWebAuthnCredential]:
+        """Get a WebAuthn credential by its credential_id bytes."""
+        row = await conn.fetchrow(
+            "SELECT * FROM webauthn_credentials WHERE credential_id = $1",
+            credential_id,
+        )
+        return DbWebAuthnCredential(**dict(row)) if row else None
+
+    @staticmethod
+    async def create_credential(
+        conn: asyncpg.Connection,
+        user_id: UUID,
+        credential_id: bytes,
+        public_key: bytes,
+        sign_count: int,
+        transports: list[str],
+        aaguid: Optional[bytes],
+        name: str,
+    ) -> DbWebAuthnCredential:
+        """Store a new WebAuthn credential."""
+        row = await conn.fetchrow(
+            """INSERT INTO webauthn_credentials
+               (user_id, credential_id, public_key, sign_count, transports, aaguid, name)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               RETURNING *""",
+            user_id,
+            credential_id,
+            public_key,
+            sign_count,
+            transports,
+            aaguid,
+            name,
+        )
+        return DbWebAuthnCredential(**dict(row))
+
+    @staticmethod
+    async def update_sign_count(
+        conn: asyncpg.Connection, credential_id: bytes, new_count: int
+    ) -> None:
+        """Update sign_count and last_used_at after successful authentication."""
+        await conn.execute(
+            """UPDATE webauthn_credentials
+               SET sign_count = $2, last_used_at = NOW()
+               WHERE credential_id = $1""",
+            credential_id,
+            new_count,
+        )
+
+    @staticmethod
+    async def delete_credential(
+        conn: asyncpg.Connection, credential_uuid: UUID, user_id: UUID
+    ) -> bool:
+        """Delete a credential by its UUID. Returns True if deleted."""
+        result = await conn.execute(
+            "DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2",
+            credential_uuid,
+            user_id,
+        )
+        return result == "DELETE 1"
+
+
+class UserPodQueries:
+    """Database queries for user-pod memberships (SCIM Group membership)."""
+
+    @staticmethod
+    async def get_user_pods(conn: asyncpg.Connection, user_id: UUID) -> list[UUID]:
+        """Get all pod IDs a user belongs to."""
+        rows = await conn.fetch(
+            "SELECT pod_id FROM user_pods WHERE user_id = $1", user_id
+        )
+        return [row["pod_id"] for row in rows]
+
+    @staticmethod
+    async def get_pod_users(conn: asyncpg.Connection, pod_id: UUID) -> list[DbUser]:
+        """Get all users in a pod."""
+        rows = await conn.fetch(
+            """SELECT u.* FROM users u
+               INNER JOIN user_pods up ON u.id = up.user_id
+               WHERE up.pod_id = $1
+               ORDER BY u.email""",
+            pod_id,
+        )
+        return [DbUser(**dict(row)) for row in rows]
+
+    @staticmethod
+    async def add_user_to_pod(
+        conn: asyncpg.Connection, user_id: UUID, pod_id: UUID
+    ) -> None:
+        """Add a user to a pod. Idempotent."""
+        await conn.execute(
+            "INSERT INTO user_pods (user_id, pod_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            user_id,
+            pod_id,
+        )
+
+    @staticmethod
+    async def remove_user_from_pod(
+        conn: asyncpg.Connection, user_id: UUID, pod_id: UUID
+    ) -> None:
+        """Remove a user from a pod."""
+        await conn.execute(
+            "DELETE FROM user_pods WHERE user_id = $1 AND pod_id = $2",
+            user_id,
+            pod_id,
+        )
+
+    @staticmethod
+    async def set_pod_members(
+        conn: asyncpg.Connection, pod_id: UUID, user_ids: list[UUID]
+    ) -> None:
+        """Replace all members of a pod with the given user IDs."""
+        await conn.execute("DELETE FROM user_pods WHERE pod_id = $1", pod_id)
+        for user_id in user_ids:
+            await conn.execute(
+                "INSERT INTO user_pods (user_id, pod_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                user_id,
+                pod_id,
+            )
+
+
+class ScimTokenQueries:
+    """Database queries for SCIM bearer tokens."""
+
+    @staticmethod
+    async def create_token(
+        conn: asyncpg.Connection,
+        token_hash: str,
+        description: str,
+        created_by: UUID,
+    ) -> DbScimToken:
+        """Create a new SCIM token."""
+        row = await conn.fetchrow(
+            """INSERT INTO scim_tokens (token_hash, description, created_by)
+               VALUES ($1, $2, $3)
+               RETURNING *""",
+            token_hash,
+            description,
+            created_by,
+        )
+        return DbScimToken(**dict(row))
+
+    @staticmethod
+    async def get_active_by_hash(
+        conn: asyncpg.Connection, token_hash: str
+    ) -> Optional[DbScimToken]:
+        """Get an active SCIM token by its hash."""
+        row = await conn.fetchrow(
+            "SELECT * FROM scim_tokens WHERE token_hash = $1 AND is_active = TRUE",
+            token_hash,
+        )
+        if row:
+            await conn.execute(
+                "UPDATE scim_tokens SET last_used_at = NOW() WHERE id = $1",
+                row["id"],
+            )
+        return DbScimToken(**dict(row)) if row else None
+
+    @staticmethod
+    async def list_tokens(conn: asyncpg.Connection) -> list[DbScimToken]:
+        """List all SCIM tokens (active and revoked)."""
+        rows = await conn.fetch(
+            "SELECT * FROM scim_tokens ORDER BY created_at DESC"
+        )
+        return [DbScimToken(**dict(row)) for row in rows]
+
+    @staticmethod
+    async def revoke_token(conn: asyncpg.Connection, token_id: UUID) -> bool:
+        """Revoke a SCIM token. Returns True if found and revoked."""
+        result = await conn.execute(
+            "UPDATE scim_tokens SET is_active = FALSE WHERE id = $1",
+            token_id,
+        )
+        return result == "UPDATE 1"

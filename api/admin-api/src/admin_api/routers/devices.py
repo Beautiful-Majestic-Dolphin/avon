@@ -110,6 +110,7 @@ async def create_enrollment(
         device_type=enrollment.device_type,
         assigned_pods=enrollment.assigned_pods,
         created_by=current_user.id,
+        require_fido2=enrollment.require_fido2,
     )
 
     await ActivityQueries.log_activity(
