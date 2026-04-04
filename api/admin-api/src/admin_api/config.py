@@ -40,5 +40,11 @@ class Settings(BaseSettings):
     scim_page_size_default: int = 100
     scim_page_size_max: int = 1000
 
+    # Analytics settings
+    analytics_enabled: bool = False
+    analytics_prometheus_url: str = "http://prometheus:9090"
+    analytics_collection_interval_seconds: int = 300
+    analytics_retention_days: int = 7
+
 
 settings = Settings()

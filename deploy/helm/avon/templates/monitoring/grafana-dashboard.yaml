@@ -447,6 +447,51 @@ data:
           ],
           "title": "Certificate Operations",
           "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 80}, {"color": "green", "value": 95}] } } },
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 16 },
+          "id": 8,
+          "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "sum(rate(avon_auth_rotations_total{result=\"success\"}[5m])) / sum(rate(avon_auth_rotations_total[5m])) * 100", "refId": "A" }],
+          "title": "Token Rotation Success Rate",
+          "type": "gauge"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": { "defaults": { "unit": "short" } },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+          "id": 9,
+          "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "sum(increase(avon_auth_enrollments_total[1h]))", "refId": "A" }],
+          "title": "Device Enrollment Trend (hourly)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": { "defaults": { "unit": "s" } },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+          "id": 10,
+          "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "histogram_quantile(0.95, sum(rate(gateway_response_time_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "A" }, { "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "histogram_quantile(0.50, sum(rate(gateway_response_time_seconds_bucket[5m])) by (le))", "legendFormat": "p50", "refId": "B" }],
+          "title": "Gateway Response Time (p50/p95)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+          "id": 11,
+          "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "sum(rate(avon_auth_verifications_total{result=\"failure\"}[5m]))", "legendFormat": "failures/sec", "refId": "A" }],
+          "title": "Auth Failure Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": { "defaults": { "unit": "short" } },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+          "id": 12,
+          "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "sum(rate(avon_ca_certificates_issued_total[5m]))", "legendFormat": "issued/sec", "refId": "A" }, { "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "sum(rate(avon_ca_certificates_revoked_total[5m]))", "legendFormat": "revoked/sec", "refId": "B" }],
+          "title": "Certificate Issuance vs Revocation",
+          "type": "timeseries"
         }
       ],
       "refresh": "30s",

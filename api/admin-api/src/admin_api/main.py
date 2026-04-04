@@ -20,6 +20,7 @@ from admin_api.routers import (
     dashboard_router,
 )
 from admin_api.routers.webauthn import router as webauthn_router
+from admin_api.routers.analytics import router as analytics_router
 from admin_api.routers.scim_tokens import router as scim_tokens_router
 from admin_api.scim.router import router as scim_router
 
@@ -50,17 +51,30 @@ def configure_logging() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    import asyncio
+
     configure_logging()
     logger.info("avon_admin_api_starting", version="1.0.0")
-    
+
     try:
         await DatabasePool.connect()
         logger.info("database_connected")
     except Exception as e:
         logger.warning("database_connection_failed", error=str(e))
-    
+
+    # Start analytics collector background task
+    collector_task = None
+    if settings.analytics_enabled:
+        from admin_api.analytics.collector import collector_loop
+
+        collector_task = asyncio.create_task(collector_loop())
+        logger.info("analytics_collector_started")
+
     yield
-    
+
+    if collector_task:
+        collector_task.cancel()
+
     await DatabasePool.disconnect()
     logger.info("avon_admin_api_shutdown")
 
@@ -90,6 +104,7 @@ app.include_router(tunnels_router, prefix="/api/v1/tunnels", tags=["tunnels"])
 app.include_router(users_router, prefix="/api/v1/users", tags=["users"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(webauthn_router, prefix="/api/v1/webauthn", tags=["webauthn"])
+app.include_router(analytics_router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(scim_tokens_router, prefix="/api/v1/scim-tokens", tags=["scim-tokens"])
 app.include_router(scim_router, prefix="/scim/v2", tags=["scim"])
 
