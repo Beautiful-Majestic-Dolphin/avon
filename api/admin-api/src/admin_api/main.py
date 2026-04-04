@@ -20,6 +20,8 @@ from admin_api.routers import (
     dashboard_router,
 )
 from admin_api.routers.webauthn import router as webauthn_router
+from admin_api.routers.scim_tokens import router as scim_tokens_router
+from admin_api.scim.router import router as scim_router
 
 logger = structlog.get_logger()
 
@@ -88,6 +90,8 @@ app.include_router(tunnels_router, prefix="/api/v1/tunnels", tags=["tunnels"])
 app.include_router(users_router, prefix="/api/v1/users", tags=["users"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(webauthn_router, prefix="/api/v1/webauthn", tags=["webauthn"])
+app.include_router(scim_tokens_router, prefix="/api/v1/scim-tokens", tags=["scim-tokens"])
+app.include_router(scim_router, prefix="/scim/v2", tags=["scim"])
 
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
