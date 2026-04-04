@@ -54,3 +54,7 @@ temp/
 *-secret.yaml
 *.pem
 *.key
+
+# Claude Code
+.claude/
+CLAUDE.md
