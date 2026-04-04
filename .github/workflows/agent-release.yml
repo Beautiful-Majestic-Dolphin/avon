@@ -112,7 +112,7 @@ jobs:
           "$($hash.Hash.ToLower())  ${{ matrix.binary }}" | Out-File -FilePath "target/${{ matrix.target }}/release/${{ matrix.binary }}.sha256" -Encoding utf8
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agent-${{ matrix.target }}
           path: |
@@ -217,7 +217,7 @@ jobs:
           cp target/universal/avon-agent "avon-agent-macos-universal"
 
       - name: Upload macOS package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agent-macos-package
           path: |
@@ -262,7 +262,7 @@ jobs:
           tar czf "avon-agent-${VERSION}-linux-aarch64.tar.gz" "avon-agent-${VERSION}-linux-aarch64"
 
       - name: Upload Linux archives
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agent-linux-packages
           path: avon-agent-*-linux-*.tar.gz
@@ -290,7 +290,7 @@ jobs:
           zip -r "avon-agent-${VERSION}-windows-x86_64.zip" "avon-agent-${VERSION}-windows-x86_64"
 
       - name: Upload Windows archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agent-windows-package
           path: avon-agent-*-windows-*.zip
