@@ -17,6 +17,7 @@ spec:
         prometheus.io/path: "/metrics"
         checksum/config: {{ include (print $.Template.BasePath "/pulse/configmap.yaml") . | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/common/secrets.yaml") . | sha256sum }}
+        {{- include "avon.meshAnnotations" . | nindent 8 }}
         {{- with .Values.pulse.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -1,0 +1,52 @@
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "linkerd") .Values.serviceMesh.linkerd.authorization.enabled }}
+---
+# Allow internal Avon service-to-service traffic via mesh mTLS
+apiVersion: policy.linkerd.io/v1beta1
+kind: ServerAuthorization
+metadata:
+  name: {{ include "avon.fullname" . }}-internal
+  labels:
+    {{- include "avon.labels" . | nindent 4 }}
+spec:
+  server:
+    selector:
+      matchLabels:
+        {{- include "avon.selectorLabels" . | nindent 8 }}
+  client:
+    meshTLS:
+      serviceAccounts:
+        - name: {{ include "avon.serviceAccountName" . }}
+---
+# Allow kubelet health probes (unauthenticated, no mesh identity)
+apiVersion: policy.linkerd.io/v1beta1
+kind: ServerAuthorization
+metadata:
+  name: {{ include "avon.fullname" . }}-health-probes
+  labels:
+    {{- include "avon.labels" . | nindent 4 }}
+spec:
+  server:
+    selector:
+      matchLabels:
+        {{- include "avon.selectorLabels" . | nindent 8 }}
+  client:
+    unauthenticated: true
+    networks:
+      - cidr: "0.0.0.0/0"
+---
+# Allow nginx ingress to reach admin-api
+apiVersion: policy.linkerd.io/v1beta1
+kind: ServerAuthorization
+metadata:
+  name: {{ include "avon.adminApi.fullname" . }}-ingress
+  labels:
+    {{- include "avon.adminApi.labels" . | nindent 4 }}
+spec:
+  server:
+    name: {{ include "avon.adminApi.fullname" . }}-http
+  client:
+    meshTLS:
+      serviceAccounts:
+        - name: ingress-nginx
+          namespace: ingress-nginx
+{{- end }}

@@ -1,0 +1,67 @@
+{{- if and .Values.serviceMesh.enabled (eq .Values.serviceMesh.provider "linkerd") }}
+---
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: {{ include "avon.auth.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  labels:
+    {{- include "avon.auth.labels" . | nindent 4 }}
+spec:
+  routes:
+    - name: gRPC
+      condition:
+        pathRegex: /.*
+      timeout: 10s
+---
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: {{ include "avon.ca.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  labels:
+    {{- include "avon.ca.labels" . | nindent 4 }}
+spec:
+  routes:
+    - name: gRPC
+      condition:
+        pathRegex: /.*
+      timeout: 30s
+---
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: {{ include "avon.pulse.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  labels:
+    {{- include "avon.pulse.labels" . | nindent 4 }}
+spec:
+  routes:
+    - name: gRPC
+      condition:
+        pathRegex: /.*
+      timeout: 10s
+---
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: {{ include "avon.policyEngine.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  labels:
+    {{- include "avon.policyEngine.labels" . | nindent 4 }}
+spec:
+  routes:
+    - name: HTTP
+      condition:
+        pathRegex: /.*
+      timeout: 10s
+---
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: {{ include "avon.adminApi.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  labels:
+    {{- include "avon.adminApi.labels" . | nindent 4 }}
+spec:
+  routes:
+    - name: HTTP
+      condition:
+        pathRegex: /.*
+      timeout: 30s
+{{- end }}

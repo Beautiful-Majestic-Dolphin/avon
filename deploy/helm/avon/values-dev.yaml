@@ -136,6 +136,10 @@ monitoring:
   grafana:
     enabled: false
 
+serviceMesh:
+  enabled: false
+  provider: "none"
+
 secrets:
   jwtSecret: "dev-jwt-secret-change-me-in-production"
   databaseUrl: "postgresql://postgres:dev-password-change-me@avon-postgresql:5432/avon"
