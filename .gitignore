@@ -58,3 +58,6 @@ temp/
 # Claude Code
 .claude/
 CLAUDE.md
+
+# Superpowers specs
+docs/superpowers/specs/
