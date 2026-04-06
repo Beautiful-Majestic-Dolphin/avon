@@ -37,7 +37,7 @@ redis = { version = "0.24", features = ["tokio-comp"] }
 
 # Metrics and config
 metrics = "0.22"
-metrics-exporter-prometheus = "0.13"
+metrics-exporter-prometheus = "0.18"
 config = "0.14"
 clap = { version = "4.4", features = ["derive"] }
 
