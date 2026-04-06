@@ -45,7 +45,7 @@ num-traits = "0.2"
 uuid = { version = "1.7", features = ["v4", "serde"] }
 
 # Metrics and config
-metrics = "0.22"
+metrics = "0.24"
 metrics-exporter-prometheus = "0.13"
 config = "0.14"
 clap = { version = "4.4", features = ["derive", "env"] }
