@@ -99,10 +99,7 @@ impl RoutingTable {
 
     /// Returns all routes as a vector of (destination, session_id) pairs.
     pub fn all_routes(&self) -> Vec<(IpAddr, SessionId)> {
-        self.routes
-            .iter()
-            .map(|r| (*r.key(), *r.value()))
-            .collect()
+        self.routes.iter().map(|r| (*r.key(), *r.value())).collect()
     }
 
     /// Returns all destinations for a session.

@@ -30,12 +30,7 @@ impl TunDevice {
     /// * `address` - IP address to assign to the device
     /// * `netmask` - Netmask for the device
     /// * `mtu` - Maximum transmission unit
-    pub async fn create(
-        name: &str,
-        address: IpAddr,
-        netmask: IpAddr,
-        mtu: u32,
-    ) -> Result<Self> {
+    pub async fn create(name: &str, address: IpAddr, netmask: IpAddr, mtu: u32) -> Result<Self> {
         #[cfg(target_os = "linux")]
         let handle = linux::LinuxTunHandle::create(name, address, netmask, mtu)
             .await
@@ -144,18 +139,22 @@ mod linux {
             ifr[16..18].copy_from_slice(&flags.to_ne_bytes());
 
             // SAFETY: We're calling ioctl with a valid fd and properly sized buffer
-            let result = unsafe {
-                libc::ioctl(fd, TUNSETIFF as libc::c_ulong, ifr.as_mut_ptr())
-            };
+            let result = unsafe { libc::ioctl(fd, TUNSETIFF as libc::c_ulong, ifr.as_mut_ptr()) };
 
             if result < 0 {
-                anyhow::bail!("ioctl TUNSETIFF failed: {}", std::io::Error::last_os_error());
+                anyhow::bail!(
+                    "ioctl TUNSETIFF failed: {}",
+                    std::io::Error::last_os_error()
+                );
             }
 
             // Configure the interface using ip commands
             Self::configure_interface(name, address, netmask, mtu)?;
 
-            Ok(Self { fd, file: Mutex::new(file) })
+            Ok(Self {
+                fd,
+                file: Mutex::new(file),
+            })
         }
 
         /// Configures the network interface.
@@ -170,7 +169,13 @@ mod linux {
 
             // Set IP address
             let output = Command::new("ip")
-                .args(["addr", "add", &format!("{}/{}", address, prefix_len), "dev", name])
+                .args([
+                    "addr",
+                    "add",
+                    &format!("{}/{}", address, prefix_len),
+                    "dev",
+                    name,
+                ])
                 .output()
                 .context("Failed to run ip addr add")?;
 
@@ -189,7 +194,10 @@ mod linux {
                 .context("Failed to run ip link set mtu")?;
 
             if !output.status.success() {
-                anyhow::bail!("ip link set mtu failed: {}", String::from_utf8_lossy(&output.stderr));
+                anyhow::bail!(
+                    "ip link set mtu failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
 
             // Bring interface up
@@ -199,7 +207,10 @@ mod linux {
                 .context("Failed to run ip link set up")?;
 
             if !output.status.success() {
-                anyhow::bail!("ip link set up failed: {}", String::from_utf8_lossy(&output.stderr));
+                anyhow::bail!(
+                    "ip link set up failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
 
             Ok(())
@@ -222,7 +233,7 @@ mod linux {
         /// Reads a packet from the TUN device.
         pub async fn read_packet(&self) -> Result<Vec<u8>> {
             let mut buf = vec![0u8; 65536];
-            
+
             let mut file = self.file.lock().await;
             let len = file
                 .read(&mut buf)
@@ -333,9 +344,7 @@ mod macos {
             mtu: u32,
         ) -> Result<Self> {
             // Create a PF_SYSTEM socket for kernel control
-            let fd = unsafe {
-                libc::socket(PF_SYSTEM, libc::SOCK_DGRAM, SYSPROTO_CONTROL)
-            };
+            let fd = unsafe { libc::socket(PF_SYSTEM, libc::SOCK_DGRAM, SYSPROTO_CONTROL) };
             if fd < 0 {
                 anyhow::bail!(
                     "Failed to create PF_SYSTEM socket: {}",
@@ -351,11 +360,11 @@ mod macos {
             let name_bytes = UTUN_CONTROL_NAME.as_bytes();
             ctl_info.ctl_name[..name_bytes.len()].copy_from_slice(name_bytes);
 
-            let result = unsafe {
-                libc::ioctl(fd, CTLIOCGINFO, &mut ctl_info as *mut CtlInfo)
-            };
+            let result = unsafe { libc::ioctl(fd, CTLIOCGINFO, &mut ctl_info as *mut CtlInfo) };
             if result < 0 {
-                unsafe { libc::close(fd); }
+                unsafe {
+                    libc::close(fd);
+                }
                 anyhow::bail!(
                     "ioctl CTLIOCGINFO failed: {}",
                     std::io::Error::last_os_error()
@@ -394,7 +403,9 @@ mod macos {
                 )
             };
             if result < 0 {
-                unsafe { libc::close(fd); }
+                unsafe {
+                    libc::close(fd);
+                }
                 anyhow::bail!(
                     "Failed to connect utun socket (unit {}): {}",
                     unit,
@@ -409,15 +420,16 @@ mod macos {
             // Set socket to non-blocking for async I/O
             let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
             if flags < 0 {
-                unsafe { libc::close(fd); }
-                anyhow::bail!(
-                    "fcntl F_GETFL failed: {}",
-                    std::io::Error::last_os_error()
-                );
+                unsafe {
+                    libc::close(fd);
+                }
+                anyhow::bail!("fcntl F_GETFL failed: {}", std::io::Error::last_os_error());
             }
             let result = unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
             if result < 0 {
-                unsafe { libc::close(fd); }
+                unsafe {
+                    libc::close(fd);
+                }
                 anyhow::bail!(
                     "fcntl F_SETFL O_NONBLOCK failed: {}",
                     std::io::Error::last_os_error()
@@ -428,8 +440,8 @@ mod macos {
             Self::configure_interface(&utun_name, address, netmask, mtu)?;
 
             let wrapper = RawFdWrapper { fd };
-            let async_fd = AsyncFd::new(wrapper)
-                .context("Failed to create AsyncFd for utun socket")?;
+            let async_fd =
+                AsyncFd::new(wrapper).context("Failed to create AsyncFd for utun socket")?;
 
             Ok(Self {
                 fd: async_fd,
@@ -518,7 +530,10 @@ mod macos {
 
             tracing::info!(
                 "Configured {} with address {} netmask {} mtu {}",
-                name, address, netmask, mtu
+                name,
+                address,
+                netmask,
+                mtu
             );
             Ok(())
         }
@@ -543,7 +558,10 @@ mod macos {
         /// This method strips the header and returns only the raw IP packet.
         pub async fn read_packet(&self) -> Result<Vec<u8>> {
             loop {
-                let mut guard = self.fd.readable().await
+                let mut guard = self
+                    .fd
+                    .readable()
+                    .await
                     .context("Failed to wait for utun readable")?;
 
                 // 4-byte AF header + max IP packet
@@ -601,7 +619,10 @@ mod macos {
             buf.extend_from_slice(packet);
 
             loop {
-                let mut guard = self.fd.writable().await
+                let mut guard = self
+                    .fd
+                    .writable()
+                    .await
                     .context("Failed to wait for utun writable")?;
 
                 match guard.try_io(|inner| {
@@ -675,12 +696,7 @@ struct StubTunHandle {
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 impl StubTunHandle {
-    async fn create(
-        name: &str,
-        _address: IpAddr,
-        _netmask: IpAddr,
-        _mtu: u32,
-    ) -> Result<Self> {
+    async fn create(name: &str, _address: IpAddr, _netmask: IpAddr, _mtu: u32) -> Result<Self> {
         tracing::warn!("TUN device not supported on this platform");
         Ok(Self {
             _name: name.to_string(),

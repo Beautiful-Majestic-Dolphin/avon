@@ -43,19 +43,19 @@ impl IdentityManager {
         let keystore_path = data_dir.join("keystore.enc");
         let token_path = data_dir.join("token.enc");
 
-        let identity_data = std::fs::read_to_string(&identity_path)
-            .context("Failed to read identity file")?;
-        let data: IdentityData = serde_json::from_str(&identity_data)
-            .context("Failed to parse identity data")?;
+        let identity_data =
+            std::fs::read_to_string(&identity_path).context("Failed to read identity file")?;
+        let data: IdentityData =
+            serde_json::from_str(&identity_data).context("Failed to parse identity data")?;
 
         let fingerprint = HardwareFingerprint::collect();
 
         let keystore = SoftwareKeystore::load(&keystore_path, &fingerprint)
             .context("Failed to load keystore")?;
 
-        let token_data = std::fs::read(&token_path)
-            .context("Failed to read token file")?;
-        let token = keystore.decrypt_token(&token_data)
+        let token_data = std::fs::read(&token_path).context("Failed to read token file")?;
+        let token = keystore
+            .decrypt_token(&token_data)
             .context("Failed to decrypt token")?;
 
         tracing::info!(device_id = %data.device_id, "Identity loaded successfully");
@@ -75,8 +75,7 @@ impl IdentityManager {
     ) -> Result<Self> {
         tracing::info!(control_plane = %control_plane, "Starting enrollment");
 
-        std::fs::create_dir_all(data_dir)
-            .context("Failed to create data directory")?;
+        std::fs::create_dir_all(data_dir).context("Failed to create data directory")?;
 
         let fingerprint = HardwareFingerprint::collect();
         tracing::debug!(fingerprint_hash = %hex::encode(fingerprint.to_hash()), "Hardware fingerprint collected");
@@ -94,8 +93,7 @@ impl IdentityManager {
 
         let token_path = data_dir.join("token.enc");
         let encrypted_token = keystore.encrypt_token(&initial_token)?;
-        std::fs::write(&token_path, &encrypted_token)
-            .context("Failed to write token file")?;
+        std::fs::write(&token_path, &encrypted_token).context("Failed to write token file")?;
 
         let data = IdentityData {
             device_id,
@@ -105,10 +103,9 @@ impl IdentityManager {
         };
 
         let identity_path = data_dir.join("identity.json");
-        let identity_json = serde_json::to_string_pretty(&data)
-            .context("Failed to serialize identity")?;
-        std::fs::write(&identity_path, &identity_json)
-            .context("Failed to write identity file")?;
+        let identity_json =
+            serde_json::to_string_pretty(&data).context("Failed to serialize identity")?;
+        std::fs::write(&identity_path, &identity_json).context("Failed to write identity file")?;
 
         tracing::info!(device_id = %device_id, "Enrollment complete");
 
@@ -140,7 +137,7 @@ impl IdentityManager {
     pub async fn rotate_token(&self, input: &TokenRotationInput) -> [u8; 32] {
         let mut token = self.token.write().await;
         let new_token = token.rotate(input);
-        
+
         tracing::debug!("Token rotated successfully");
         new_token
     }
@@ -189,13 +186,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let data_dir = temp_dir.path();
 
-        let identity = IdentityManager::enroll(
-            "test-enrollment-token",
-            "gateway.avon.local:8443",
-            data_dir,
-        )
-        .await
-        .unwrap();
+        let identity =
+            IdentityManager::enroll("test-enrollment-token", "gateway.avon.local:8443", data_dir)
+                .await
+                .unwrap();
 
         assert!(!identity.device_id().to_string().is_empty());
 
@@ -208,13 +202,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let data_dir = temp_dir.path();
 
-        let identity = IdentityManager::enroll(
-            "test-token",
-            "gateway.avon.local:8443",
-            data_dir,
-        )
-        .await
-        .unwrap();
+        let identity = IdentityManager::enroll("test-token", "gateway.avon.local:8443", data_dir)
+            .await
+            .unwrap();
 
         let data = b"test data";
         let tag1 = identity.get_auth_tag(data).await;

@@ -203,7 +203,9 @@ impl PostureCollector {
         // Check /etc/crypttab
         if let Ok(content) = std::fs::read_to_string("/etc/crypttab") {
             if !content.trim().is_empty()
-                && content.lines().any(|l| !l.starts_with('#') && !l.trim().is_empty())
+                && content
+                    .lines()
+                    .any(|l| !l.starts_with('#') && !l.trim().is_empty())
             {
                 return true;
             }
@@ -232,10 +234,7 @@ impl PostureCollector {
         use std::process::Command;
 
         // Check BitLocker status
-        if let Ok(output) = Command::new("manage-bde")
-            .args(["-status", "C:"])
-            .output()
-        {
+        if let Ok(output) = Command::new("manage-bde").args(["-status", "C:"]).output() {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 return stdout.contains("Protection On") || stdout.contains("Fully Encrypted");
@@ -306,10 +305,7 @@ impl PostureCollector {
         use std::process::Command;
 
         // Get last software update time
-        if let Ok(output) = Command::new("softwareupdate")
-            .args(["--history"])
-            .output()
-        {
+        if let Ok(output) = Command::new("softwareupdate").args(["--history"]).output() {
             if output.status.success() {
                 // Parse the output to find the most recent update
                 // This is a simplified implementation

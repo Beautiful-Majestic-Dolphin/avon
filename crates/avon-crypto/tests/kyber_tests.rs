@@ -2,9 +2,8 @@
 
 use avon_crypto::error::CryptoError;
 use avon_crypto::pqc::kyber::{
-    KyberCiphertext, KyberKeyPair, KyberPublicKey, KyberSecretKey,
-    KYBER768_CIPHERTEXT_BYTES, KYBER768_PUBLIC_KEY_BYTES, KYBER768_SECRET_KEY_BYTES,
-    KYBER768_SHARED_SECRET_BYTES,
+    KyberCiphertext, KyberKeyPair, KyberPublicKey, KyberSecretKey, KYBER768_CIPHERTEXT_BYTES,
+    KYBER768_PUBLIC_KEY_BYTES, KYBER768_SECRET_KEY_BYTES, KYBER768_SHARED_SECRET_BYTES,
 };
 
 // =============================================================================
@@ -59,7 +58,10 @@ mod key_generation_tests {
         let keypair1 = KyberKeyPair::generate().unwrap();
         let keypair2 = KyberKeyPair::generate().unwrap();
 
-        assert_ne!(keypair1.public_key().to_bytes(), keypair2.public_key().to_bytes());
+        assert_ne!(
+            keypair1.public_key().to_bytes(),
+            keypair2.public_key().to_bytes()
+        );
     }
 }
 
@@ -300,19 +302,19 @@ mod api_consistency_tests {
     #[test]
     fn test_api_similar_to_ecdh() {
         // This test verifies that the Kyber API follows a similar pattern to ECDH
-        
+
         // Generate keypair (similar to X25519KeyPair::generate())
         let keypair = KyberKeyPair::generate().unwrap();
-        
+
         // Get public key (similar to keypair.public_key())
         let _public_key = keypair.public_key();
-        
+
         // Encapsulate (KEM equivalent of DH)
         let (ciphertext, sender_shared) = keypair.public_key().encapsulate().unwrap();
-        
+
         // Decapsulate (KEM equivalent of DH from other side)
         let receiver_shared = keypair.decapsulate(&ciphertext).unwrap();
-        
+
         // Both parties have same shared secret (like DH)
         assert_eq!(sender_shared.as_bytes(), receiver_shared.as_bytes());
     }

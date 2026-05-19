@@ -114,9 +114,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let db = Arc::new(PulseDatabase::new(
-        pool.unwrap_or_else(|| {
-            panic!("Database URL is required for pulse manager")
-        }),
+        pool.unwrap_or_else(|| panic!("Database URL is required for pulse manager")),
         args.redis_url.clone(),
     ));
 
@@ -125,9 +123,8 @@ async fn main() -> anyhow::Result<()> {
         Duration::from_secs(args.rotation_interval_secs),
     ));
 
-    let (gateway_tx, mut gateway_rx) = tokio::sync::mpsc::channel(
-        config.gateway_channel_size.unwrap_or(1000),
-    );
+    let (gateway_tx, mut gateway_rx) =
+        tokio::sync::mpsc::channel(config.gateway_channel_size.unwrap_or(1000));
 
     let scheduler = Arc::new(PulseScheduler::new(
         db.clone(),
@@ -138,10 +135,7 @@ async fn main() -> anyhow::Result<()> {
 
     let service = PulseServiceImpl::new(scheduler.clone(), rotation_manager.clone());
 
-    let addr = args
-        .listen_addr
-        .parse()
-        .expect("Invalid listen address");
+    let addr = args.listen_addr.parse().expect("Invalid listen address");
 
     // Start health server
     let health_port: u16 = std::env::var("AVON_HEALTH_PORT")

@@ -163,10 +163,12 @@ impl HardwareFingerprint {
                 if let Ok(stdout) = String::from_utf8(output.stdout) {
                     // Parse JSON to extract serial numbers
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                        if let Some(nvme_items) = json.get("SPNVMeDataType").and_then(|v| v.as_array()) {
+                        if let Some(nvme_items) =
+                            json.get("SPNVMeDataType").and_then(|v| v.as_array())
+                        {
                             for item in nvme_items {
-                                if let Some(serial) = item.get("device_serial")
-                                    .and_then(|v| v.as_str())
+                                if let Some(serial) =
+                                    item.get("device_serial").and_then(|v| v.as_str())
                                 {
                                     let serial = serial.trim().to_string();
                                     if !serial.is_empty() {
@@ -188,10 +190,12 @@ impl HardwareFingerprint {
             if output.status.success() {
                 if let Ok(stdout) = String::from_utf8(output.stdout) {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                        if let Some(sata_items) = json.get("SPSerialATADataType").and_then(|v| v.as_array()) {
+                        if let Some(sata_items) =
+                            json.get("SPSerialATADataType").and_then(|v| v.as_array())
+                        {
                             for item in sata_items {
-                                if let Some(serial) = item.get("device_serial")
-                                    .and_then(|v| v.as_str())
+                                if let Some(serial) =
+                                    item.get("device_serial").and_then(|v| v.as_str())
                                 {
                                     let serial = serial.trim().to_string();
                                     if !serial.is_empty() {
@@ -222,7 +226,8 @@ impl HardwareFingerprint {
         let mut macs: Vec<String> = networks
             .iter()
             .filter_map(|(name, _data)| {
-                if name.starts_with("lo") || name.starts_with("docker") || name.starts_with("veth") {
+                if name.starts_with("lo") || name.starts_with("docker") || name.starts_with("veth")
+                {
                     return None;
                 }
                 Self::get_mac_address(name)
@@ -279,8 +284,7 @@ impl HardwareFingerprint {
     fn collect_tpm_ek_hash() -> Option<[u8; 32]> {
         #[cfg(any(target_os = "linux", target_os = "windows"))]
         {
-            super::tpm::TpmContext::try_open()
-                .and_then(|ctx| ctx.get_ek_hash().ok())
+            super::tpm::TpmContext::try_open().and_then(|ctx| ctx.get_ek_hash().ok())
         }
         #[cfg(not(any(target_os = "linux", target_os = "windows")))]
         {
@@ -296,17 +300,17 @@ mod tests {
     #[test]
     fn test_fingerprint_collection() {
         let fingerprint = HardwareFingerprint::collect();
-        
+
         assert!(fingerprint.cpu_id.is_some() || fingerprint.hostname.is_some());
     }
 
     #[test]
     fn test_fingerprint_hash_deterministic() {
         let fingerprint = HardwareFingerprint::collect();
-        
+
         let hash1 = fingerprint.to_hash();
         let hash2 = fingerprint.to_hash();
-        
+
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, [0u8; 32]);
     }

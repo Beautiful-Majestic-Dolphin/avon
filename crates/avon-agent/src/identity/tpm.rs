@@ -72,7 +72,7 @@ mod tests {
     fn test_tpm_try_open() {
         // TPM is typically not available in test environments
         let result = TpmContext::try_open();
-        
+
         // We just verify it doesn't panic
         if result.is_some() {
             println!("TPM is available on this system");

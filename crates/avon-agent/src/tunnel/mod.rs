@@ -132,7 +132,7 @@ impl TunnelManager {
     /// Initializes the TUN device.
     async fn initialize_tun_device(&self) -> Result<()> {
         let tun_name = format!("{}0", self.config.tun_name_prefix);
-        
+
         let tun = TunDevice::create(
             &tun_name,
             self.config.tun_address,
@@ -213,10 +213,7 @@ impl TunnelManager {
             .context("Failed to resolve peer address")?;
 
         // 4. Perform tunnel handshake
-        let handshake = TunnelHandshake::new(
-            session_id,
-            self.identity.clone(),
-        );
+        let handshake = TunnelHandshake::new(session_id, self.identity.clone());
 
         let tunnel_keys = handshake
             .initiate(peer_addr, self.config.handshake_timeout)
@@ -282,7 +279,8 @@ impl TunnelManager {
         }
 
         // 3. Notify control plane
-        self.notify_tunnel_closed(session_id, tunnel.peer_device()).await?;
+        self.notify_tunnel_closed(session_id, tunnel.peer_device())
+            .await?;
 
         // 4. Remove routing entries for this tunnel
         self.routing_table.remove_routes_for_session(session_id);
@@ -319,13 +317,13 @@ impl TunnelManager {
     fn generate_session_id(&self) -> SessionId {
         let counter = self.session_counter.fetch_add(1, Ordering::Relaxed);
         let device_id = self.identity.device_id();
-        
+
         let mut session_id = [0u8; 16];
         // First 8 bytes from device ID
         session_id[..8].copy_from_slice(&device_id.as_bytes()[..8]);
         // Last 8 bytes from counter
         session_id[8..].copy_from_slice(&counter.to_be_bytes());
-        
+
         session_id
     }
 
@@ -392,10 +390,7 @@ impl TunnelManager {
         };
 
         self.control_client
-            .send_request(
-                control_message::Payload::TunnelClosed(notification),
-                None,
-            )
+            .send_request(control_message::Payload::TunnelClosed(notification), None)
             .await
             .context("Failed to notify tunnel closure")?;
 
@@ -417,10 +412,7 @@ impl TunnelManager {
         );
 
         // Perform handshake as responder
-        let handshake = TunnelHandshake::new(
-            session_id,
-            self.identity.clone(),
-        );
+        let handshake = TunnelHandshake::new(session_id, self.identity.clone());
 
         let tunnel_keys = handshake
             .respond(peer_addr, self.config.handshake_timeout)
@@ -444,7 +436,8 @@ impl TunnelManager {
         self.tunnels.insert(session_id, tunnel);
 
         // Notify control plane
-        self.notify_tunnel_established(&session_id, &peer_device).await?;
+        self.notify_tunnel_established(&session_id, &peer_device)
+            .await?;
 
         tracing::info!(
             session_id = %hex::encode(session_id),

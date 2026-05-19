@@ -201,13 +201,8 @@ mod tests {
         let responder_kp = HybridKeyPair::generate().unwrap();
         let (_, shared_secret) = hybrid_encapsulate(&responder_kp.public_key()).unwrap();
 
-        let keys = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x42u8; 16],
-        )
-        .unwrap();
+        let keys =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x42u8; 16]).unwrap();
 
         assert_ne!(keys.initiator_key, keys.responder_key);
     }
@@ -217,21 +212,11 @@ mod tests {
         let responder_kp = HybridKeyPair::generate().unwrap();
         let (_, shared_secret) = hybrid_encapsulate(&responder_kp.public_key()).unwrap();
 
-        let keys1 = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x42u8; 16],
-        )
-        .unwrap();
+        let keys1 =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x42u8; 16]).unwrap();
 
-        let keys2 = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x42u8; 16],
-        )
-        .unwrap();
+        let keys2 =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x42u8; 16]).unwrap();
 
         assert_eq!(keys1.initiator_key, keys2.initiator_key);
         assert_eq!(keys1.responder_key, keys2.responder_key);
@@ -242,21 +227,11 @@ mod tests {
         let responder_kp = HybridKeyPair::generate().unwrap();
         let (_, shared_secret) = hybrid_encapsulate(&responder_kp.public_key()).unwrap();
 
-        let keys1 = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x01u8; 16],
-        )
-        .unwrap();
+        let keys1 =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x01u8; 16]).unwrap();
 
-        let keys2 = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x02u8; 16],
-        )
-        .unwrap();
+        let keys2 =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x02u8; 16]).unwrap();
 
         assert_ne!(keys1.initiator_key, keys2.initiator_key);
         assert_ne!(keys1.responder_key, keys2.responder_key);
@@ -268,13 +243,7 @@ mod tests {
         let (_, shared_secret) = hybrid_encapsulate(&responder_kp.public_key()).unwrap();
 
         let session_id = [0x42u8; 16];
-        let keys = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &session_id,
-        )
-        .unwrap();
+        let keys = TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &session_id).unwrap();
 
         let context = SessionContext::new(session_id, keys);
 

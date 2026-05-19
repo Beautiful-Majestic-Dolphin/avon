@@ -254,7 +254,7 @@ mod rfc8032_tests {
     use super::*;
 
     /// RFC 8032 Section 7.1 - Test 1
-    /// 
+    ///
     /// SECRET KEY:
     ///   9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60
     /// PUBLIC KEY:
@@ -266,12 +266,12 @@ mod rfc8032_tests {
     ///   5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b
     #[test]
     fn test_rfc8032_test_vector_1() {
-        let secret_key = hex::decode(
-            "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
-        ).unwrap();
-        let expected_public_key = hex::decode(
-            "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
-        ).unwrap();
+        let secret_key =
+            hex::decode("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+                .unwrap();
+        let expected_public_key =
+            hex::decode("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+                .unwrap();
         let message: &[u8] = b"";
         let expected_signature = hex::decode(
             "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
@@ -289,14 +289,17 @@ mod rfc8032_tests {
 
         // Sign and verify signature
         let signature = keypair.sign(message);
-        assert_eq!(signature.to_bytes().as_slice(), expected_signature.as_slice());
+        assert_eq!(
+            signature.to_bytes().as_slice(),
+            expected_signature.as_slice()
+        );
 
         // Verify the signature
         assert!(keypair.verifying_key().verify(message, &signature).is_ok());
     }
 
     /// RFC 8032 Section 7.1 - Test 2
-    /// 
+    ///
     /// SECRET KEY:
     ///   4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb
     /// PUBLIC KEY:
@@ -308,12 +311,12 @@ mod rfc8032_tests {
     ///   085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00
     #[test]
     fn test_rfc8032_test_vector_2() {
-        let secret_key = hex::decode(
-            "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb"
-        ).unwrap();
-        let expected_public_key = hex::decode(
-            "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
-        ).unwrap();
+        let secret_key =
+            hex::decode("4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb")
+                .unwrap();
+        let expected_public_key =
+            hex::decode("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c")
+                .unwrap();
         let message = hex::decode("72").unwrap();
         let expected_signature = hex::decode(
             "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00"
@@ -331,14 +334,17 @@ mod rfc8032_tests {
 
         // Sign and verify signature
         let signature = keypair.sign(&message);
-        assert_eq!(signature.to_bytes().as_slice(), expected_signature.as_slice());
+        assert_eq!(
+            signature.to_bytes().as_slice(),
+            expected_signature.as_slice()
+        );
 
         // Verify the signature
         assert!(keypair.verifying_key().verify(&message, &signature).is_ok());
     }
 
     /// RFC 8032 Section 7.1 - Test 3
-    /// 
+    ///
     /// SECRET KEY:
     ///   c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7
     /// PUBLIC KEY:
@@ -350,12 +356,12 @@ mod rfc8032_tests {
     ///   18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a
     #[test]
     fn test_rfc8032_test_vector_3() {
-        let secret_key = hex::decode(
-            "c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7"
-        ).unwrap();
-        let expected_public_key = hex::decode(
-            "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025"
-        ).unwrap();
+        let secret_key =
+            hex::decode("c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7")
+                .unwrap();
+        let expected_public_key =
+            hex::decode("fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025")
+                .unwrap();
         let message = hex::decode("af82").unwrap();
         let expected_signature = hex::decode(
             "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a"
@@ -373,23 +379,26 @@ mod rfc8032_tests {
 
         // Sign and verify signature
         let signature = keypair.sign(&message);
-        assert_eq!(signature.to_bytes().as_slice(), expected_signature.as_slice());
+        assert_eq!(
+            signature.to_bytes().as_slice(),
+            expected_signature.as_slice()
+        );
 
         // Verify the signature
         assert!(keypair.verifying_key().verify(&message, &signature).is_ok());
     }
 
     /// RFC 8032 Section 7.1 - Test 1024
-    /// 
+    ///
     /// This tests a longer message (1023 bytes).
     #[test]
     fn test_rfc8032_test_vector_1024() {
-        let secret_key = hex::decode(
-            "f5e5767cf153319517630f226876b86c8160cc583bc013744c6bf255f5cc0ee5"
-        ).unwrap();
-        let expected_public_key = hex::decode(
-            "278117fc144c72340f67d0f2316e8386ceffbf2b2428c9c51fef7c597f1d426e"
-        ).unwrap();
+        let secret_key =
+            hex::decode("f5e5767cf153319517630f226876b86c8160cc583bc013744c6bf255f5cc0ee5")
+                .unwrap();
+        let expected_public_key =
+            hex::decode("278117fc144c72340f67d0f2316e8386ceffbf2b2428c9c51fef7c597f1d426e")
+                .unwrap();
         let message = hex::decode(
             "08b8b2b733424243760fe426a4b54908632110a66c2f6591eabd3345e3e4eb98\
              fa6e264bf09efe12ee50f8f54e9f77b1e355f6c50544e23fb1433ddf73be84d8\
@@ -422,8 +431,9 @@ mod rfc8032_tests {
              0d334ba77c225bc307ba537152f3f1610e4eafe595f6d9d90d11faa933a15ef1\
              369546868a7f3a45a96768d40fd9d03412c091c6315cf4fde7cb68606937380d\
              b2eaaa707b4c4185c32eddcdd306705e4dc1ffc872eeee475a64dfac86aba41c\
-             0618983f8741c5ef68d3a101e8a3b8cac60c905c15fc910840b94c00a0b9d0"
-        ).unwrap();
+             0618983f8741c5ef68d3a101e8a3b8cac60c905c15fc910840b94c00a0b9d0",
+        )
+        .unwrap();
         let expected_signature = hex::decode(
             "0aab4c900501b3e24d7cdf4663326a3a87df5e4843b2cbdb67cbf6e460fec350aa5371b1508f9f4528ecea23c436d94b5e8fcd4f681e30a6ac00a9704a188a03"
         ).unwrap();
@@ -440,7 +450,10 @@ mod rfc8032_tests {
 
         // Sign and verify signature
         let signature = keypair.sign(&message);
-        assert_eq!(signature.to_bytes().as_slice(), expected_signature.as_slice());
+        assert_eq!(
+            signature.to_bytes().as_slice(),
+            expected_signature.as_slice()
+        );
 
         // Verify the signature
         assert!(keypair.verifying_key().verify(&message, &signature).is_ok());

@@ -194,10 +194,10 @@ mod tests {
         let source = DeviceId::new();
         let dest = DeviceId::new();
         let mut info = TunnelInfo::new(source, dest);
-        
+
         info.record_sent(100);
         assert_eq!(info.bytes_sent, 100);
-        
+
         info.record_received(200);
         assert_eq!(info.bytes_received, 200);
     }

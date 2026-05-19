@@ -163,7 +163,9 @@ impl HealthServer {
 
             // Simple HTTP response
             let response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
-            if let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut socket, response.as_bytes()).await {
+            if let Err(e) =
+                tokio::io::AsyncWriteExt::write_all(&mut socket, response.as_bytes()).await
+            {
                 warn!(?addr, error = %e, "Failed to send health response");
             }
         }

@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use tokio::sync::RwLock;
 use tokio::signal;
+use tokio::sync::RwLock;
 
 use crate::config::AgentConfig;
 use crate::identity::IdentityManager;
@@ -64,8 +64,7 @@ impl AvonAgent {
     pub async fn new(config: AgentConfig) -> Result<Self> {
         tracing::info!(data_dir = %config.data_dir.display(), "Initializing AVON Agent");
 
-        std::fs::create_dir_all(&config.data_dir)
-            .context("Failed to create data directory")?;
+        std::fs::create_dir_all(&config.data_dir).context("Failed to create data directory")?;
 
         let identity = IdentityManager::load(&config.data_dir)
             .await

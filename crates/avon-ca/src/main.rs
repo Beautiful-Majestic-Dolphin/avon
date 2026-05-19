@@ -102,10 +102,7 @@ async fn main() -> anyhow::Result<()> {
 
     let service = CaServiceImpl::new(ca.clone(), ocsp.clone());
 
-    let addr = args
-        .listen_addr
-        .parse()
-        .expect("Invalid listen address");
+    let addr = args.listen_addr.parse().expect("Invalid listen address");
 
     // Start health server
     let health_port: u16 = std::env::var("AVON_HEALTH_PORT")

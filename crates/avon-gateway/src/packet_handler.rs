@@ -5,8 +5,8 @@
 use avon_common::device::DeviceId;
 use avon_protocol::codec::encode_with_auth_tag;
 use avon_protocol::v1::{
-    control_message::Payload, AuthResponse, ConnectRequest, ConnectResponse,
-    ControlMessage, PulseRequest, PulseResponse, Timestamp,
+    control_message::Payload, AuthResponse, ConnectRequest, ConnectResponse, ControlMessage,
+    PulseRequest, PulseResponse, Timestamp,
 };
 use prost::Message;
 use std::net::SocketAddr;
@@ -50,11 +50,7 @@ impl PacketHandler {
     /// Handles an incoming packet.
     ///
     /// Returns a response packet if one should be sent, or None for silent drop.
-    pub async fn handle_packet(
-        &self,
-        packet: &[u8],
-        source: SocketAddr,
-    ) -> Option<Vec<u8>> {
+    pub async fn handle_packet(&self, packet: &[u8], source: SocketAddr) -> Option<Vec<u8>> {
         // Try to decode the packet header to get device ID
         let message = match ControlMessage::decode(packet) {
             Ok(msg) => msg,
@@ -107,11 +103,20 @@ impl PacketHandler {
         let token_valid = self.registry.verify_token(&device_id, &auth_tag);
         if !token_valid {
             // Also try verifying with HMAC
-            let _computed_tag = avon_crypto::hmac::hmac_sha256(&device_state.current_token, &payload_bytes);
-            if !avon_crypto::hmac::hmac_sha256_verify(&device_state.current_token, &payload_bytes, &auth_tag) {
+            let _computed_tag =
+                avon_crypto::hmac::hmac_sha256(&device_state.current_token, &payload_bytes);
+            if !avon_crypto::hmac::hmac_sha256_verify(
+                &device_state.current_token,
+                &payload_bytes,
+                &auth_tag,
+            ) {
                 // Try previous token
                 if let Some(prev_token) = device_state.previous_token {
-                    if !avon_crypto::hmac::hmac_sha256_verify(&prev_token, &payload_bytes, &auth_tag) {
+                    if !avon_crypto::hmac::hmac_sha256_verify(
+                        &prev_token,
+                        &payload_bytes,
+                        &auth_tag,
+                    ) {
                         warn!(?device_id, ?source, "Auth tag verification failed");
                         return None;
                     }
@@ -128,15 +133,23 @@ impl PacketHandler {
         // Route to appropriate handler
         match message.payload {
             Some(Payload::PulseRequest(req)) => {
-                self.handle_pulse_request(&device_id, &device_state.current_token, req, message.sequence)
-                    .await
+                self.handle_pulse_request(
+                    &device_id,
+                    &device_state.current_token,
+                    req,
+                    message.sequence,
+                )
+                .await
             }
-            Some(Payload::AuthRequest(_)) => {
-                self.handle_auth_request(&message, source).await
-            }
+            Some(Payload::AuthRequest(_)) => self.handle_auth_request(&message, source).await,
             Some(Payload::ConnectRequest(req)) => {
-                self.handle_connect_request(&device_id, &device_state.current_token, req, message.sequence)
-                    .await
+                self.handle_connect_request(
+                    &device_id,
+                    &device_state.current_token,
+                    req,
+                    message.sequence,
+                )
+                .await
             }
             _ => {
                 debug!(?device_id, "Unhandled message type");

@@ -41,7 +41,7 @@ pub mod fido2;
 pub mod service;
 
 // Re-export main types
-pub use cache::{AuthCache, CachedDeviceState, CacheError};
+pub use cache::{AuthCache, CacheError, CachedDeviceState};
 pub use config::AuthConfig;
 pub use db::{AuthDatabase, DbDevice, DbError, EnrollmentToken, NewDevice};
 pub use service::{AuthMetrics, AuthServiceImpl};

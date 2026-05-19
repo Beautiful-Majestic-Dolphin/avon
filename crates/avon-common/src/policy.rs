@@ -170,7 +170,6 @@ pub struct RequiredPosture {
     pub min_agent_version: Option<String>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

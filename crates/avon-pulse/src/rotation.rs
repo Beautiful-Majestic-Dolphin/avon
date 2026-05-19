@@ -88,8 +88,8 @@ impl TokenRotationManager {
         }
 
         let rotation_id = self.rotation_counter.fetch_add(1, Ordering::SeqCst);
-        let server_nonce: [u8; 32] = random_bytes_fixed()
-            .map_err(|e| RotationError::CryptoError(e.to_string()))?;
+        let server_nonce: [u8; 32] =
+            random_bytes_fixed().map_err(|e| RotationError::CryptoError(e.to_string()))?;
 
         let context = RotationContext {
             rotation_id,

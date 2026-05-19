@@ -34,9 +34,7 @@ impl Default for AgentConfig {
 
 impl AgentConfig {
     pub fn load(path: Option<&Path>) -> Result<Self> {
-        let config_path = path
-            .map(PathBuf::from)
-            .or_else(Self::default_config_path);
+        let config_path = path.map(PathBuf::from).or_else(Self::default_config_path);
 
         let mut builder = config::Config::builder();
 
@@ -55,13 +53,9 @@ impl AgentConfig {
                 .try_parsing(true),
         );
 
-        let config = builder
-            .build()
-            .context("Failed to build configuration")?;
+        let config = builder.build().context("Failed to build configuration")?;
 
-        let mut agent_config: AgentConfig = config
-            .try_deserialize()
-            .unwrap_or_default();
+        let mut agent_config: AgentConfig = config.try_deserialize().unwrap_or_default();
 
         if agent_config.data_dir == PathBuf::new() {
             agent_config.data_dir = Self::default_data_dir();
@@ -88,7 +82,9 @@ impl AgentConfig {
         if cfg!(target_os = "linux") {
             Some(PathBuf::from("/etc/avon/agent.conf"))
         } else if cfg!(target_os = "macos") {
-            Some(PathBuf::from("/Library/Application Support/AVON/agent.conf"))
+            Some(PathBuf::from(
+                "/Library/Application Support/AVON/agent.conf",
+            ))
         } else if cfg!(target_os = "windows") {
             Some(PathBuf::from(r"C:\ProgramData\AVON\agent.conf"))
         } else {

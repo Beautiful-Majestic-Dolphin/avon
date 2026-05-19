@@ -38,8 +38,8 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Load configuration
-    let config = GatewayConfig::load(args.config.as_deref())?
-        .with_overrides(args.port, args.log_level);
+    let config =
+        GatewayConfig::load(args.config.as_deref())?.with_overrides(args.port, args.log_level);
 
     // Initialize tracing
     tracing_subscriber::registry()
@@ -55,7 +55,10 @@ async fn main() -> anyhow::Result<()> {
     PrometheusBuilder::new()
         .with_http_listener(metrics_addr.parse::<std::net::SocketAddr>()?)
         .install()?;
-    info!(metrics_port = config.metrics_port, "Prometheus metrics enabled");
+    info!(
+        metrics_port = config.metrics_port,
+        "Prometheus metrics enabled"
+    );
 
     // Initialize device registry
     let registry = Arc::new(DeviceRegistry::new(config.redis_url.clone()).await?);

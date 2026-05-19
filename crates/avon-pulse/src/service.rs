@@ -7,9 +7,9 @@ use std::sync::Arc;
 use avon_common::device::DeviceId;
 use avon_protocol::v1::pulse_service_server::PulseService;
 use avon_protocol::v1::{
-    LivenessRequest, LivenessResponse, LivenessStatus as ProtoLivenessStatus,
-    RecordPulseRequest, RecordPulseResult, RotationRequest, RotationResponse,
-    SchedulePulseRequest, SchedulePulseResponse,
+    LivenessRequest, LivenessResponse, LivenessStatus as ProtoLivenessStatus, RecordPulseRequest,
+    RecordPulseResult, RotationRequest, RotationResponse, SchedulePulseRequest,
+    SchedulePulseResponse,
 };
 use tonic::{Request, Response, Status};
 use tracing::{debug, info, warn};
@@ -59,7 +59,11 @@ impl PulseService for PulseServiceImpl {
 
         match self.rotation_manager.initiate_rotation(device_id).await {
             Ok(context) => {
-                info!(?device_id, pulse_id = context.rotation_id, "Pulse scheduled");
+                info!(
+                    ?device_id,
+                    pulse_id = context.rotation_id,
+                    "Pulse scheduled"
+                );
 
                 Ok(Response::new(SchedulePulseResponse {
                     success: true,
@@ -126,13 +130,19 @@ impl PulseService for PulseServiceImpl {
             }));
         };
 
-        let posture = req.posture.map(|p| DevicePosture {
-            os_version: p.os_version,
-            agent_version: p.agent_version,
-            firewall_enabled: p.firewall_enabled,
-            disk_encrypted: p.disk_encrypted,
-            last_update_check: p.last_update.as_ref().and_then(|t| chrono::DateTime::from_timestamp(t.seconds, 0)),
-        }).unwrap_or_default();
+        let posture = req
+            .posture
+            .map(|p| DevicePosture {
+                os_version: p.os_version,
+                agent_version: p.agent_version,
+                firewall_enabled: p.firewall_enabled,
+                disk_encrypted: p.disk_encrypted,
+                last_update_check: p
+                    .last_update
+                    .as_ref()
+                    .and_then(|t| chrono::DateTime::from_timestamp(t.seconds, 0)),
+            })
+            .unwrap_or_default();
 
         let response = PulseResponse {
             device_id,
@@ -142,7 +152,11 @@ impl PulseService for PulseServiceImpl {
             posture,
         };
 
-        debug!(?device_id, pulse_id = req.pulse_id, "Recording pulse response");
+        debug!(
+            ?device_id,
+            pulse_id = req.pulse_id,
+            "Recording pulse response"
+        );
 
         match self.scheduler.handle_pulse_response(response).await {
             Ok(()) => {
@@ -292,10 +306,7 @@ impl PulseMetrics {
             "avon_pulse_responses_total",
             "Total number of pulse responses received"
         );
-        metrics::describe_counter!(
-            "avon_pulse_missed_total",
-            "Total number of missed pulses"
-        );
+        metrics::describe_counter!("avon_pulse_missed_total", "Total number of missed pulses");
         metrics::describe_counter!(
             "avon_token_rotations_total",
             "Total number of token rotations completed"

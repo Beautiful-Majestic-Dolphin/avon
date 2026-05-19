@@ -75,12 +75,14 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     match cli.command {
-        Commands::Run { config: config_path } => {
+        Commands::Run {
+            config: config_path,
+        } => {
             tracing::info!("AVON Agent starting...");
-            
+
             let config = AgentConfig::load(config_path.as_deref())?;
             let agent = AvonAgent::new(config).await?;
-            
+
             agent.run().await?;
         }
         Commands::Enroll {
@@ -127,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Status { data_dir } => {
             let data_dir = data_dir.unwrap_or_else(AgentConfig::default_data_dir);
-            
+
             match identity::IdentityManager::load(&data_dir).await {
                 Ok(identity) => {
                     println!("AVON Agent Status");
@@ -135,7 +137,14 @@ async fn main() -> anyhow::Result<()> {
                     println!("Device ID: {}", identity.device_id());
                     println!("Data directory: {}", data_dir.display());
                     println!("Identity: Loaded");
-                    println!("TPM: {}", if identity.has_tpm() { "Available" } else { "Not available" });
+                    println!(
+                        "TPM: {}",
+                        if identity.has_tpm() {
+                            "Available"
+                        } else {
+                            "Not available"
+                        }
+                    );
                 }
                 Err(_) => {
                     println!("AVON Agent Status");

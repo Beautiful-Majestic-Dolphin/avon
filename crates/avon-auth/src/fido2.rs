@@ -91,8 +91,8 @@ pub fn verify_attestation(
     };
 
     // Extract fmt
-    let fmt = cbor_map_get_text(att_map, "fmt")
-        .ok_or_else(|| Fido2Error::MissingField("fmt".into()))?;
+    let fmt =
+        cbor_map_get_text(att_map, "fmt").ok_or_else(|| Fido2Error::MissingField("fmt".into()))?;
 
     // Extract authData
     let auth_data = cbor_map_get_bytes(att_map, "authData")
@@ -111,12 +111,8 @@ pub fn verify_attestation(
 
     let rp_id_hash = &auth_data[0..32];
     let flags = auth_data[32];
-    let sign_count = u32::from_be_bytes([
-        auth_data[33],
-        auth_data[34],
-        auth_data[35],
-        auth_data[36],
-    ]);
+    let sign_count =
+        u32::from_be_bytes([auth_data[33], auth_data[34], auth_data[35], auth_data[36]]);
 
     // Verify rpIdHash
     let expected_rp_id_hash = Sha256::digest(expected_rp_id.as_bytes());
@@ -143,10 +139,8 @@ pub fn verify_attestation(
     let mut aaguid = [0u8; 16];
     aaguid.copy_from_slice(&auth_data[acd_start..acd_start + 16]);
 
-    let cred_id_len = u16::from_be_bytes([
-        auth_data[acd_start + 16],
-        auth_data[acd_start + 17],
-    ]) as usize;
+    let cred_id_len =
+        u16::from_be_bytes([auth_data[acd_start + 16], auth_data[acd_start + 17]]) as usize;
 
     let cred_id_start = acd_start + 18;
     if auth_data.len() < cred_id_start + cred_id_len {
@@ -212,8 +206,7 @@ fn base64url_decode(input: &str) -> Result<Vec<u8>, String> {
     };
     // Replace URL-safe chars with standard base64
     let standard = padded.replace('-', "+").replace('_', "/");
-    base64ct::Base64::decode_vec(&standard)
-        .map_err(|e| format!("base64 decode error: {}", e))
+    base64ct::Base64::decode_vec(&standard).map_err(|e| format!("base64 decode error: {}", e))
 }
 
 use base64ct::Encoding;

@@ -14,8 +14,8 @@ use avon_crypto::hybrid::signature::{HybridSigningKeyPair, HybridVerifyingKey};
 use chrono::{DateTime, Utc};
 use num_traits::ToPrimitive;
 use rcgen::{
-    BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose,
-    IsCa, KeyPair, KeyUsagePurpose, SerialNumber,
+    BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, IsCa,
+    KeyPair, KeyUsagePurpose, SerialNumber,
 };
 use thiserror::Error;
 use tracing::{debug, info};
@@ -368,8 +368,9 @@ impl CertificateAuthority {
             return Err(CaError::InvalidCertificate("Certificate too short".into()));
         }
 
-        let (_, cert) = X509Certificate::from_der(cert_der)
-            .map_err(|e| CaError::InvalidCertificate(format!("Failed to parse certificate: {}", e)))?;
+        let (_, cert) = X509Certificate::from_der(cert_der).map_err(|e| {
+            CaError::InvalidCertificate(format!("Failed to parse certificate: {}", e))
+        })?;
 
         let now = Utc::now();
         let not_before = DateTime::from_timestamp(cert.validity().not_before.timestamp(), 0)
@@ -409,7 +410,11 @@ impl CertificateAuthority {
         })
     }
 
-    pub fn generate_ocsp_staple(&self, serial: u64, status: CertificateStatus) -> Result<OcspStaple> {
+    pub fn generate_ocsp_staple(
+        &self,
+        serial: u64,
+        status: CertificateStatus,
+    ) -> Result<OcspStaple> {
         let now = Utc::now();
         let next_update = now + chrono::Duration::from_std(self.ocsp_lifetime).unwrap();
 
