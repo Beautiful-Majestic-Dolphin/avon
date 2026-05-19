@@ -135,10 +135,10 @@ impl HardwareFingerprint {
         if let Ok(entries) = std::fs::read_dir("/dev/disk/by-id") {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with("ata-") || name.starts_with("nvme-") {
-                    if !name.contains("-part") {
-                        serials.push(name);
-                    }
+                if (name.starts_with("ata-") || name.starts_with("nvme-"))
+                    && !name.contains("-part")
+                {
+                    serials.push(name);
                 }
             }
         }
@@ -224,8 +224,8 @@ impl HardwareFingerprint {
 
         let networks = Networks::new_with_refreshed_list();
         let mut macs: Vec<String> = networks
-            .iter()
-            .filter_map(|(name, _data)| {
+            .keys()
+            .filter_map(|name| {
                 if name.starts_with("lo") || name.starts_with("docker") || name.starts_with("veth")
                 {
                     return None;
