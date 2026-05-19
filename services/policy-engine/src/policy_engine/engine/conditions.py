@@ -1,12 +1,12 @@
 """Condition evaluation for the AVON Policy Engine."""
 
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
 
 from policy_engine.models.device import DevicePosture
-from policy_engine.models.policy import RequiredPosture, TimeWindow
+from policy_engine.models.policy import PolicyConditions, RequiredPosture, TimeWindow
 
 logger = structlog.get_logger()
 
@@ -18,6 +18,7 @@ class ConditionEvaluator:
         """Check if current time is within allowed window."""
         try:
             import zoneinfo
+
             tz = zoneinfo.ZoneInfo(window.timezone)
         except Exception:
             tz = timezone.utc
@@ -37,7 +38,9 @@ class ConditionEvaluator:
         if window.start_time <= window.end_time:
             in_window = window.start_time <= current_time <= window.end_time
         else:
-            in_window = current_time >= window.start_time or current_time <= window.end_time
+            in_window = (
+                current_time >= window.start_time or current_time <= window.end_time
+            )
 
         if not in_window:
             logger.debug(
@@ -80,7 +83,9 @@ class ConditionEvaluator:
                 return False
 
         if required.min_os_version is not None:
-            if not self._version_meets_minimum(actual.os_version, required.min_os_version):
+            if not self._version_meets_minimum(
+                actual.os_version, required.min_os_version
+            ):
                 logger.debug(
                     "Posture check failed: OS version too old",
                     actual=actual.os_version,
@@ -138,15 +143,14 @@ class ConditionEvaluator:
 
     def evaluate_all_conditions(
         self,
-        conditions: Optional["PolicyConditions"],
+        conditions: Optional[PolicyConditions],
         source_posture: Optional[DevicePosture],
         dest_posture: Optional[DevicePosture],
     ) -> tuple[bool, str]:
         """Evaluate all conditions for a policy.
-        
+
         Returns (passed, reason) tuple.
         """
-        from policy_engine.models.policy import PolicyConditions
 
         if conditions is None:
             return True, "No conditions to evaluate"

@@ -1,8 +1,8 @@
 """Tests for the AVON Policy Engine evaluator."""
 
 import pytest
-from datetime import datetime, time, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import time
+from unittest.mock import AsyncMock, MagicMock
 
 from policy_engine.engine.conditions import ConditionEvaluator
 from policy_engine.engine.evaluator import PolicyEvaluator

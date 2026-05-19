@@ -6,7 +6,6 @@ For production use, run: python -m grpc_tools.protoc -I../../proto --python_out=
 
 import grpc
 
-from policy_engine.api import policy_pb2
 
 
 class PolicyServiceStub:

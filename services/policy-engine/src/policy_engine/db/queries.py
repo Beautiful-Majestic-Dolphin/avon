@@ -84,6 +84,7 @@ class PolicyQueries:
                 if row["conditions"]:
                     try:
                         import json
+
                         conditions = PolicyConditions.model_validate(
                             json.loads(row["conditions"])
                             if isinstance(row["conditions"], str)
@@ -107,8 +108,12 @@ class PolicyQueries:
                         enabled=row["enabled"],
                         conditions=conditions,
                         description=row["description"],
-                        created_at=str(row["created_at"]) if row["created_at"] else None,
-                        updated_at=str(row["updated_at"]) if row["updated_at"] else None,
+                        created_at=(
+                            str(row["created_at"]) if row["created_at"] else None
+                        ),
+                        updated_at=(
+                            str(row["updated_at"]) if row["updated_at"] else None
+                        ),
                     )
                 )
 
