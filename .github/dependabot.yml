@@ -37,7 +37,7 @@ updates:
       - "python"
 
   - package-ecosystem: "pip"
-    directory: "/services/admin-api"
+    directory: "/api/admin-api"
     schedule:
       interval: "weekly"
       day: "monday"

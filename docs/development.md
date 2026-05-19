@@ -210,7 +210,7 @@ source venv/bin/activate
 
 # Install in development mode
 pip install -e services/policy-engine[dev]
-pip install -e services/admin-api[dev]
+pip install -e api/admin-api[dev]
 ```
 
 ### Protocol Buffers
@@ -284,7 +284,7 @@ cd services/policy-engine
 uvicorn main:app --reload --port 8081
 
 # Terminal 6: Admin API
-cd services/admin-api
+cd api/admin-api
 uvicorn main:app --reload --port 8080
 ```
 
@@ -339,7 +339,7 @@ cargo test -p avon-auth test_authentication
 
 # Run Python tests
 pytest services/policy-engine
-pytest services/admin-api
+pytest api/admin-api
 ```
 
 ### Integration Tests
