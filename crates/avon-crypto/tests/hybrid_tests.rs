@@ -288,8 +288,6 @@ mod signature_tests {
 
 mod signature_component_tests {
     use super::*;
-    use avon_crypto::pqc::dilithium::DilithiumSignature;
-    use avon_crypto::signature::Ed25519Signature;
 
     #[test]
     fn test_verification_fails_if_classical_signature_is_wrong() {

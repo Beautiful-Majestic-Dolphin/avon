@@ -148,7 +148,10 @@ impl PulseScheduler {
             .await
             .map_err(|e| SchedulerError::DatabaseError(e.to_string()))?;
 
-        debug!(device_count = devices.len(), "Scheduling pulses for devices");
+        debug!(
+            device_count = devices.len(),
+            "Scheduling pulses for devices"
+        );
 
         for device in devices {
             if let Err(e) = self.send_pulse(device.id).await {
@@ -161,8 +164,8 @@ impl PulseScheduler {
 
     async fn send_pulse(&self, device_id: DeviceId) -> Result<()> {
         let pulse_id = self.pulse_counter.fetch_add(1, Ordering::SeqCst);
-        let server_nonce: [u8; 32] = random_bytes_fixed()
-            .map_err(|e| SchedulerError::ChannelError(e.to_string()))?;
+        let server_nonce: [u8; 32] =
+            random_bytes_fixed().map_err(|e| SchedulerError::ChannelError(e.to_string()))?;
 
         let rotation_requested = self.rotation_manager.should_rotate(&device_id).await;
 
@@ -348,10 +351,13 @@ impl PulseScheduler {
         }
     }
 
-    pub fn get_device_pulse_info(&self, device_id: &DeviceId) -> Option<(DateTime<Utc>, Option<DateTime<Utc>>, u32)> {
-        self.device_states.get(device_id).map(|state| {
-            (state.last_seen, state.last_pulse_at, state.missed_pulses)
-        })
+    pub fn get_device_pulse_info(
+        &self,
+        device_id: &DeviceId,
+    ) -> Option<(DateTime<Utc>, Option<DateTime<Utc>>, u32)> {
+        self.device_states
+            .get(device_id)
+            .map(|state| (state.last_seen, state.last_pulse_at, state.missed_pulses))
     }
 
     pub fn register_device(&self, device_id: DeviceId, token: [u8; 32]) {
@@ -380,6 +386,7 @@ impl PulseScheduler {
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     fn create_test_posture() -> DevicePosture {
         DevicePosture {
             os_version: "Linux 5.15".to_string(),
