@@ -59,8 +59,8 @@ temp/
 .claude/
 CLAUDE.md
 
-# Superpowers specs
-docs/superpowers/specs/
+# Superpowers (local-only workflow artifacts)
+docs/superpowers/
 
 # Local-only docs
 WEBSITE_GUIDE.md
