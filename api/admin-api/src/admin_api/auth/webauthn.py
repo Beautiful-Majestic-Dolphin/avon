@@ -1,7 +1,7 @@
 """WebAuthn ceremony handlers for AVON Admin API.
 
 Manages FIDO2 hardware security key registration and authentication
-using the py-webauthn library.
+using the webauthn library (PyPI package "webauthn").
 """
 
 import json
