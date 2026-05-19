@@ -16,8 +16,8 @@
 
 # AVON - Authenticated Vector Ownership Network
 
-[![CI](https://github.com/ShaneDolphin/avons-corners/actions/workflows/ci.yml/badge.svg)](https://github.com/ShaneDolphin/avons-corners/actions/workflows/ci.yml)
-[![E2E Tests](https://github.com/ShaneDolphin/avons-corners/actions/workflows/e2e.yml/badge.svg)](https://github.com/ShaneDolphin/avons-corners/actions/workflows/e2e.yml)
+[![CI](https://github.com/Beautiful-Majestic-Dolphin/avon/actions/workflows/ci.yml/badge.svg)](https://github.com/Beautiful-Majestic-Dolphin/avon/actions/workflows/ci.yml)
+[![E2E Tests](https://github.com/Beautiful-Majestic-Dolphin/avon/actions/workflows/e2e.yml/badge.svg)](https://github.com/Beautiful-Majestic-Dolphin/avon/actions/workflows/e2e.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 AVON is a **post-quantum zero trust network access (ZTNA)** platform that provides secure, authenticated connectivity without implicit network trust. Built with quantum-resistant cryptography, AVON ensures your network remains secure against both current and future threats.
@@ -78,8 +78,8 @@ AVON is a **post-quantum zero trust network access (ZTNA)** platform that provid
 
 ```bash
 # Clone the repository
-git clone https://github.com/ShaneDolphin/avons-corners.git
-cd avons-corners
+git clone https://github.com/Beautiful-Majestic-Dolphin/avon.git
+cd avon
 
 # Start all services with Docker Compose
 docker compose up -d
@@ -113,7 +113,7 @@ kubectl get svc avon-gateway -n avon
 
 ```bash
 # Download agent (Linux example)
-curl -LO https://github.com/ShaneDolphin/avons-corners/releases/latest/download/avon-agent-linux-amd64.tar.gz
+curl -LO https://github.com/Beautiful-Majestic-Dolphin/avon/releases/latest/download/avon-agent-linux-amd64.tar.gz
 tar -xzf avon-agent-linux-amd64.tar.gz
 sudo mv avon-agent /usr/local/bin/
 
@@ -184,7 +184,7 @@ source venv/bin/activate
 
 # Install services
 pip install -e services/policy-engine[dev]
-pip install -e services/admin-api[dev]
+pip install -e api/admin-api[dev]
 
 # Run tests
 pytest services/

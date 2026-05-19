@@ -2,6 +2,13 @@
 //!
 //! Uses CTAP2 over USB HID to perform makeCredential during device
 //! enrollment, providing hardware attestation of the enrolling device.
+//!
+//! TODO: This module does not currently compile with the pinned
+//! `ctap-hid-fido2 = "3.5"` dependency. The code was written against an
+//! older API: `FidoKeyHidFactory::create` returns a single `FidoKeyHid`
+//! (not a `Vec`), and `MakeCredentialArgsBuilder` in v3.5 has no
+//! `user_id`/`user_name` setters. The feature is opt-in (off by default)
+//! and CI does not exercise it. Rewrite required before this can ship.
 
 /// Result of FIDO2 enrollment attestation.
 #[derive(Debug, Clone)]
@@ -44,10 +51,8 @@ pub fn perform_enrollment_attestation(
     device_name: &str,
 ) -> anyhow::Result<Fido2Enrollment> {
     // Derive challenge deterministically from enrollment token
-    let challenge = avon_crypto::hmac::hmac_sha256(
-        b"avon-fido2-enrollment-v1",
-        enrollment_token.as_bytes(),
-    );
+    let challenge =
+        avon_crypto::hmac::hmac_sha256(b"avon-fido2-enrollment-v1", enrollment_token.as_bytes());
 
     #[cfg(feature = "fido2")]
     {
@@ -98,9 +103,7 @@ pub fn perform_enrollment_attestation(
     #[cfg(not(feature = "fido2"))]
     {
         let _ = (rp_id, device_id, device_name, challenge);
-        anyhow::bail!(
-            "FIDO2 support not compiled. Rebuild with: cargo build --features fido2"
-        )
+        anyhow::bail!("FIDO2 support not compiled. Rebuild with: cargo build --features fido2")
     }
 }
 
@@ -128,14 +131,10 @@ mod tests {
     #[test]
     fn test_challenge_derivation_deterministic() {
         let token = "test-enrollment-token-123";
-        let challenge1 = avon_crypto::hmac::hmac_sha256(
-            b"avon-fido2-enrollment-v1",
-            token.as_bytes(),
-        );
-        let challenge2 = avon_crypto::hmac::hmac_sha256(
-            b"avon-fido2-enrollment-v1",
-            token.as_bytes(),
-        );
+        let challenge1 =
+            avon_crypto::hmac::hmac_sha256(b"avon-fido2-enrollment-v1", token.as_bytes());
+        let challenge2 =
+            avon_crypto::hmac::hmac_sha256(b"avon-fido2-enrollment-v1", token.as_bytes());
         assert_eq!(challenge1, challenge2);
         assert_ne!(challenge1, [0u8; 32]);
     }
