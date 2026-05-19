@@ -5,7 +5,6 @@ import structlog
 
 from policy_engine.engine.evaluator import PolicyEvaluator
 from policy_engine.engine.pod_hierarchy import PodHierarchy
-from policy_engine.models.device import DevicePosture
 from policy_engine.models.policy import PolicyAction
 
 logger = structlog.get_logger()

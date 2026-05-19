@@ -38,7 +38,7 @@ class PolicyEvaluator:
         context: Optional[dict] = None,
     ) -> PolicyDecision:
         """Evaluate policy for a connection request.
-        
+
         1. Get pod memberships for both devices
         2. Expand pod hierarchy (include parent pods)
         3. Find matching policies ordered by priority
@@ -101,8 +101,10 @@ class PolicyEvaluator:
             )
 
             for policy in policies:
-                passed, condition_reason = self.condition_evaluator.evaluate_all_conditions(
-                    policy.conditions, source_posture, dest_posture
+                passed, condition_reason = (
+                    self.condition_evaluator.evaluate_all_conditions(
+                        policy.conditions, source_posture, dest_posture
+                    )
                 )
 
                 if passed:

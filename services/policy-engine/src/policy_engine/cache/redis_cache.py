@@ -6,7 +6,7 @@ from typing import Optional
 import redis.asyncio as redis
 import structlog
 
-from policy_engine.models.policy import Policy, PolicyAction
+from policy_engine.models.policy import Policy
 
 logger = structlog.get_logger()
 
@@ -66,7 +66,9 @@ class PolicyCache:
         """Generate cache key for pod hierarchy."""
         return f"avon:policy:pod_hierarchy:{pod_id}"
 
-    def _policy_key(self, source_pods: tuple[str, ...], dest_pods: tuple[str, ...]) -> str:
+    def _policy_key(
+        self, source_pods: tuple[str, ...], dest_pods: tuple[str, ...]
+    ) -> str:
         """Generate cache key for matching policies."""
         source_hash = hash(source_pods)
         dest_hash = hash(dest_pods)
@@ -79,7 +81,9 @@ class PolicyCache:
             if data:
                 return json.loads(data)
         except Exception as e:
-            logger.warning("Cache get failed", key=self._pod_key(device_id), error=str(e))
+            logger.warning(
+                "Cache get failed", key=self._pod_key(device_id), error=str(e)
+            )
         return None
 
     async def set_device_pods(self, device_id: str, pod_ids: list[str]) -> None:
@@ -91,7 +95,9 @@ class PolicyCache:
                 json.dumps(pod_ids),
             )
         except Exception as e:
-            logger.warning("Cache set failed", key=self._pod_key(device_id), error=str(e))
+            logger.warning(
+                "Cache set failed", key=self._pod_key(device_id), error=str(e)
+            )
 
     async def get_pod_hierarchy(self, pod_id: str) -> Optional[list[str]]:
         """Get cached pod hierarchy."""
@@ -100,7 +106,9 @@ class PolicyCache:
             if data:
                 return json.loads(data)
         except Exception as e:
-            logger.warning("Cache get failed", key=self._hierarchy_key(pod_id), error=str(e))
+            logger.warning(
+                "Cache get failed", key=self._hierarchy_key(pod_id), error=str(e)
+            )
         return None
 
     async def set_pod_hierarchy(self, pod_id: str, hierarchy: list[str]) -> None:
@@ -112,7 +120,9 @@ class PolicyCache:
                 json.dumps(hierarchy),
             )
         except Exception as e:
-            logger.warning("Cache set failed", key=self._hierarchy_key(pod_id), error=str(e))
+            logger.warning(
+                "Cache set failed", key=self._hierarchy_key(pod_id), error=str(e)
+            )
 
     async def get_matching_policies(
         self, source_pods: list[str], dest_pods: list[str]
@@ -148,7 +158,9 @@ class PolicyCache:
         try:
             await self.redis.client.delete(self._pod_key(device_id))
         except Exception as e:
-            logger.warning("Cache invalidation failed", device_id=device_id, error=str(e))
+            logger.warning(
+                "Cache invalidation failed", device_id=device_id, error=str(e)
+            )
 
     async def invalidate_pod(self, pod_id: str) -> None:
         """Invalidate cache for a pod."""

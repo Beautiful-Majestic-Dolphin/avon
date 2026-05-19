@@ -8,10 +8,15 @@
 //!
 //! The gateway consists of several components:
 //!
-//! - [`UdpGateway`](gateway::UdpGateway) - Main UDP receive loop
-//! - [`RateLimiter`](rate_limiter::RateLimiter) - Per-IP rate limiting
-//! - [`DeviceRegistry`](device_registry::DeviceRegistry) - In-memory device cache
-//! - [`PacketHandler`](packet_handler::PacketHandler) - Packet processing and routing
+//! - [`UdpGateway`] - Main UDP receive loop
+//! - [`RateLimiter`] - Per-IP rate limiting
+//! - [`DeviceRegistry`] - In-memory device cache
+//! - [`PacketHandler`] - Packet processing and routing
+//!
+//! [`UdpGateway`]: gateway::UdpGateway
+//! [`RateLimiter`]: rate_limiter::RateLimiter
+//! [`DeviceRegistry`]: device_registry::DeviceRegistry
+//! [`PacketHandler`]: packet_handler::PacketHandler
 //!
 //! # Example
 //!

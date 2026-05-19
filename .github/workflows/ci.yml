@@ -120,10 +120,11 @@ jobs:
           pip install -e api/admin-api[dev] || pip install -e api/admin-api
 
       - name: Run black
-        run: black --check services/ --exclude '\.venv'
+        # Exclude protobuf-generated files; they're regenerated on build.
+        run: black --check services/ --exclude '\.venv|_pb2(_grpc)?\.py'
 
       - name: Run ruff
-        run: ruff check services/
+        run: ruff check services/ --exclude '_pb2.py,_pb2_grpc.py'
 
       - name: Run mypy
         run: mypy services/ --ignore-missing-imports

@@ -1,7 +1,5 @@
 """Pod hierarchy management for the AVON Policy Engine."""
 
-from typing import Optional
-
 import structlog
 
 from policy_engine.cache.redis_cache import PolicyCache
@@ -19,7 +17,7 @@ class PodHierarchy:
 
     async def expand_pods(self, pod_ids: list[str]) -> set[str]:
         """Expand pod list to include all ancestor pods.
-        
+
         For each pod in the input list, this returns the pod itself
         plus all of its parent pods up to the root.
         """
@@ -62,7 +60,7 @@ class PodHierarchy:
         self, pod_id: str, include_children: bool = False
     ) -> set[str]:
         """Get all device IDs in a pod.
-        
+
         If include_children is True, also includes devices in child pods.
         Note: This is a placeholder - full implementation would require
         additional database queries for child pod traversal.
