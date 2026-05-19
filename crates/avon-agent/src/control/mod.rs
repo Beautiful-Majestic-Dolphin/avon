@@ -72,10 +72,7 @@ impl ControlPlaneClient {
     ///
     /// * `addresses` - List of control plane addresses to connect to
     /// * `identity` - Identity manager for authentication
-    pub async fn new(
-        addresses: Vec<SocketAddr>,
-        identity: Arc<IdentityManager>,
-    ) -> Result<Self> {
+    pub async fn new(addresses: Vec<SocketAddr>, identity: Arc<IdentityManager>) -> Result<Self> {
         if addresses.is_empty() {
             anyhow::bail!("At least one control plane address is required");
         }
@@ -152,8 +149,7 @@ impl ControlPlaneClient {
 
     /// Handles an incoming packet.
     async fn handle_packet(&self, packet: &[u8], addr: SocketAddr) -> Result<()> {
-        let msg = ControlMessage::decode(packet)
-            .context("Failed to decode control message")?;
+        let msg = ControlMessage::decode(packet).context("Failed to decode control message")?;
 
         // Update connection state
         {
@@ -342,9 +338,8 @@ impl ControlPlaneClient {
     /// Cleans up expired pending requests.
     pub fn cleanup_expired_requests(&self, max_age: Duration) {
         let now = Instant::now();
-        self.pending_requests.retain(|_, req| {
-            now.duration_since(req.sent_at) < max_age
-        });
+        self.pending_requests
+            .retain(|_, req| now.duration_since(req.sent_at) < max_age);
     }
 }
 

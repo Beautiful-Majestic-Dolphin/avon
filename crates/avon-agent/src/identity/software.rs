@@ -38,8 +38,8 @@ impl SoftwareKeystore {
         let encryption_key = Self::derive_encryption_key(fingerprint)?;
 
         let seed: [u8; 32] = rand::random();
-        let keypair = Ed25519KeyPair::from_seed(&seed)
-            .context("Failed to generate signing keypair")?;
+        let keypair =
+            Ed25519KeyPair::from_seed(&seed).context("Failed to generate signing keypair")?;
 
         let keystore = Self {
             keypair,
@@ -57,11 +57,10 @@ impl SoftwareKeystore {
     pub fn load(path: &Path, fingerprint: &HardwareFingerprint) -> Result<Self> {
         let encryption_key = Self::derive_encryption_key(fingerprint)?;
 
-        let data = std::fs::read(path)
-            .context("Failed to read keystore file")?;
+        let data = std::fs::read(path).context("Failed to read keystore file")?;
 
-        let keystore_data: KeystoreData = serde_json::from_slice(&data)
-            .context("Failed to parse keystore data")?;
+        let keystore_data: KeystoreData =
+            serde_json::from_slice(&data).context("Failed to parse keystore data")?;
 
         if keystore_data.version != KEYSTORE_VERSION {
             anyhow::bail!(
@@ -74,7 +73,8 @@ impl SoftwareKeystore {
         let cipher = Aes256GcmCipher::new(encryption_key.as_ref())
             .context("Failed to create AEAD cipher")?;
 
-        let decrypted = cipher.decrypt(&keystore_data.nonce, &keystore_data.encrypted_seed, &[])
+        let decrypted = cipher
+            .decrypt(&keystore_data.nonce, &keystore_data.encrypted_seed, &[])
             .context("Failed to decrypt keystore (hardware fingerprint may have changed)")?;
 
         if decrypted.len() != 32 {
@@ -84,8 +84,8 @@ impl SoftwareKeystore {
         let mut seed = [0u8; 32];
         seed.copy_from_slice(&decrypted);
 
-        let keypair = Ed25519KeyPair::from_seed(&seed)
-            .context("Failed to restore keypair from seed")?;
+        let keypair =
+            Ed25519KeyPair::from_seed(&seed).context("Failed to restore keypair from seed")?;
 
         tracing::info!(path = %path.display(), "Software keystore loaded");
 
@@ -101,7 +101,8 @@ impl SoftwareKeystore {
         let cipher = Aes256GcmCipher::new(self.encryption_key.as_ref())
             .context("Failed to create AEAD cipher")?;
 
-        let encrypted = cipher.encrypt(&nonce_bytes, &self.seed, &[])
+        let encrypted = cipher
+            .encrypt(&nonce_bytes, &self.seed, &[])
             .context("Failed to encrypt seed")?;
 
         let keystore_data = KeystoreData {
@@ -111,16 +112,14 @@ impl SoftwareKeystore {
             public_key: self.keypair.verifying_key().to_bytes().to_vec(),
         };
 
-        let json = serde_json::to_vec_pretty(&keystore_data)
-            .context("Failed to serialize keystore")?;
+        let json =
+            serde_json::to_vec_pretty(&keystore_data).context("Failed to serialize keystore")?;
 
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .context("Failed to create keystore directory")?;
+            std::fs::create_dir_all(parent).context("Failed to create keystore directory")?;
         }
 
-        std::fs::write(path, &json)
-            .context("Failed to write keystore file")?;
+        std::fs::write(path, &json).context("Failed to write keystore file")?;
 
         Ok(())
     }
@@ -140,10 +139,11 @@ impl SoftwareKeystore {
         let token_key = Self::derive_token_key(&self.encryption_key)?;
         let nonce_bytes: [u8; 12] = rand::random();
 
-        let cipher = Aes256GcmCipher::new(&token_key)
-            .context("Failed to create AEAD cipher for token")?;
+        let cipher =
+            Aes256GcmCipher::new(&token_key).context("Failed to create AEAD cipher for token")?;
 
-        let encrypted = cipher.encrypt(&nonce_bytes, token_bytes, &[])
+        let encrypted = cipher
+            .encrypt(&nonce_bytes, token_bytes, &[])
             .context("Failed to encrypt token")?;
 
         let mut result = Vec::with_capacity(12 + encrypted.len());
@@ -159,15 +159,15 @@ impl SoftwareKeystore {
         }
 
         let (nonce_bytes, ciphertext) = encrypted_data.split_at(12);
-        let nonce_array: [u8; 12] = nonce_bytes.try_into()
-            .context("Invalid nonce length")?;
+        let nonce_array: [u8; 12] = nonce_bytes.try_into().context("Invalid nonce length")?;
 
         let token_key = Self::derive_token_key(&self.encryption_key)?;
 
-        let cipher = Aes256GcmCipher::new(&token_key)
-            .context("Failed to create AEAD cipher for token")?;
+        let cipher =
+            Aes256GcmCipher::new(&token_key).context("Failed to create AEAD cipher for token")?;
 
-        let decrypted = cipher.decrypt(&nonce_array, ciphertext, &[])
+        let decrypted = cipher
+            .decrypt(&nonce_array, ciphertext, &[])
             .context("Failed to decrypt token")?;
 
         if decrypted.len() != 32 {
@@ -182,18 +182,28 @@ impl SoftwareKeystore {
 
     fn derive_encryption_key(fingerprint: &HardwareFingerprint) -> Result<Zeroizing<[u8; 32]>> {
         let fingerprint_hash = fingerprint.to_hash();
-        let key_vec = hkdf_sha256(&fingerprint_hash, Some(ENCRYPTION_SALT), b"keystore-encryption", 32)
-            .context("Failed to derive encryption key")?;
-        
+        let key_vec = hkdf_sha256(
+            &fingerprint_hash,
+            Some(ENCRYPTION_SALT),
+            b"keystore-encryption",
+            32,
+        )
+        .context("Failed to derive encryption key")?;
+
         let mut key = [0u8; 32];
         key.copy_from_slice(&key_vec);
         Ok(Zeroizing::new(key))
     }
 
     fn derive_token_key(base_key: &[u8; 32]) -> Result<[u8; 32]> {
-        let key_vec = hkdf_sha256(base_key, Some(TOKEN_ENCRYPTION_SALT), b"token-encryption", 32)
-            .context("Failed to derive token key")?;
-        
+        let key_vec = hkdf_sha256(
+            base_key,
+            Some(TOKEN_ENCRYPTION_SALT),
+            b"token-encryption",
+            32,
+        )
+        .context("Failed to derive token key")?;
+
         let mut key = [0u8; 32];
         key.copy_from_slice(&key_vec);
         Ok(key)

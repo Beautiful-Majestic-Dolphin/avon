@@ -281,7 +281,10 @@ impl X25519KeyPair {
     ///
     /// assert_eq!(alice_shared.as_bytes(), bob_shared.as_bytes());
     /// ```
-    pub fn diffie_hellman(&self, peer_public: &X25519PublicKey) -> Result<SharedSecret, CryptoError> {
+    pub fn diffie_hellman(
+        &self,
+        peer_public: &X25519PublicKey,
+    ) -> Result<SharedSecret, CryptoError> {
         let secret = StaticSecret::from(*self.private.as_bytes());
         let peer_pk = PublicKey::from(peer_public.0);
 

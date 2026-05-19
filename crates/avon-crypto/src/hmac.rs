@@ -32,8 +32,7 @@ type HmacSha256 = Hmac<Sha256>;
 /// assert_eq!(tag.len(), 32);
 /// ```
 pub fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
-    let mut mac =
-        HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
     mac.update(data);
     let result = mac.finalize();
     result.into_bytes().into()
@@ -71,8 +70,7 @@ pub fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
 /// assert!(!hmac_sha256_verify(key, data, &bad_tag));
 /// ```
 pub fn hmac_sha256_verify(key: &[u8], data: &[u8], tag: &[u8]) -> bool {
-    let mut mac =
-        HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
     mac.update(data);
     mac.verify_slice(tag).is_ok()
 }

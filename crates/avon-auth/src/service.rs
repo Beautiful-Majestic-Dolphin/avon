@@ -7,8 +7,8 @@ use avon_common::device::DeviceId;
 use avon_protocol::v1::auth_service_server::AuthService;
 use avon_protocol::v1::{
     EnrollDeviceRequest, EnrollDeviceResponse, GetDeviceStateRequest, GetDeviceStateResponse,
-    RevokeDeviceRequest, RevokeDeviceResponse, RotateTokenRequest, RotateTokenResponse,
-    Timestamp, VerifyDeviceRequest, VerifyDeviceResponse,
+    RevokeDeviceRequest, RevokeDeviceResponse, RotateTokenRequest, RotateTokenResponse, Timestamp,
+    VerifyDeviceRequest, VerifyDeviceResponse,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};

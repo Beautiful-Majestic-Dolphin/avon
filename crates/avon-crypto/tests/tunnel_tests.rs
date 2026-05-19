@@ -300,13 +300,8 @@ mod session_key_tests {
         let responder_kp = HybridKeyPair::generate().unwrap();
         let (_, shared_secret) = hybrid_encapsulate(&responder_kp.public_key()).unwrap();
 
-        let keys = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x42u8; 16],
-        )
-        .unwrap();
+        let keys =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x42u8; 16]).unwrap();
 
         assert_ne!(keys.initiator_key, keys.responder_key);
     }
@@ -316,21 +311,11 @@ mod session_key_tests {
         let responder_kp = HybridKeyPair::generate().unwrap();
         let (_, shared_secret) = hybrid_encapsulate(&responder_kp.public_key()).unwrap();
 
-        let keys1 = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x42u8; 16],
-        )
-        .unwrap();
+        let keys1 =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x42u8; 16]).unwrap();
 
-        let keys2 = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x42u8; 16],
-        )
-        .unwrap();
+        let keys2 =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x42u8; 16]).unwrap();
 
         assert_eq!(keys1.initiator_key, keys2.initiator_key);
         assert_eq!(keys1.responder_key, keys2.responder_key);
@@ -341,21 +326,11 @@ mod session_key_tests {
         let responder_kp = HybridKeyPair::generate().unwrap();
         let (_, shared_secret) = hybrid_encapsulate(&responder_kp.public_key()).unwrap();
 
-        let keys1 = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x01u8; 16],
-        )
-        .unwrap();
+        let keys1 =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x01u8; 16]).unwrap();
 
-        let keys2 = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x02u8; 16],
-        )
-        .unwrap();
+        let keys2 =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x02u8; 16]).unwrap();
 
         assert_ne!(keys1.initiator_key, keys2.initiator_key);
         assert_ne!(keys1.responder_key, keys2.responder_key);
@@ -366,13 +341,8 @@ mod session_key_tests {
         let responder_kp = HybridKeyPair::generate().unwrap();
         let (_, shared_secret) = hybrid_encapsulate(&responder_kp.public_key()).unwrap();
 
-        let keys1 = TunnelKeys::derive(
-            &shared_secret,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x42u8; 16],
-        )
-        .unwrap();
+        let keys1 =
+            TunnelKeys::derive(&shared_secret, &[0u8; 32], &[1u8; 32], &[0x42u8; 16]).unwrap();
 
         let keys2 = TunnelKeys::derive(
             &shared_secret,
@@ -393,21 +363,11 @@ mod session_key_tests {
         let (_, shared_secret1) = hybrid_encapsulate(&responder_kp1.public_key()).unwrap();
         let (_, shared_secret2) = hybrid_encapsulate(&responder_kp2.public_key()).unwrap();
 
-        let keys1 = TunnelKeys::derive(
-            &shared_secret1,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x42u8; 16],
-        )
-        .unwrap();
+        let keys1 =
+            TunnelKeys::derive(&shared_secret1, &[0u8; 32], &[1u8; 32], &[0x42u8; 16]).unwrap();
 
-        let keys2 = TunnelKeys::derive(
-            &shared_secret2,
-            &[0u8; 32],
-            &[1u8; 32],
-            &[0x42u8; 16],
-        )
-        .unwrap();
+        let keys2 =
+            TunnelKeys::derive(&shared_secret2, &[0u8; 32], &[1u8; 32], &[0x42u8; 16]).unwrap();
 
         assert_ne!(keys1.initiator_key, keys2.initiator_key);
         assert_ne!(keys1.responder_key, keys2.responder_key);
@@ -433,10 +393,7 @@ mod integration_tests {
         let responder_secret = responder_kp.decapsulate(&encapsulation).unwrap();
 
         // 4. Both derive the same shared secret
-        assert_eq!(
-            initiator_secret.as_bytes(),
-            responder_secret.as_bytes()
-        );
+        assert_eq!(initiator_secret.as_bytes(), responder_secret.as_bytes());
 
         // 5. Derive tunnel keys
         let session_id = [0x42u8; 16];
@@ -465,11 +422,15 @@ mod integration_tests {
 
         // 7. Create tunnel ciphers
         // Initiator uses initiator_key for sending, responder_key for receiving
-        let initiator_send = TunnelCipher::new(initiator_keys.initiator_key, TunnelDirection::Initiator);
-        let responder_recv = TunnelCipher::new(responder_keys.initiator_key, TunnelDirection::Initiator);
+        let initiator_send =
+            TunnelCipher::new(initiator_keys.initiator_key, TunnelDirection::Initiator);
+        let responder_recv =
+            TunnelCipher::new(responder_keys.initiator_key, TunnelDirection::Initiator);
 
-        let responder_send = TunnelCipher::new(responder_keys.responder_key, TunnelDirection::Responder);
-        let initiator_recv = TunnelCipher::new(initiator_keys.responder_key, TunnelDirection::Responder);
+        let responder_send =
+            TunnelCipher::new(responder_keys.responder_key, TunnelDirection::Responder);
+        let initiator_recv =
+            TunnelCipher::new(initiator_keys.responder_key, TunnelDirection::Responder);
 
         // 8. Test bidirectional communication
         let msg1 = b"Hello from initiator!";

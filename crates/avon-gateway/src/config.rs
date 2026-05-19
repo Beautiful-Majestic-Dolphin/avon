@@ -169,8 +169,7 @@ mod tests {
 
     #[test]
     fn test_config_with_overrides() {
-        let config = GatewayConfig::default()
-            .with_overrides(Some(5000), Some("debug".to_string()));
+        let config = GatewayConfig::default().with_overrides(Some(5000), Some("debug".to_string()));
         assert_eq!(config.listen_addr.port(), 5000);
         assert_eq!(config.log_level, "debug");
     }

@@ -128,24 +128,21 @@ impl PacketLoop {
         // In a real implementation, we would use a more sophisticated
         // approach like select! over all tunnel receive futures.
         // For now, we poll each tunnel in a round-robin fashion.
-        
+
         loop {
             let mut received_any = false;
 
             // Iterate over all tunnels
             for tunnel_ref in self.tunnels.iter() {
                 let tunnel = tunnel_ref.value();
-                
+
                 // Try to receive with a short timeout
-                match tokio::time::timeout(
-                    std::time::Duration::from_millis(10),
-                    tunnel.recv(),
-                )
-                .await
+                match tokio::time::timeout(std::time::Duration::from_millis(10), tunnel.recv())
+                    .await
                 {
                     Ok(Ok(packet)) => {
                         received_any = true;
-                        
+
                         // Write packet to TUN
                         let tun_guard = self.tun.read().await;
                         if let Some(tun) = tun_guard.as_ref() {
@@ -193,12 +190,7 @@ impl PacketLoop {
             return None;
         }
 
-        let addr = std::net::Ipv4Addr::new(
-            packet[16],
-            packet[17],
-            packet[18],
-            packet[19],
-        );
+        let addr = std::net::Ipv4Addr::new(packet[16], packet[17], packet[18], packet[19]);
 
         Some(IpAddr::V4(addr))
     }

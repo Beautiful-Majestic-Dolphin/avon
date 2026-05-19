@@ -298,8 +298,8 @@ impl Tunnel {
             .context("Failed to receive packet")?;
 
         // Parse the tunnel packet
-        let packet = TunnelPacket::from_bytes(&buf[..len])
-            .context("Failed to parse tunnel packet")?;
+        let packet =
+            TunnelPacket::from_bytes(&buf[..len]).context("Failed to parse tunnel packet")?;
 
         // Decrypt the packet
         let aad = &self.session_id;
@@ -320,7 +320,7 @@ impl Tunnel {
         // Send a special close packet (empty payload with close flag)
         let close_marker = b"AVON_CLOSE";
         let aad = &self.session_id;
-        
+
         let encrypted = self
             .send_cipher
             .encrypt(close_marker, aad)
@@ -337,9 +337,11 @@ impl Tunnel {
 
     /// Closes the tunnel.
     pub async fn close(&self) {
-        self.state.store(TunnelState::Closing as u8, Ordering::Relaxed);
+        self.state
+            .store(TunnelState::Closing as u8, Ordering::Relaxed);
         // Socket will be closed when dropped
-        self.state.store(TunnelState::Closed as u8, Ordering::Relaxed);
+        self.state
+            .store(TunnelState::Closed as u8, Ordering::Relaxed);
     }
 
     /// Returns the number of remaining nonces before rekey is needed.

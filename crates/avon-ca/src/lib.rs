@@ -44,7 +44,9 @@ pub mod config;
 pub mod ocsp;
 pub mod service;
 
-pub use ca::{CaError, CertificateAuthority, CertificateStatus, IssuedCertificate, OcspStaple, VerifiedCert};
+pub use ca::{
+    CaError, CertificateAuthority, CertificateStatus, IssuedCertificate, OcspStaple, VerifiedCert,
+};
 pub use config::CaConfig;
 pub use ocsp::OcspResponder;
 pub use service::CaServiceImpl;

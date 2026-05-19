@@ -121,7 +121,9 @@ impl HybridKeyPair {
         encapsulation: &HybridEncapsulation,
     ) -> Result<HybridSharedSecret, CryptoError> {
         // Perform ECDH with sender's ephemeral public key
-        let ecdh_secret = self.classical.diffie_hellman(&encapsulation.classical_public)?;
+        let ecdh_secret = self
+            .classical
+            .diffie_hellman(&encapsulation.classical_public)?;
 
         // Decapsulate Kyber ciphertext
         let kyber_secret = self.pqc.decapsulate(&encapsulation.pqc_ciphertext)?;

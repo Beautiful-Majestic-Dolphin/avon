@@ -132,13 +132,9 @@ mod tests {
 
     async fn create_test_identity() -> Arc<IdentityManager> {
         let temp_dir = TempDir::new().unwrap();
-        let identity = IdentityManager::enroll(
-            "test-token",
-            "gateway.test:8443",
-            temp_dir.path(),
-        )
-        .await
-        .unwrap();
+        let identity = IdentityManager::enroll("test-token", "gateway.test:8443", temp_dir.path())
+            .await
+            .unwrap();
         Arc::new(identity)
     }
 
@@ -196,12 +192,20 @@ mod tests {
         let handler = PulseHandler::new(identity);
 
         // No pulse yet, not overdue
-        assert!(!handler.is_pulse_overdue(std::time::Duration::from_secs(30)).await);
+        assert!(
+            !handler
+                .is_pulse_overdue(std::time::Duration::from_secs(30))
+                .await
+        );
 
         // Simulate a pulse
         *handler.last_pulse.write().await = Some(Instant::now());
 
         // Just received, not overdue
-        assert!(!handler.is_pulse_overdue(std::time::Duration::from_secs(30)).await);
+        assert!(
+            !handler
+                .is_pulse_overdue(std::time::Duration::from_secs(30))
+                .await
+        );
     }
 }

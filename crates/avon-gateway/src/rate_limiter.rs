@@ -49,9 +49,7 @@ impl RateLimiter {
             let quota = Quota::per_second(
                 NonZeroU32::new(self.config.requests_per_second).unwrap_or(NonZeroU32::MIN),
             )
-            .allow_burst(
-                NonZeroU32::new(self.config.burst_size).unwrap_or(NonZeroU32::MIN),
-            );
+            .allow_burst(NonZeroU32::new(self.config.burst_size).unwrap_or(NonZeroU32::MIN));
             RateLimiterState {
                 limiter: GovRateLimiter::direct(quota),
                 last_seen: now,

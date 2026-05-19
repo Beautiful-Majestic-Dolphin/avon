@@ -50,7 +50,17 @@ impl PulseDatabase {
     ) -> Result<Vec<DeviceRecord>> {
         let interval_secs = interval.as_secs() as i64;
 
-        let rows = sqlx::query_as::<_, (uuid::Uuid, String, Vec<u8>, i64, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>(
+        let rows = sqlx::query_as::<
+            _,
+            (
+                uuid::Uuid,
+                String,
+                Vec<u8>,
+                i64,
+                Option<DateTime<Utc>>,
+                Option<DateTime<Utc>>,
+            ),
+        >(
             r#"
             SELECT id, name, current_token, token_sequence, last_seen_at, last_pulse_at
             FROM devices
@@ -66,21 +76,23 @@ impl PulseDatabase {
 
         let devices = rows
             .into_iter()
-            .map(|(id, name, current_token, token_sequence, last_seen_at, last_pulse_at)| {
-                let mut token = [0u8; 32];
-                if current_token.len() >= 32 {
-                    token.copy_from_slice(&current_token[..32]);
-                }
+            .map(
+                |(id, name, current_token, token_sequence, last_seen_at, last_pulse_at)| {
+                    let mut token = [0u8; 32];
+                    if current_token.len() >= 32 {
+                        token.copy_from_slice(&current_token[..32]);
+                    }
 
-                DeviceRecord {
-                    id: DeviceId::from_uuid(id),
-                    name,
-                    current_token: token,
-                    token_sequence: token_sequence as u64,
-                    last_seen_at,
-                    last_pulse_at,
-                }
-            })
+                    DeviceRecord {
+                        id: DeviceId::from_uuid(id),
+                        name,
+                        current_token: token,
+                        token_sequence: token_sequence as u64,
+                        last_seen_at,
+                        last_pulse_at,
+                    }
+                },
+            )
             .collect();
 
         Ok(devices)
@@ -166,7 +178,17 @@ impl PulseDatabase {
     }
 
     pub async fn get_device(&self, device_id: DeviceId) -> Result<Option<DeviceRecord>> {
-        let row = sqlx::query_as::<_, (uuid::Uuid, String, Vec<u8>, i64, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>(
+        let row = sqlx::query_as::<
+            _,
+            (
+                uuid::Uuid,
+                String,
+                Vec<u8>,
+                i64,
+                Option<DateTime<Utc>>,
+                Option<DateTime<Utc>>,
+            ),
+        >(
             r#"
             SELECT id, name, current_token, token_sequence, last_seen_at, last_pulse_at
             FROM devices
@@ -177,21 +199,23 @@ impl PulseDatabase {
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|(id, name, current_token, token_sequence, last_seen_at, last_pulse_at)| {
-            let mut token = [0u8; 32];
-            if current_token.len() >= 32 {
-                token.copy_from_slice(&current_token[..32]);
-            }
+        Ok(row.map(
+            |(id, name, current_token, token_sequence, last_seen_at, last_pulse_at)| {
+                let mut token = [0u8; 32];
+                if current_token.len() >= 32 {
+                    token.copy_from_slice(&current_token[..32]);
+                }
 
-            DeviceRecord {
-                id: DeviceId::from_uuid(id),
-                name,
-                current_token: token,
-                token_sequence: token_sequence as u64,
-                last_seen_at,
-                last_pulse_at,
-            }
-        }))
+                DeviceRecord {
+                    id: DeviceId::from_uuid(id),
+                    name,
+                    current_token: token,
+                    token_sequence: token_sequence as u64,
+                    last_seen_at,
+                    last_pulse_at,
+                }
+            },
+        ))
     }
 
     pub async fn invalidate_device_cache(&self, device_id: DeviceId) -> Result<()> {
@@ -218,12 +242,7 @@ impl PulseDatabase {
         pulse_id: u64,
         expected_at: DateTime<Utc>,
     ) -> Result<()> {
-        debug!(
-            ?device_id,
-            pulse_id,
-            ?expected_at,
-            "Recorded missed pulse"
-        );
+        debug!(?device_id, pulse_id, ?expected_at, "Recorded missed pulse");
         Ok(())
     }
 }

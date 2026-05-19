@@ -362,7 +362,10 @@ impl KyberKeyPair {
     ///
     /// assert_eq!(sender_shared.as_bytes(), receiver_shared.as_bytes());
     /// ```
-    pub fn decapsulate(&self, ciphertext: &KyberCiphertext) -> Result<KyberSharedSecret, CryptoError> {
+    pub fn decapsulate(
+        &self,
+        ciphertext: &KyberCiphertext,
+    ) -> Result<KyberSharedSecret, CryptoError> {
         let sk = kyber768::SecretKey::from_bytes(&self.secret.0)
             .map_err(|_| CryptoError::DecryptionFailed("invalid secret key".to_string()))?;
 
@@ -384,7 +387,10 @@ mod tests {
     #[test]
     fn test_keypair_generation() {
         let keypair = KyberKeyPair::generate().unwrap();
-        assert_eq!(keypair.public_key().to_bytes().len(), KYBER768_PUBLIC_KEY_BYTES);
+        assert_eq!(
+            keypair.public_key().to_bytes().len(),
+            KYBER768_PUBLIC_KEY_BYTES
+        );
     }
 
     #[test]
