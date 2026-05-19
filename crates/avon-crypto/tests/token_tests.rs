@@ -177,11 +177,8 @@ mod rotation_synchronization_tests {
 
         // Perform 10 rotations
         for i in 0..10u64 {
-            let input = TokenRotationInput::new(
-                [(i as u8); 32],
-                [(i as u8 + 100); 32],
-                1000 + i * 100,
-            );
+            let input =
+                TokenRotationInput::new([(i as u8); 32], [(i as u8 + 100); 32], 1000 + i * 100);
 
             let client_new = client.rotate(&input);
             let server_new = server.complete_rotation(&input);
@@ -384,7 +381,7 @@ mod grace_period_tests {
         let device_id = [0x01u8; 16];
 
         let mut client = RotatingToken::new(seed);
-        let mut server = ServerTokenState::new(device_id, seed);
+        let _server = ServerTokenState::new(device_id, seed);
 
         // Client rotates
         let input = TokenRotationInput::new([0u8; 32], [1u8; 32], 1000);
@@ -396,7 +393,7 @@ mod grace_period_tests {
         // Let's test the reverse: server rotates, client hasn't
 
         // Reset
-        let mut client = RotatingToken::new(seed);
+        let client = RotatingToken::new(seed);
         let mut server = ServerTokenState::new(device_id, seed);
 
         // Server rotates

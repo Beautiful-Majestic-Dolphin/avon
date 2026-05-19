@@ -11,8 +11,8 @@ use anyhow::{Context, Result};
 use avon_crypto::hybrid::key_exchange::{hybrid_encapsulate, HybridEncapsulation, HybridKeyPair};
 use avon_crypto::session::TunnelKeys;
 use avon_protocol::v1::{
-    tunnel_handshake, HybridEncapsulation as ProtoEncapsulation, TunnelConfirm, TunnelHandshake as ProtoHandshake,
-    TunnelInit, TunnelResponse,
+    tunnel_handshake, HybridEncapsulation as ProtoEncapsulation, TunnelConfirm,
+    TunnelHandshake as ProtoHandshake, TunnelInit, TunnelResponse,
 };
 use prost::Message;
 use tokio::net::UdpSocket;
@@ -72,9 +72,8 @@ impl TunnelHandshake {
             .context("Failed to connect handshake socket")?;
 
         // Generate ephemeral keypair for this tunnel
-        let keypair = HybridKeyPair::generate()
-            .context("Failed to generate hybrid keypair")?;
-        
+        let keypair = HybridKeyPair::generate().context("Failed to generate hybrid keypair")?;
+
         self.local_keypair = Some(keypair);
 
         // Perform handshake with timeout
@@ -85,7 +84,9 @@ impl TunnelHandshake {
 
     /// Performs the initiator side of the handshake.
     async fn do_initiate(&self, socket: &UdpSocket) -> Result<TunnelKeys> {
-        let keypair = self.local_keypair.as_ref()
+        let keypair = self
+            .local_keypair
+            .as_ref()
             .context("Keypair not initialized")?;
 
         // 1. Send TunnelInit with our ephemeral public key
@@ -117,8 +118,8 @@ impl TunnelHandshake {
             .await
             .context("Failed to receive TunnelResponse")?;
 
-        let response_handshake = ProtoHandshake::decode(&buf[..len])
-            .context("Failed to decode TunnelResponse")?;
+        let response_handshake =
+            ProtoHandshake::decode(&buf[..len]).context("Failed to decode TunnelResponse")?;
 
         let response = match response_handshake.message {
             Some(tunnel_handshake::Message::Response(r)) => r,
@@ -198,9 +199,8 @@ impl TunnelHandshake {
             .context("Failed to connect handshake socket")?;
 
         // Generate our keypair
-        let keypair = HybridKeyPair::generate()
-            .context("Failed to generate hybrid keypair")?;
-        
+        let keypair = HybridKeyPair::generate().context("Failed to generate hybrid keypair")?;
+
         self.local_keypair = Some(keypair);
 
         // Perform handshake with timeout
@@ -211,7 +211,9 @@ impl TunnelHandshake {
 
     /// Performs the responder side of the handshake.
     async fn do_respond(&self, socket: &UdpSocket) -> Result<TunnelKeys> {
-        let keypair = self.local_keypair.as_ref()
+        let keypair = self
+            .local_keypair
+            .as_ref()
             .context("Keypair not initialized")?;
 
         // 1. Receive TunnelInit
@@ -221,8 +223,8 @@ impl TunnelHandshake {
             .await
             .context("Failed to receive TunnelInit")?;
 
-        let init_handshake = ProtoHandshake::decode(&buf[..len])
-            .context("Failed to decode TunnelInit")?;
+        let init_handshake =
+            ProtoHandshake::decode(&buf[..len]).context("Failed to decode TunnelInit")?;
 
         let init = match init_handshake.message {
             Some(tunnel_handshake::Message::Init(i)) => i,
@@ -237,12 +239,13 @@ impl TunnelHandshake {
             .context("Missing ephemeral public key")?;
 
         let initiator_public_bytes = self.reconstruct_public_key(&initiator_public_key)?;
-        let initiator_public = avon_crypto::hybrid::key_exchange::HybridPublicKey::from_bytes(&initiator_public_bytes)
-            .context("Failed to parse initiator public key")?;
+        let initiator_public =
+            avon_crypto::hybrid::key_exchange::HybridPublicKey::from_bytes(&initiator_public_bytes)
+                .context("Failed to parse initiator public key")?;
 
         // 3. Perform encapsulation to initiator's public key
-        let (encapsulation, shared_secret) = hybrid_encapsulate(&initiator_public)
-            .context("Failed to encapsulate")?;
+        let (encapsulation, shared_secret) =
+            hybrid_encapsulate(&initiator_public).context("Failed to encapsulate")?;
 
         // 4. Send TunnelResponse
         let response = TunnelResponse {
@@ -283,8 +286,8 @@ impl TunnelHandshake {
             .await
             .context("Failed to receive TunnelConfirm")?;
 
-        let confirm_handshake = ProtoHandshake::decode(&buf[..len])
-            .context("Failed to decode TunnelConfirm")?;
+        let confirm_handshake =
+            ProtoHandshake::decode(&buf[..len]).context("Failed to decode TunnelConfirm")?;
 
         let _confirm = match confirm_handshake.message {
             Some(tunnel_handshake::Message::Confirm(c)) => c,
@@ -304,8 +307,7 @@ impl TunnelHandshake {
         bytes.extend_from_slice(&encap.classical_public);
         bytes.extend_from_slice(&encap.pqc_ciphertext);
 
-        HybridEncapsulation::from_bytes(&bytes)
-            .context("Failed to parse encapsulation")
+        HybridEncapsulation::from_bytes(&bytes).context("Failed to parse encapsulation")
     }
 
     /// Reconstructs the responder's public key from encapsulation.
@@ -329,17 +331,15 @@ impl TunnelHandshake {
         // In production, this would be an encrypted proof of key possession
         // For now, we use a simple hash of the session ID with the key
         use avon_crypto::hmac::hmac_sha256;
-        
+
         let tag = hmac_sha256(keys.initiator_key(), &self.session_id);
-        
+
         Ok(tag.to_vec())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_handshake_creation() {
         // This test would require a mock identity manager
