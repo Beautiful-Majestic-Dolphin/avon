@@ -1,6 +1,8 @@
+mod crl;
 mod hybrid;
 mod x509;
 
+pub use crl::{current_crl, revoke};
 pub use hybrid::{
     verify_csr, CsrData, Issued, Issuer, DEVICE_LIFETIME_SECS, SERVICE_LIFETIME_SECS,
 };
