@@ -34,6 +34,7 @@
 //! ```
 
 pub mod aead;
+pub mod cert;
 pub mod ecdh;
 pub mod error;
 pub mod hmac;

@@ -52,8 +52,12 @@ impl SessionCipher {
     }
 
     pub fn seal(&self, aad: &[u8], plaintext: &mut Vec<u8>) -> Result<u64, CryptoError> {
-        let counter = self.counter.next().map_err(|_| CryptoError::CounterExhausted)?;
-        self.send.seal_in_place(&nonce_for(counter), aad, plaintext)?;
+        let counter = self
+            .counter
+            .next()
+            .map_err(|_| CryptoError::CounterExhausted)?;
+        self.send
+            .seal_in_place(&nonce_for(counter), aad, plaintext)?;
         Ok(counter)
     }
 
@@ -61,7 +65,10 @@ impl SessionCipher {
         // Decrypt first, then commit the counter: a forged packet must not be
         // able to poison the window.
         {
-            let window = self.window.lock().map_err(|_| CryptoError::AuthenticationFailed)?;
+            let window = self
+                .window
+                .lock()
+                .map_err(|_| CryptoError::AuthenticationFailed)?;
             if let Some(highest) = window.highest() {
                 if highest >= counter && highest - counter >= ReplayWindow::SIZE {
                     return Err(CryptoError::Replay(super::replay::ReplayError::TooOld));
@@ -69,7 +76,12 @@ impl SessionCipher {
             }
         }
         self.recv.open_in_place(&nonce_for(counter), aad, buf)?;
-        let mut window = self.window.lock().map_err(|_| CryptoError::AuthenticationFailed)?;
-        window.check_and_update(counter).map_err(CryptoError::Replay)
+        let mut window = self
+            .window
+            .lock()
+            .map_err(|_| CryptoError::AuthenticationFailed)?;
+        window
+            .check_and_update(counter)
+            .map_err(CryptoError::Replay)
     }
 }
