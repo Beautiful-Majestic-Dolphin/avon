@@ -1,5 +1,6 @@
 [workspace]
 resolver = "2"
+exclude = ["crates/avon-crypto/fuzz"]
 members = [
     "crates/avon-crypto",
     "crates/avon-protocol",

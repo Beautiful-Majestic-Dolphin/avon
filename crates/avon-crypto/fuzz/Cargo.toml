@@ -1,0 +1,36 @@
+[package]
+name = "avon-crypto-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+avon-crypto = { path = ".." }
+
+[[bin]]
+name = "cert_decode"
+path = "fuzz_targets/cert_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "hybrid_pk_decode"
+path = "fuzz_targets/hybrid_pk_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "hybrid_sig_decode"
+path = "fuzz_targets/hybrid_sig_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "tbs_roundtrip"
+path = "fuzz_targets/tbs_roundtrip.rs"
+test = false
+doc = false
