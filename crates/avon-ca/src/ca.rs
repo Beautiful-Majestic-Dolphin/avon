@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use avon_common::device::DeviceId;
-use avon_crypto::hybrid::signature::{HybridSigningKeyPair, HybridVerifyingKey};
+use avon_crypto::hybrid::signature::{Domain, HybridSigningKeyPair, HybridVerifyingKey};
 use chrono::{DateTime, Utc};
 use num_traits::ToPrimitive;
 use rcgen::{
@@ -234,7 +234,7 @@ impl CertificateAuthority {
 
         let mut cert_der = cert.der().to_vec();
 
-        let signature = keypair.sign(&cert_der);
+        let signature = keypair.sign(Domain::Cert, &cert_der).map_err(|e| CaError::SigningFailed(e.to_string()))?;
         cert_der.extend_from_slice(&signature.to_bytes());
 
         Ok(cert_der)
@@ -270,8 +270,8 @@ impl CertificateAuthority {
 
         let mut cert_der = cert.der().to_vec();
 
-        let intermediate_signature = intermediate_keypair.sign(&cert_der);
-        let root_signature = root_keypair.sign(&cert_der);
+        let intermediate_signature = intermediate_keypair.sign(Domain::Cert, &cert_der).map_err(|e| CaError::SigningFailed(e.to_string()))?;
+        let root_signature = root_keypair.sign(Domain::Cert, &cert_der).map_err(|e| CaError::SigningFailed(e.to_string()))?;
 
         cert_der.extend_from_slice(&intermediate_signature.to_bytes());
         cert_der.extend_from_slice(&root_signature.to_bytes());
@@ -339,7 +339,7 @@ impl CertificateAuthority {
         tbs_data.extend_from_slice(public_key_pqc);
         tbs_data.extend_from_slice(&serial.to_be_bytes());
 
-        let hybrid_signature = self.intermediate_keypair.sign(&tbs_data);
+        let hybrid_signature = self.intermediate_keypair.sign(Domain::Cert, &tbs_data).map_err(|e| CaError::SigningFailed(e.to_string()))?;
         let classical_signature = hybrid_signature.classical().to_bytes().to_vec();
         let pqc_signature = hybrid_signature.pqc().to_bytes().to_vec();
 
@@ -436,7 +436,7 @@ impl CertificateAuthority {
         response.extend_from_slice(&now.timestamp().to_be_bytes());
         response.extend_from_slice(&next_update.timestamp().to_be_bytes());
 
-        let signature = self.intermediate_keypair.sign(&response);
+        let signature = self.intermediate_keypair.sign(Domain::Cert, &response).map_err(|e| CaError::SigningFailed(e.to_string()))?;
         response.extend_from_slice(&signature.to_bytes());
 
         Ok(OcspStaple {

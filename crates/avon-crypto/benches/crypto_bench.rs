@@ -7,7 +7,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use avon_crypto::ecdh::X25519KeyPair;
 use avon_crypto::hybrid::kem::HybridKemKeyPair;
-use avon_crypto::hybrid::signature::HybridSigningKeyPair;
+use avon_crypto::hybrid::signature::{Domain, HybridSigningKeyPair};
 use avon_crypto::pqc::mldsa::MlDsaKeyPair;
 use avon_crypto::pqc::mlkem::MlKemKeyPair;
 use avon_crypto::signature::Ed25519KeyPair;
@@ -135,7 +135,7 @@ fn bench_hybrid_sign(c: &mut Criterion) {
 
     c.bench_function("hybrid_sign", |b| {
         b.iter(|| {
-            let _ = black_box(keypair.sign(black_box(message)));
+            let _ = black_box(keypair.sign(Domain::Auth, black_box(message)).unwrap());
         })
     });
 }
@@ -144,14 +144,14 @@ fn bench_hybrid_sign(c: &mut Criterion) {
 fn bench_hybrid_verify(c: &mut Criterion) {
     let keypair = HybridSigningKeyPair::generate().unwrap();
     let message = b"Hello, world! This is a test message for benchmarking.";
-    let signature = keypair.sign(message);
+    let signature = keypair.sign(Domain::Auth, message).unwrap();
 
     c.bench_function("hybrid_verify", |b| {
         b.iter(|| {
             let _ = black_box(
                 keypair
                     .verifying_key()
-                    .verify(black_box(message), black_box(&signature)),
+                    .verify(Domain::Auth, black_box(message), black_box(&signature)),
             );
         })
     });
