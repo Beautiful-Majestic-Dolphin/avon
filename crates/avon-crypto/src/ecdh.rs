@@ -79,6 +79,11 @@ impl X25519PrivateKey {
 pub struct X25519PublicKey(#[serde(with = "serde_bytes_array")] [u8; 32]);
 
 impl X25519PublicKey {
+    /// Returns the key as a byte array reference.
+    pub fn as_array(&self) -> &[u8; 32] {
+        &self.0
+    }
+
     /// The length of an X25519 public key in bytes.
     pub const LENGTH: usize = 32;
 
@@ -248,6 +253,11 @@ impl X25519KeyPair {
     /// ```
     pub fn public_key(&self) -> &X25519PublicKey {
         &self.public
+    }
+
+    /// Returns a reference to the private key.
+    pub fn private_key(&self) -> &X25519PrivateKey {
+        &self.private
     }
 
     /// Performs Diffie-Hellman key exchange with a peer's public key.

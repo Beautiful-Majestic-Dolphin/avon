@@ -41,10 +41,7 @@ pub mod hybrid;
 pub mod kdf;
 pub mod pqc;
 pub mod random;
-pub mod session;
 pub mod signature;
-pub mod token;
-pub mod tunnel;
 
 pub use error::CryptoError;
 
