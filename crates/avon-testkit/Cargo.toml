@@ -10,6 +10,7 @@ description = "Test infrastructure for AVON (ephemeral databases, Redis, ports, 
 avon-config.workspace = true
 avon-crypto.workspace = true
 avon-db.workspace = true
+avon-protocol.workspace = true
 rcgen = { version = "0.13", features = ["pem"] }
 sqlx.workspace = true
 redis.workspace = true

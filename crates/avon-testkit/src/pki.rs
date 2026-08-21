@@ -5,7 +5,9 @@ use std::path::Path;
 
 use avon_config::TlsArgs;
 use avon_crypto::cert::{Certificate, SubjectKind, TbsCertificate};
-use avon_crypto::hybrid::signature::HybridSigningKeyPair;
+use avon_crypto::hybrid::kem::HybridKemPublicKey;
+use avon_crypto::hybrid::signature::{Domain, HybridSigningKeyPair};
+use avon_protocol::v2::Csr;
 use rcgen::{
     BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, KeyPair,
     KeyUsagePurpose, SanType, PKCS_ED25519,
@@ -133,5 +135,48 @@ impl TestPki {
 impl Default for TestPki {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// A CSR proving possession of the hybrid signing key and carrying a PKCS#10
+/// request for the Ed25519 TLS key. Serial, issuer and validity are zero: the
+/// CA sets them.
+pub fn make_csr(
+    signing: &HybridSigningKeyPair,
+    kem: &HybridKemPublicKey,
+    tls_key: &KeyPair,
+    kind: SubjectKind,
+    tenant: &str,
+    subject: [u8; 16],
+) -> Csr {
+    let template = TbsCertificate {
+        version: 2,
+        serial: [0; 16],
+        tenant_id: tenant.to_string(),
+        subject_id: subject,
+        kind,
+        signing_key: signing.verifying_key(),
+        kem_key: Some(kem.clone()),
+        not_before: 0,
+        not_after: 0,
+        issuer_key_id: [0; 32],
+        sans: vec![],
+        tls_cert_sha256: None,
+    }
+    .encode();
+    let proof = signing
+        .sign(Domain::Csr, &template)
+        .expect("csr proof")
+        .to_bytes();
+    let params = CertificateParams::new(Vec::<String>::new()).expect("params");
+    let tls_csr_pem = params
+        .serialize_request(tls_key)
+        .expect("csr")
+        .pem()
+        .expect("pem");
+    Csr {
+        tbs_template: template,
+        proof,
+        tls_csr_pem,
     }
 }
