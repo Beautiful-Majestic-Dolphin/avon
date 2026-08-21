@@ -9,8 +9,8 @@
 //! - **HMAC**: Message authentication using HMAC-SHA256
 //! - **Random**: Cryptographically secure random number generation
 //! - **Signature**: Ed25519 digital signatures
-//! - **PQC**: Post-quantum cryptography (CRYSTALS-Kyber KEM, CRYSTALS-Dilithium)
-//! - **Hybrid**: Hybrid classical+PQC cryptography (X25519+Kyber, Ed25519+Dilithium)
+//! - **PQC**: Post-quantum cryptography (ML-KEM-768, ML-DSA-65)
+//! - **Hybrid**: Hybrid classical+PQC cryptography (X25519+ML-KEM-768, Ed25519+ML-DSA-65)
 //! - **Token**: Rotating authentication tokens for device identity
 //! - **Tunnel**: High-performance tunnel encryption with atomic nonce counter
 //! - **Session**: Session key derivation for tunnel establishment

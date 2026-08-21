@@ -8,8 +8,8 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use avon_crypto::ecdh::X25519KeyPair;
 use avon_crypto::hybrid::key_exchange::{hybrid_encapsulate, HybridKeyPair};
 use avon_crypto::hybrid::signature::HybridSigningKeyPair;
-use avon_crypto::pqc::dilithium::DilithiumKeyPair;
-use avon_crypto::pqc::kyber::KyberKeyPair;
+use avon_crypto::pqc::mldsa::MlDsaKeyPair;
+use avon_crypto::pqc::mlkem::MlKemKeyPair;
 use avon_crypto::signature::Ed25519KeyPair;
 
 /// Benchmark classical X25519 key exchange.
@@ -24,23 +24,23 @@ fn bench_x25519_key_exchange(c: &mut Criterion) {
     });
 }
 
-/// Benchmark Kyber768 key encapsulation.
+/// Benchmark ML-KEM-768 key encapsulation.
 fn bench_kyber_encapsulate(c: &mut Criterion) {
-    let keypair = KyberKeyPair::generate().unwrap();
+    let keypair = MlKemKeyPair::generate().unwrap();
 
-    c.bench_function("kyber768_encapsulate", |b| {
+    c.bench_function("mlkem768_encapsulate", |b| {
         b.iter(|| {
             let _ = black_box(keypair.public_key().encapsulate().unwrap());
         })
     });
 }
 
-/// Benchmark Kyber768 key decapsulation.
+/// Benchmark ML-KEM-768 key decapsulation.
 fn bench_kyber_decapsulate(c: &mut Criterion) {
-    let keypair = KyberKeyPair::generate().unwrap();
+    let keypair = MlKemKeyPair::generate().unwrap();
     let (ciphertext, _) = keypair.public_key().encapsulate().unwrap();
 
-    c.bench_function("kyber768_decapsulate", |b| {
+    c.bench_function("mlkem768_decapsulate", |b| {
         b.iter(|| {
             let _ = black_box(keypair.decapsulate(&ciphertext).unwrap());
         })
@@ -99,25 +99,25 @@ fn bench_ed25519_verify(c: &mut Criterion) {
     });
 }
 
-/// Benchmark Dilithium3 signing.
+/// Benchmark ML-DSA-65 signing.
 fn bench_dilithium_sign(c: &mut Criterion) {
-    let keypair = DilithiumKeyPair::generate().unwrap();
+    let keypair = MlDsaKeyPair::generate().unwrap();
     let message = b"Hello, world! This is a test message for benchmarking.";
 
-    c.bench_function("dilithium3_sign", |b| {
+    c.bench_function("mldsa65_sign", |b| {
         b.iter(|| {
-            let _ = black_box(keypair.sign(black_box(message)));
+            let _ = black_box(keypair.sign(black_box(message)).unwrap());
         })
     });
 }
 
-/// Benchmark Dilithium3 verification.
+/// Benchmark ML-DSA-65 verification.
 fn bench_dilithium_verify(c: &mut Criterion) {
-    let keypair = DilithiumKeyPair::generate().unwrap();
+    let keypair = MlDsaKeyPair::generate().unwrap();
     let message = b"Hello, world! This is a test message for benchmarking.";
-    let signature = keypair.sign(message);
+    let signature = keypair.sign(message).unwrap();
 
-    c.bench_function("dilithium3_verify", |b| {
+    c.bench_function("mldsa65_verify", |b| {
         b.iter(|| {
             let _ = black_box(
                 keypair
@@ -167,9 +167,9 @@ fn bench_key_generation(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("kyber768", |b| {
+    group.bench_function("mlkem768", |b| {
         b.iter(|| {
-            let _ = black_box(KyberKeyPair::generate().unwrap());
+            let _ = black_box(MlKemKeyPair::generate().unwrap());
         })
     });
 
@@ -185,9 +185,9 @@ fn bench_key_generation(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("dilithium3", |b| {
+    group.bench_function("mldsa65", |b| {
         b.iter(|| {
-            let _ = black_box(DilithiumKeyPair::generate().unwrap());
+            let _ = black_box(MlDsaKeyPair::generate().unwrap());
         })
     });
 

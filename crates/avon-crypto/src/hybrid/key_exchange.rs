@@ -1,8 +1,8 @@
-//! Hybrid Key Exchange combining X25519 (classical) and Kyber768 (PQC).
+//! Hybrid Key Exchange combining X25519 (classical) and ML-KEM-768 (PQC).
 //!
 //! This module provides a hybrid key exchange mechanism that combines classical
 //! elliptic curve Diffie-Hellman (X25519) with post-quantum key encapsulation
-//! (Kyber768).
+//! (ML-KEM-768).
 //!
 //! # Security Property
 //!
@@ -11,10 +11,10 @@
 //!
 //! # Protocol
 //!
-//! 1. Recipient generates a hybrid keypair (X25519 + Kyber768)
+//! 1. Recipient generates a hybrid keypair (X25519 + ML-KEM-768)
 //! 2. Sender generates ephemeral X25519 keypair
 //! 3. Sender performs ECDH with recipient's X25519 public key
-//! 4. Sender performs Kyber encapsulation with recipient's Kyber public key
+//! 4. Sender performs ML-KEM encapsulation with recipient's ML-KEM public key
 //! 5. Both secrets are combined using HKDF-SHA384
 //! 6. Result is a 32-byte shared secret
 //!
@@ -40,17 +40,17 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::ecdh::{X25519KeyPair, X25519PublicKey};
 use crate::error::CryptoError;
 use crate::kdf::hkdf_sha384;
-use crate::pqc::kyber::{KyberCiphertext, KyberKeyPair, KyberPublicKey};
+use crate::pqc::mlkem::{MlKemCiphertext, MlKemKeyPair, MlKemPublicKey};
 
 /// Domain separator for hybrid key exchange.
 const HYBRID_KEX_INFO: &[u8] = b"AVON-hybrid-kex-v1";
 
-/// A hybrid key pair combining X25519 and Kyber768.
+/// A hybrid key pair combining X25519 and ML-KEM-768.
 ///
 /// This keypair is used by the recipient in a hybrid key exchange.
 pub struct HybridKeyPair {
     classical: X25519KeyPair,
-    pqc: KyberKeyPair,
+    pqc: MlKemKeyPair,
 }
 
 impl HybridKeyPair {
@@ -69,7 +69,7 @@ impl HybridKeyPair {
     /// ```
     pub fn generate() -> Result<Self, CryptoError> {
         let classical = X25519KeyPair::generate()?;
-        let pqc = KyberKeyPair::generate()?;
+        let pqc = MlKemKeyPair::generate()?;
 
         Ok(Self { classical, pqc })
     }
@@ -125,7 +125,7 @@ impl HybridKeyPair {
             .classical
             .diffie_hellman(&encapsulation.classical_public)?;
 
-        // Decapsulate Kyber ciphertext
+        // Decapsulate ML-KEM ciphertext
         let kyber_secret = self.pqc.decapsulate(&encapsulation.pqc_ciphertext)?;
 
         // Combine secrets using HKDF
@@ -133,19 +133,19 @@ impl HybridKeyPair {
     }
 }
 
-/// A hybrid public key combining X25519 and Kyber768 public keys.
+/// A hybrid public key combining X25519 and ML-KEM-768 public keys.
 ///
 /// This is shared with senders who want to establish a shared secret.
 #[derive(Clone)]
 pub struct HybridPublicKey {
     classical: X25519PublicKey,
-    pqc: KyberPublicKey,
+    pqc: MlKemPublicKey,
 }
 
 impl HybridPublicKey {
     /// Returns the hybrid public key as bytes.
     ///
-    /// Format: X25519 public key (32 bytes) || Kyber public key (1184 bytes)
+    /// Format: X25519 public key (32 bytes) || ML-KEM public key (1184 bytes)
     ///
     /// # Example
     ///
@@ -193,7 +193,7 @@ impl HybridPublicKey {
         }
 
         let classical = X25519PublicKey::from_bytes(&bytes[..32])?;
-        let pqc = KyberPublicKey::from_bytes(&bytes[32..])?;
+        let pqc = MlKemPublicKey::from_bytes(&bytes[32..])?;
 
         Ok(Self { classical, pqc })
     }
@@ -206,14 +206,14 @@ impl HybridPublicKey {
 pub struct HybridEncapsulation {
     /// Ephemeral X25519 public key for ECDH.
     pub classical_public: X25519PublicKey,
-    /// Kyber ciphertext.
-    pub pqc_ciphertext: KyberCiphertext,
+    /// ML-KEM ciphertext.
+    pub pqc_ciphertext: MlKemCiphertext,
 }
 
 impl HybridEncapsulation {
     /// Returns the encapsulation as bytes.
     ///
-    /// Format: X25519 ephemeral public key (32 bytes) || Kyber ciphertext (1088 bytes)
+    /// Format: X25519 ephemeral public key (32 bytes) || ML-KEM ciphertext (1088 bytes)
     ///
     /// # Example
     ///
@@ -263,7 +263,7 @@ impl HybridEncapsulation {
         }
 
         let classical_public = X25519PublicKey::from_bytes(&bytes[..32])?;
-        let pqc_ciphertext = KyberCiphertext::from_bytes(&bytes[32..])?;
+        let pqc_ciphertext = MlKemCiphertext::from_bytes(&bytes[32..])?;
 
         Ok(Self {
             classical_public,
@@ -298,7 +298,7 @@ impl HybridSharedSecret {
 /// Performs hybrid encapsulation to a recipient's public key.
 ///
 /// This is the initiator side of the hybrid key exchange. It generates an
-/// ephemeral X25519 keypair, performs ECDH, performs Kyber encapsulation,
+/// ephemeral X25519 keypair, performs ECDH, performs ML-KEM encapsulation,
 /// and combines the secrets.
 ///
 /// # Arguments
@@ -337,7 +337,7 @@ pub fn hybrid_encapsulate(
     // Perform ECDH with recipient's classical public key
     let ecdh_secret = ephemeral.diffie_hellman(&recipient_public.classical)?;
 
-    // Perform Kyber encapsulation with recipient's PQC public key
+    // Perform ML-KEM encapsulation with recipient's PQC public key
     let (kyber_ciphertext, kyber_secret) = recipient_public.pqc.encapsulate()?;
 
     // Combine secrets using HKDF
@@ -351,12 +351,12 @@ pub fn hybrid_encapsulate(
     Ok((encapsulation, shared_secret))
 }
 
-/// Combines ECDH and Kyber secrets using HKDF-SHA384.
+/// Combines ECDH and ML-KEM secrets using HKDF-SHA384.
 fn combine_secrets(
     ecdh_secret: &[u8; 32],
     kyber_secret: &[u8; 32],
 ) -> Result<HybridSharedSecret, CryptoError> {
-    // Concatenate secrets: ECDH || Kyber
+    // Concatenate secrets: ECDH || ML-KEM
     let mut combined = [0u8; 64];
     combined[..32].copy_from_slice(ecdh_secret);
     combined[32..].copy_from_slice(kyber_secret);

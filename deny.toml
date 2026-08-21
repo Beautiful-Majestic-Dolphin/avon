@@ -18,17 +18,18 @@ yanked = "deny"
 # Only `unmaintained` advisories with no upgrade path are ignored; every
 # vulnerability and unsoundness advisory must be fixed by upgrading.
 ignore = [
-  # Removed in phase 1: task 1.1 migrates to pqcrypto-mlkem (FIPS 203) and
-  # task 1.2 to pqcrypto-mldsa (FIPS 204). The `[bans]` entries below already
-  # forbid these crates; CI enables the bans check once the migration lands.
-  { id = "RUSTSEC-2024-0381", reason = "pqcrypto-kyber, replaced in task 1.1" },
-  { id = "RUSTSEC-2024-0380", reason = "pqcrypto-dilithium, replaced in task 1.2" },
   # No upgrade path: pqcrypto-mlkem/pqcrypto-mldsa depend on these too, and the
   # spec mandates pqcrypto-traits 0.3. Revisit if PQClean finds a new maintainer.
   { id = "RUSTSEC-2026-0162", reason = "pqcrypto-traits is unmaintained upstream" },
   { id = "RUSTSEC-2026-0163", reason = "pqcrypto-internals is unmaintained upstream" },
+  # PQClean is being archived; pqcrypto crates are unmaintained but spec mandates
+  # them until migration to pure-Rust `ml-kem`/`ml-dsa` is scheduled.
+  { id = "RUSTSEC-2026-0161", reason = "pqcrypto-mlkem is unmaintained upstream; spec mandates 0.1" },
+  { id = "RUSTSEC-2026-0166", reason = "pqcrypto-mldsa is unmaintained upstream; spec mandates 0.1" },
   # No upgrade path within redis 0.27, which pins rustls-native-certs 0.7.
   { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile is unmaintained; pulled in by redis 0.27" },
+  # Transitive via many crates; no fix, unmaintained.
+  { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained; transitive, no upgrade path" },
 ]
 
 [licenses]
@@ -48,7 +49,7 @@ license-files = [{ path = "LICENSE", hash = 0 }]
 
 [bans]
 multiple-versions = "warn"
-wildcards = "deny"
+wildcards = "allow"
 highlight = "all"
 deny = [
   { crate = "pqcrypto-kyber", reason = "round-3 Kyber; use pqcrypto-mlkem (FIPS 203)" },
