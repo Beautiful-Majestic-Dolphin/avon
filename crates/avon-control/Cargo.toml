@@ -1,0 +1,53 @@
+[package]
+name = "avon-control"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "AVON control plane: enrollment, authentication, pulse, sessions, gateway coordination"
+
+[[bin]]
+name = "avon-control"
+path = "src/main.rs"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+avon-common.workspace = true
+avon-config.workspace = true
+avon-crypto.workspace = true
+avon-db.workspace = true
+avon-observability.workspace = true
+avon-protocol.workspace = true
+avon-tls.workspace = true
+tokio.workspace = true
+tokio-stream = { version = "0.1", features = ["net", "sync"] }
+tonic = { workspace = true, features = ["tls-aws-lc"] }
+prost.workspace = true
+sqlx.workspace = true
+redis.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+base64ct = { workspace = true, features = ["alloc"] }
+sha2 = "0.10"
+hkdf = "0.12"
+subtle.workspace = true
+metrics.workspace = true
+dashmap.workspace = true
+ipnet = "2.10"
+rcgen = { version = "0.13", features = ["pem"] }
+
+[dev-dependencies]
+avon-testkit.workspace = true
+tempfile.workspace = true
+tracing-test = "0.2"
+
+[lints]
+workspace = true
