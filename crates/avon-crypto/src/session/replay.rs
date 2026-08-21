@@ -7,7 +7,7 @@ pub struct ReplayWindow {
     highest: Option<u64>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplayError {
     Replayed,
     TooOld,
