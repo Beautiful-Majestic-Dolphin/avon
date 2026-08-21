@@ -91,7 +91,9 @@ fn valid_chain_verifies() {
     )
     .unwrap();
     let v = ChainVerifier::new(vec![p.root.clone()]).unwrap();
-    let verified = v.verify(&leaf, &[p.issuing.clone()], 1_500).unwrap();
+    let verified = v
+        .verify(&leaf, std::slice::from_ref(&p.issuing), 1_500)
+        .unwrap();
     assert_eq!(verified.chain, vec![p.root.id(), p.issuing.id(), leaf.id()]);
 }
 
@@ -106,11 +108,11 @@ fn expired_and_not_yet_valid_are_rejected() {
     .unwrap();
     let v = ChainVerifier::new(vec![p.root.clone()]).unwrap();
     assert!(matches!(
-        v.verify(&leaf, &[p.issuing.clone()], 2_001),
+        v.verify(&leaf, std::slice::from_ref(&p.issuing), 2_001),
         Err(CertError::Expired)
     ));
     assert!(matches!(
-        v.verify(&leaf, &[p.issuing.clone()], 999),
+        v.verify(&leaf, std::slice::from_ref(&p.issuing), 999),
         Err(CertError::NotYetValid)
     ));
 }
@@ -127,7 +129,7 @@ fn leaf_signed_by_unknown_issuer_is_rejected() {
     .unwrap();
     let v = ChainVerifier::new(vec![p.root.clone()]).unwrap();
     assert!(matches!(
-        v.verify(&leaf, &[p.issuing.clone()], 1_500),
+        v.verify(&leaf, std::slice::from_ref(&p.issuing), 1_500),
         Err(CertError::UnknownIssuer)
     ));
 }
