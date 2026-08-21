@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "avon.control.fullname" . }}
+  labels:
+    {{- include "avon.control.labels" . | nindent 4 }}
+data:
+  AVON_CONTROL_LISTEN_ADDR: "0.0.0.0:50051"
+  AVON_CONTROL_CA_URL: "https://{{ include "avon.ca.fullname" . }}:{{ .Values.ca.service.port }}"
+  AVON_CONTROL_CA_SERVER_NAME: "ca"
+  AVON_CONTROL_SESSION_TTL_SECS: {{ .Values.control.sessionTtlSecs | quote }}
+  AVON_CONTROL_PULSE_INTERVAL_SECS: {{ .Values.control.pulseIntervalSecs | quote }}
+  AVON_HEALTH_ADDR: "0.0.0.0:8080"
+  AVON_METRICS_ADDR: "0.0.0.0:9090"
+  AVON_LOG_LEVEL: {{ .Values.control.logLevel | default "info" | quote }}
+  AVON_LOG_FORMAT: "json"
+  AVON_DATABASE_REQUIRE_TLS: {{ .Values.control.requireDatabaseTls | quote }}
+  AVON_REDIS_REQUIRE_TLS: {{ .Values.control.requireRedisTls | quote }}

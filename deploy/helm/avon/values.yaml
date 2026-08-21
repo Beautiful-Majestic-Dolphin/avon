@@ -37,7 +37,8 @@ gateway:
     readOnlyRootFilesystem: true
 
 control:
-  replicaCount: 3
+  replicaCount: 2
+  logLevel: info
   image:
     repository: avon/control
     tag: latest
@@ -45,12 +46,24 @@ control:
   service:
     type: ClusterIP
     port: 50051
+  serviceAccount:
+    create: true
+  # Set either these two or existingSecret.
+  databaseUrl: ""
+  redisUrl: ""
+  existingSecret: ""
+  # Secret with tls.crt / tls.key / ca.crt, from cert-manager or the bootstrap job.
+  tlsSecret: ""
+  requireDatabaseTls: true
+  requireRedisTls: true
+  sessionTtlSecs: 86400
+  pulseIntervalSecs: 30
   resources:
     requests:
       cpu: 100m
       memory: 128Mi
     limits:
-      cpu: 500m
+      cpu: "1"
       memory: 512Mi
   nodeSelector: {}
   tolerations: []
@@ -58,10 +71,7 @@ control:
   podAnnotations: {}
   podSecurityContext:
     runAsNonRoot: true
-    runAsUser: 1000
-  securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
+    runAsUser: 65532
 
 ca:
   replicaCount: 2
@@ -72,10 +82,14 @@ ca:
   service:
     type: ClusterIP
     port: 50052
+  # Keys live in Postgres, sealed by the master key in this Secret; the CA
+  # keeps no state on disk.
   persistence:
-    enabled: true
+    enabled: false
     size: 1Gi
     storageClass: ""
+  masterKeySecret: avon-ca-master-key
+  tlsSecret: ""
   hsm:
     enabled: false
     provider: ""
@@ -96,6 +110,31 @@ ca:
   securityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: false
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop: [ALL]
+  seccompProfile:
+    type: RuntimeDefault
+
+migrateJob:
+  enabled: true
+  backoffLimit: 3
+  image:
+    repository: avon/migrate
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
 
 policyEngine:
   replicaCount: 3

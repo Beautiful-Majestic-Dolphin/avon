@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "avon.control.fullname" . }}
+  labels:
+    {{- include "avon.control.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.control.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "avon.control.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/control/configmap.yaml") . | sha256sum }}
+        {{- include "avon.meshAnnotations" . | nindent 8 }}
+        {{- with .Values.control.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "avon.control.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ if .Values.control.serviceAccount.create }}{{ include "avon.control.fullname" . }}{{ else }}{{ include "avon.serviceAccountName" . }}{{ end }}
+      securityContext:
+        {{- toYaml .Values.control.podSecurityContext | nindent 8 }}
+      containers:
+        - name: control
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: {{ include "avon.image" (dict "global" .Values.global "image" .Values.control.image) }}
+          imagePullPolicy: {{ .Values.control.image.pullPolicy }}
+          ports:
+            - { name: grpc, containerPort: 50051, protocol: TCP }
+            - { name: health, containerPort: 8080, protocol: TCP }
+            - { name: metrics, containerPort: 9090, protocol: TCP }
+          envFrom:
+            - configMapRef:
+                name: {{ include "avon.control.fullname" . }}
+            - secretRef:
+                name: {{ .Values.control.existingSecret | default (include "avon.control.fullname" .) }}
+          env:
+            - { name: AVON_TLS_CERT, value: /tls/tls.crt }
+            - { name: AVON_TLS_KEY, value: /tls/tls.key }
+            - { name: AVON_TLS_CA, value: /tls/ca.crt }
+          volumeMounts:
+            - { name: tls, mountPath: /tls, readOnly: true }
+          # gRPC for liveness: the listener either serves or it does not.
+          # Readiness is HTTP because it reports database, Redis and CA health.
+          livenessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: health
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.control.resources | nindent 12 }}
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ .Values.control.tlsSecret | default (printf "%s-tls" (include "avon.control.fullname" .)) }}
+      {{- with .Values.control.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.control.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.control.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

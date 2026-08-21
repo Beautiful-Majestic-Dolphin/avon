@@ -6,7 +6,8 @@ metadata:
     {{- include "avon.ca.labels" . | nindent 4 }}
 spec:
   serviceName: {{ include "avon.ca.fullname" . }}
-  replicas: {{ .Values.ca.replicaCount }}
+  # Single writer: `avon-ca init` and CRL versioning assume one issuer.
+  replicas: 1
   selector:
     matchLabels:
       {{- include "avon.ca.selectorLabels" . | nindent 6 }}
@@ -17,7 +18,6 @@ spec:
         prometheus.io/port: "9090"
         prometheus.io/path: "/metrics"
         checksum/config: {{ include (print $.Template.BasePath "/ca/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/common/secrets.yaml") . | sha256sum }}
         {{- include "avon.meshAnnotations" . | nindent 8 }}
         {{- with .Values.ca.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -32,92 +32,83 @@ spec:
       serviceAccountName: {{ include "avon.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.ca.podSecurityContext | nindent 8 }}
-      containers:
-        - name: ca
+      initContainers:
+        # Idempotent: creates the root/issuing/TLS chain only if `ca_keys` is
+        # empty, so a restart or a scaled-down/up cycle changes nothing.
+        - name: init
           securityContext:
-            {{- toYaml .Values.ca.securityContext | nindent 12 }}
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           image: {{ include "avon.image" (dict "global" .Values.global "image" .Values.ca.image) }}
           imagePullPolicy: {{ .Values.ca.image.pullPolicy }}
-          ports:
-            - name: grpc
-              containerPort: {{ .Values.ca.service.port }}
-              protocol: TCP
-            - name: health
-              containerPort: 8080
-              protocol: TCP
-            - name: metrics
-              containerPort: 9090
-              protocol: TCP
-          env:
-            - name: AVON_LOG_LEVEL
-              value: {{ .Values.ca.logLevel | default "info" | quote }}
-            - name: AVON_GRPC_PORT
-              value: {{ .Values.ca.service.port | quote }}
-            - name: AVON_HEALTH_PORT
-              value: "8080"
-            - name: AVON_METRICS_PORT
-              value: "9090"
-            - name: AVON_DATA_DIR
-              value: "/data"
+          args: ["init"]
           envFrom:
             - configMapRef:
                 name: {{ include "avon.ca.fullname" . }}-config
             - secretRef:
-                name: {{ include "avon.fullname" . }}-secrets
-          {{- if .Values.ca.persistence.enabled }}
+                name: {{ .Values.control.existingSecret | default (include "avon.control.fullname" .) }}
+          env:
+            - { name: AVON_CA_MASTER_KEY_FILE, value: /ca/master.key }
           volumeMounts:
-            - name: ca-data
-              mountPath: /data
-          {{- end }}
+            - { name: master-key, mountPath: /ca, readOnly: true }
+          resources:
+            {{- toYaml .Values.ca.resources | nindent 12 }}
+      containers:
+        - name: ca
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: {{ include "avon.image" (dict "global" .Values.global "image" .Values.ca.image) }}
+          imagePullPolicy: {{ .Values.ca.image.pullPolicy }}
+          args: ["serve"]
+          ports:
+            - { name: grpc, containerPort: {{ .Values.ca.service.port }}, protocol: TCP }
+            - { name: health, containerPort: 8080, protocol: TCP }
+            - { name: metrics, containerPort: 9090, protocol: TCP }
+          env:
+            - { name: AVON_CA_MASTER_KEY_FILE, value: /ca/master.key }
+            - { name: AVON_CA_LISTEN_ADDR, value: "0.0.0.0:{{ .Values.ca.service.port }}" }
+            - { name: AVON_TLS_CERT, value: /tls/tls.crt }
+            - { name: AVON_TLS_KEY, value: /tls/tls.key }
+            - { name: AVON_TLS_CA, value: /tls/ca.crt }
+          envFrom:
+            - configMapRef:
+                name: {{ include "avon.ca.fullname" . }}-config
+            - secretRef:
+                name: {{ .Values.control.existingSecret | default (include "avon.control.fullname" .) }}
+          volumeMounts:
+            - { name: master-key, mountPath: /ca, readOnly: true }
+            - { name: tls, mountPath: /tls, readOnly: true }
+          # gRPC liveness: the CA serves mTLS only, so an HTTP probe on the gRPC
+          # port would report a failure that is not one.
           livenessProbe:
-            httpGet:
-              path: /health
-              port: health
+            grpc:
+              port: {{ .Values.ca.service.port }}
             initialDelaySeconds: 10
             periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /ready
               port: health
             initialDelaySeconds: 5
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
           resources:
             {{- toYaml .Values.ca.resources | nindent 12 }}
+      volumes:
+        - name: master-key
+          secret:
+            secretName: {{ .Values.ca.masterKeySecret }}
+            defaultMode: 0400
+        - name: tls
+          secret:
+            secretName: {{ .Values.ca.tlsSecret | default (printf "%s-tls" (include "avon.ca.fullname" .)) }}
       {{- with .Values.ca.nodeSelector }}
       nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ca.tolerations }}
+      tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.ca.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if not .Values.ca.affinity }}
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  {{- include "avon.ca.selectorLabels" . | nindent 18 }}
-              topologyKey: kubernetes.io/hostname
-      {{- end }}
-      {{- with .Values.ca.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-  {{- if .Values.ca.persistence.enabled }}
-  volumeClaimTemplates:
-    - metadata:
-        name: ca-data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        {{- if or .Values.ca.persistence.storageClass .Values.global.storageClass }}
-        storageClassName: {{ .Values.ca.persistence.storageClass | default .Values.global.storageClass }}
-        {{- end }}
-        resources:
-          requests:
-            storage: {{ .Values.ca.persistence.size }}
-  {{- end }}
