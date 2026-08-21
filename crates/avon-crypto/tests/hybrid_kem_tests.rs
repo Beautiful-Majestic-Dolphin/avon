@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use avon_crypto::hybrid::kem::{
-    combine, HybridKemCiphertext, HybridKemKeyPair, HybridKemPublicKey, HYBRID_KEM_CIPHERTEXT_BYTES,
-    HYBRID_KEM_PUBLIC_KEY_BYTES,
+    combine, HybridKemCiphertext, HybridKemKeyPair, HybridKemPublicKey,
+    HYBRID_KEM_CIPHERTEXT_BYTES, HYBRID_KEM_PUBLIC_KEY_BYTES,
 };
 use sha2::{Digest, Sha256};
 
@@ -17,7 +17,10 @@ fn roundtrip() {
 #[test]
 fn serialized_sizes() {
     let kp = HybridKemKeyPair::generate().unwrap();
-    assert_eq!(kp.public_key().to_bytes().len(), HYBRID_KEM_PUBLIC_KEY_BYTES);
+    assert_eq!(
+        kp.public_key().to_bytes().len(),
+        HYBRID_KEM_PUBLIC_KEY_BYTES
+    );
     let (ct, _) = kp.public_key().encapsulate().unwrap();
     assert_eq!(ct.to_bytes().len(), HYBRID_KEM_CIPHERTEXT_BYTES);
     assert_eq!(HYBRID_KEM_PUBLIC_KEY_BYTES, 32 + 1184);
@@ -66,7 +69,12 @@ fn combine_is_sha256_over_labelled_transcript() {
     let got = combine(&ss_x, &ss_m, &eph, &xpk, &ct, &mpk);
     let mut h = Sha256::new();
     h.update(b"AVON-HYBRID-KEM-V2");
-    h.update(ss_x); h.update(ss_m); h.update(eph); h.update(xpk); h.update(&ct); h.update(&mpk);
+    h.update(ss_x);
+    h.update(ss_m);
+    h.update(eph);
+    h.update(xpk);
+    h.update(&ct);
+    h.update(&mpk);
     let expected: [u8; 32] = h.finalize().into();
     assert_eq!(got, expected);
 }

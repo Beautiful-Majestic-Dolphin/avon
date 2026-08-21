@@ -93,7 +93,9 @@ impl HybridSigningKeyPair {
 
     /// Persisted form: `ed25519_seed(32) || mldsa_sk(4032) || mldsa_pk(1952)`.
     pub fn to_secret_bytes(&self) -> Zeroizing<Vec<u8>> {
-        let mut out = Zeroizing::new(Vec::with_capacity(HYBRID_SECRET_BYTES + MLDSA65_PUBLIC_KEY_BYTES));
+        let mut out = Zeroizing::new(Vec::with_capacity(
+            HYBRID_SECRET_BYTES + MLDSA65_PUBLIC_KEY_BYTES,
+        ));
         out.extend_from_slice(self.ed25519.seed());
         out.extend_from_slice(self.mldsa.signing_key().as_bytes());
         out.extend_from_slice(self.mldsa.verifying_key().as_bytes());
@@ -128,7 +130,12 @@ impl HybridVerifyingKey {
         &self.mldsa
     }
 
-    pub fn verify(&self, domain: Domain, msg: &[u8], sig: &HybridSignature) -> Result<(), CryptoError> {
+    pub fn verify(
+        &self,
+        domain: Domain,
+        msg: &[u8],
+        sig: &HybridSignature,
+    ) -> Result<(), CryptoError> {
         let framed = framed_message(domain, msg);
         self.ed25519.verify(&framed, &sig.ed25519)?;
         self.mldsa.verify(&framed, &sig.mldsa)?;

@@ -148,11 +148,11 @@ fn bench_hybrid_verify(c: &mut Criterion) {
 
     c.bench_function("hybrid_verify", |b| {
         b.iter(|| {
-            let _ = black_box(
-                keypair
-                    .verifying_key()
-                    .verify(Domain::Auth, black_box(message), black_box(&signature)),
-            );
+            let _ = black_box(keypair.verifying_key().verify(
+                Domain::Auth,
+                black_box(message),
+                black_box(&signature),
+            ));
         })
     });
 }

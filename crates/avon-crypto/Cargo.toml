@@ -10,6 +10,7 @@ description = "Cryptographic primitives for AVON"
 serde.workspace = true
 thiserror.workspace = true
 aes-gcm = "0.10"
+chacha20poly1305 = "0.10"
 hkdf = "0.12"
 hmac = "0.12"
 sha2 = "0.10"
