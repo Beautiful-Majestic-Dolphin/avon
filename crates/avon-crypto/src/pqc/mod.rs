@@ -6,36 +6,18 @@
 //!
 //! # Available Algorithms
 //!
-//! - **Kyber**: CRYSTALS-Kyber Key Encapsulation Mechanism (KEM)
-//! - **Dilithium**: CRYSTALS-Dilithium Digital Signature Algorithm
-//!
-//! # Example
-//!
-//! ```
-//! use avon_crypto::pqc::kyber::KyberKeyPair;
-//!
-//! // Generate a keypair
-//! let keypair = KyberKeyPair::generate().unwrap();
-//!
-//! // Encapsulate to create a shared secret
-//! let (ciphertext, shared_secret_sender) = keypair.public_key().encapsulate().unwrap();
-//!
-//! // Decapsulate to recover the shared secret
-//! let shared_secret_receiver = keypair.decapsulate(&ciphertext).unwrap();
-//!
-//! // Both parties now have the same shared secret
-//! assert_eq!(shared_secret_sender.as_bytes(), shared_secret_receiver.as_bytes());
-//! ```
+//! - **ML-KEM-768**: FIPS 203 Module-Lattice-Based KEM
+//! - **ML-DSA-65**: FIPS 204 Module-Lattice Digital Signature Algorithm
 
-pub mod dilithium;
-pub mod kyber;
+pub mod mldsa;
+pub mod mlkem;
 
-pub use dilithium::{
-    DilithiumKeyPair, DilithiumSignature, DilithiumSigningKey, DilithiumVerifyingKey,
-    DILITHIUM3_PUBLIC_KEY_BYTES, DILITHIUM3_SECRET_KEY_BYTES, DILITHIUM3_SIGNATURE_BYTES,
+pub use mldsa::{
+    MlDsaKeyPair, MlDsaSignature, MlDsaSigningKey, MlDsaVerifyingKey, MLDSA65_PUBLIC_KEY_BYTES,
+    MLDSA65_SECRET_KEY_BYTES, MLDSA65_SIGNATURE_BYTES,
 };
-pub use kyber::{
-    KyberCiphertext, KyberKeyPair, KyberPublicKey, KyberSecretKey, KyberSharedSecret,
-    KYBER768_CIPHERTEXT_BYTES, KYBER768_PUBLIC_KEY_BYTES, KYBER768_SECRET_KEY_BYTES,
-    KYBER768_SHARED_SECRET_BYTES,
+pub use mlkem::{
+    MlKemCiphertext, MlKemKeyPair, MlKemPublicKey, MlKemSecretKey, MlKemSharedSecret,
+    MLKEM768_CIPHERTEXT_BYTES, MLKEM768_PUBLIC_KEY_BYTES, MLKEM768_SECRET_KEY_BYTES,
+    MLKEM768_SHARED_SECRET_BYTES,
 };

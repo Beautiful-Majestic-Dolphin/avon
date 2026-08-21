@@ -5,13 +5,13 @@
 //!
 //! # Security Properties
 //!
-//! - **Key Exchange**: Secure if EITHER X25519 OR Kyber768 remains unbroken
-//! - **Signatures**: Forgery requires breaking BOTH Ed25519 AND Dilithium3
+//! - **Key Exchange**: Secure if EITHER X25519 OR ML-KEM-768 remains unbroken
+//! - **Signatures**: Forgery requires breaking BOTH Ed25519 AND ML-DSA-65
 //!
 //! # Available Algorithms
 //!
-//! - **Hybrid Key Exchange**: X25519 + Kyber768
-//! - **Hybrid Signatures**: Ed25519 + Dilithium3
+//! - **Hybrid Key Exchange**: X25519 + ML-KEM-768
+//! - **Hybrid Signatures**: Ed25519 + ML-DSA-65
 //!
 //! # Example - Key Exchange
 //!

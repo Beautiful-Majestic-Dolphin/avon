@@ -1,11 +1,11 @@
-//! Hybrid Signatures combining Ed25519 (classical) and Dilithium3 (PQC).
+//! Hybrid Signatures combining Ed25519 (classical) and ML-DSA-65 (PQC).
 //!
 //! This module provides a hybrid signature scheme that combines classical
-//! elliptic curve signatures (Ed25519) with post-quantum signatures (Dilithium3).
+//! elliptic curve signatures (Ed25519) with post-quantum signatures (ML-DSA-65).
 //!
 //! # Security Property
 //!
-//! Forgery requires breaking BOTH Ed25519 AND Dilithium3. This provides
+//! Forgery requires breaking BOTH Ed25519 AND ML-DSA-65. This provides
 //! defense-in-depth against both classical and quantum attacks.
 //!
 //! # Example
@@ -20,21 +20,21 @@
 //! let message = b"Hello, hybrid world!";
 //! let signature = keypair.sign(message);
 //!
-//! // Verify the signature (both Ed25519 and Dilithium3 must verify)
+//! // Verify the signature (both Ed25519 and ML-DSA-65 must verify)
 //! keypair.verifying_key().verify(message, &signature).unwrap();
 //! ```
 
 use crate::error::CryptoError;
-use crate::pqc::dilithium::{
-    DilithiumKeyPair, DilithiumSignature, DilithiumVerifyingKey, DILITHIUM3_PUBLIC_KEY_BYTES,
-    DILITHIUM3_SIGNATURE_BYTES,
+use crate::pqc::mldsa::{
+    MlDsaKeyPair, MlDsaSignature, MlDsaVerifyingKey, MLDSA65_PUBLIC_KEY_BYTES,
+    MLDSA65_SIGNATURE_BYTES,
 };
 use crate::signature::{Ed25519KeyPair, Ed25519Signature, Ed25519VerifyingKey};
 
-/// A hybrid signing key pair combining Ed25519 and Dilithium3.
+/// A hybrid signing key pair combining Ed25519 and ML-DSA-65.
 pub struct HybridSigningKeyPair {
     classical: Ed25519KeyPair,
-    pqc: DilithiumKeyPair,
+    pqc: MlDsaKeyPair,
 }
 
 impl HybridSigningKeyPair {
@@ -53,7 +53,7 @@ impl HybridSigningKeyPair {
     /// ```
     pub fn generate() -> Result<Self, CryptoError> {
         let classical = Ed25519KeyPair::generate()?;
-        let pqc = DilithiumKeyPair::generate()?;
+        let pqc = MlDsaKeyPair::generate()?;
 
         Ok(Self { classical, pqc })
     }
@@ -75,7 +75,7 @@ impl HybridSigningKeyPair {
         }
     }
 
-    /// Signs a message using both Ed25519 and Dilithium3.
+    /// Signs a message using both Ed25519 and ML-DSA-65.
     ///
     /// # Arguments
     ///
@@ -83,7 +83,7 @@ impl HybridSigningKeyPair {
     ///
     /// # Returns
     ///
-    /// A hybrid signature containing both Ed25519 and Dilithium3 signatures.
+    /// A hybrid signature containing both Ed25519 and ML-DSA-65 signatures.
     ///
     /// # Example
     ///
@@ -99,23 +99,26 @@ impl HybridSigningKeyPair {
     /// ```
     pub fn sign(&self, message: &[u8]) -> HybridSignature {
         let classical = self.classical.sign(message);
-        let pqc = self.pqc.sign(message);
+        let pqc = match self.pqc.sign(message) {
+            Ok(sig) => sig,
+            Err(_) => unreachable!("ML-DSA signing key has a fixed, validated length"),
+        };
 
         HybridSignature { classical, pqc }
     }
 }
 
-/// A hybrid verifying key combining Ed25519 and Dilithium3 verifying keys.
+/// A hybrid verifying key combining Ed25519 and ML-DSA-65 verifying keys.
 #[derive(Clone)]
 pub struct HybridVerifyingKey {
     classical: Ed25519VerifyingKey,
-    pqc: DilithiumVerifyingKey,
+    pqc: MlDsaVerifyingKey,
 }
 
 impl HybridVerifyingKey {
     /// Verifies a hybrid signature on a message.
     ///
-    /// BOTH the Ed25519 and Dilithium3 signatures must verify for the
+    /// BOTH the Ed25519 and ML-DSA-65 signatures must verify for the
     /// hybrid signature to be considered valid.
     ///
     /// # Arguments
@@ -152,7 +155,7 @@ impl HybridVerifyingKey {
 
     /// Returns the hybrid verifying key as bytes.
     ///
-    /// Format: Ed25519 verifying key (32 bytes) || Dilithium verifying key (1952 bytes)
+    /// Format: Ed25519 verifying key (32 bytes) || ML-DSA verifying key (1952 bytes)
     ///
     /// # Example
     ///
@@ -164,7 +167,7 @@ impl HybridVerifyingKey {
     /// assert_eq!(bytes.len(), 32 + 1952);
     /// ```
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(32 + DILITHIUM3_PUBLIC_KEY_BYTES);
+        let mut bytes = Vec::with_capacity(32 + MLDSA65_PUBLIC_KEY_BYTES);
         bytes.extend_from_slice(&self.classical.to_bytes());
         bytes.extend_from_slice(&self.pqc.to_bytes());
         bytes
@@ -191,7 +194,7 @@ impl HybridVerifyingKey {
     /// assert_eq!(keypair.verifying_key().to_bytes(), restored.to_bytes());
     /// ```
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
-        const EXPECTED_LEN: usize = 32 + DILITHIUM3_PUBLIC_KEY_BYTES;
+        const EXPECTED_LEN: usize = 32 + MLDSA65_PUBLIC_KEY_BYTES;
         if bytes.len() != EXPECTED_LEN {
             return Err(CryptoError::InvalidKeyLength {
                 expected: EXPECTED_LEN,
@@ -200,23 +203,23 @@ impl HybridVerifyingKey {
         }
 
         let classical = Ed25519VerifyingKey::from_bytes(&bytes[..32])?;
-        let pqc = DilithiumVerifyingKey::from_bytes(&bytes[32..])?;
+        let pqc = MlDsaVerifyingKey::from_bytes(&bytes[32..])?;
 
         Ok(Self { classical, pqc })
     }
 }
 
-/// A hybrid signature combining Ed25519 and Dilithium3 signatures.
+/// A hybrid signature combining Ed25519 and ML-DSA-65 signatures.
 #[derive(Clone)]
 pub struct HybridSignature {
     classical: Ed25519Signature,
-    pqc: DilithiumSignature,
+    pqc: MlDsaSignature,
 }
 
 impl HybridSignature {
     /// Returns the hybrid signature as bytes.
     ///
-    /// Format: Ed25519 signature (64 bytes) || Dilithium signature (3309 bytes)
+    /// Format: Ed25519 signature (64 bytes) || ML-DSA signature (3309 bytes)
     ///
     /// # Example
     ///
@@ -229,7 +232,7 @@ impl HybridSignature {
     /// assert_eq!(bytes.len(), 64 + 3309);
     /// ```
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(64 + DILITHIUM3_SIGNATURE_BYTES);
+        let mut bytes = Vec::with_capacity(64 + MLDSA65_SIGNATURE_BYTES);
         bytes.extend_from_slice(&self.classical.to_bytes());
         bytes.extend_from_slice(&self.pqc.to_bytes());
         bytes
@@ -257,7 +260,7 @@ impl HybridSignature {
     /// assert_eq!(signature.to_bytes(), restored.to_bytes());
     /// ```
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
-        const EXPECTED_LEN: usize = 64 + DILITHIUM3_SIGNATURE_BYTES;
+        const EXPECTED_LEN: usize = 64 + MLDSA65_SIGNATURE_BYTES;
         if bytes.len() != EXPECTED_LEN {
             return Err(CryptoError::InvalidKeyLength {
                 expected: EXPECTED_LEN,
@@ -266,7 +269,7 @@ impl HybridSignature {
         }
 
         let classical = Ed25519Signature::from_bytes(&bytes[..64])?;
-        let pqc = DilithiumSignature::from_bytes(&bytes[64..])?;
+        let pqc = MlDsaSignature::from_bytes(&bytes[64..])?;
 
         Ok(Self { classical, pqc })
     }
@@ -278,10 +281,10 @@ impl HybridSignature {
         &self.classical
     }
 
-    /// Returns a reference to the PQC (Dilithium3) signature component.
+    /// Returns a reference to the PQC (ML-DSA-65) signature component.
     ///
     /// This is useful for testing or when you need to inspect individual components.
-    pub fn pqc(&self) -> &DilithiumSignature {
+    pub fn pqc(&self) -> &MlDsaSignature {
         &self.pqc
     }
 }

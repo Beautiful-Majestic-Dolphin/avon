@@ -113,7 +113,7 @@ jobs:
           toolchain: 1.85.0
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
-          command: check advisories licenses sources
+          command: check
           arguments: --all-features
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
