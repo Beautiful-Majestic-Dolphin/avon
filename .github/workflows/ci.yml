@@ -57,10 +57,10 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: "Unit and integration tests (Linux: with Postgres/Redis)"
         if: matrix.os == 'linux'
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --locked --features avon-crypto/test-vectors
       - name: "Unit tests (macOS/Windows: crates without database needs)"
         if: matrix.os != 'linux'
-        run: cargo test --workspace --locked --exclude avon-db --exclude avon-testkit --exclude avon-observability
+        run: cargo test --workspace --locked --exclude avon-db --exclude avon-testkit --exclude avon-observability --features avon-crypto/test-vectors
       - name: Docs
         run: cargo doc --workspace --no-deps --locked
         env:
@@ -160,10 +160,26 @@ jobs:
             helm template avon deploy/helm/avon -f deploy/helm/avon/$f > /dev/null
           done
 
+  fuzz-smoke:
+    name: Fuzz smoke (60s per target)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: nightly-2025-06-01
+      - run: cargo install cargo-fuzz --locked
+      - name: Run each target for 60 seconds
+        working-directory: crates/avon-crypto
+        run: |
+          for t in cert_decode hybrid_pk_decode hybrid_sig_decode tbs_roundtrip; do
+            cargo +nightly-2025-06-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
+          done
+
   all-checks-pass:
     name: All checks pass
     if: always()
-    needs: [rust, python, supply-chain, docker, helm]
+    needs: [rust, python, supply-chain, docker, helm, fuzz-smoke]
     runs-on: ubuntu-24.04
     steps:
       - name: Fail if any dependency failed

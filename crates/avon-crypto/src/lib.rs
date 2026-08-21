@@ -1,19 +1,16 @@
-//! AVON Cryptographic Primitives
+//! AVON cryptographic primitives.
 //!
-//! This crate provides cryptographic operations for the AVON network,
-//! including:
+//! - **pqc**: ML-KEM-768 (FIPS 203) and ML-DSA-65 (FIPS 204) via PQClean.
+//! - **ecdh / signature**: X25519 and Ed25519.
+//! - **hybrid**: X25519+ML-KEM-768 KEM with a ciphertext- and key-binding
+//!   combiner; Ed25519+ML-DSA-65 composite signatures with domain separation.
+//! - **aead**: AES-256-GCM and ChaCha20-Poly1305 suites, in-place APIs.
+//! - **session**: ATP/2 key schedule, epoch rekey, replay window, session cipher.
+//! - **cert**: the AVON certificate format and chain verification.
+//! - **kdf / hmac / random**: HKDF-SHA256/384, HMAC-SHA256, OS randomness that fails closed.
 //!
-//! - **AEAD**: Authenticated encryption using AES-256-GCM
-//! - **ECDH**: X25519 Diffie-Hellman key exchange
-//! - **KDF**: Key derivation using HKDF with SHA-256 and SHA-384
-//! - **HMAC**: Message authentication using HMAC-SHA256
-//! - **Random**: Cryptographically secure random number generation
-//! - **Signature**: Ed25519 digital signatures
-//! - **PQC**: Post-quantum cryptography (ML-KEM-768, ML-DSA-65)
-//! - **Hybrid**: Hybrid classical+PQC cryptography (X25519+ML-KEM-768, Ed25519+ML-DSA-65)
-//! - **Token**: Rotating authentication tokens for device identity
-//! - **Tunnel**: High-performance tunnel encryption with atomic nonce counter
-//! - **Session**: Session key derivation for tunnel establishment
+//! Security levels: NIST category 3 (ML-KEM-768 / ML-DSA-65) combined with
+//! 128-bit classical primitives; see docs/security.md for the profile table.
 //!
 //! # Example
 //!

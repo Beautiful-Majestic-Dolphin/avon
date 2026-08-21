@@ -30,12 +30,12 @@ AVON implements a defense-in-depth security model with multiple layers of protec
 │  └── Audit logging                                              │
 │                                                                 │
 │  Layer 6: Authentication & Authorization                        │
-│  ├── Post-quantum certificates (Dilithium)                      │
+│  ├── Post-quantum certificates (ML-DSA-65)                      │
 │  ├── Continuous session verification                            │
 │  └── Policy-based access control                                │
 │                                                                 │
 │  Layer 5: Cryptographic Protection                              │
-│  ├── Post-quantum key exchange (Kyber)                          │
+│  ├── Hybrid key exchange (X25519 + ML-KEM-768)                          │
 │  ├── AES-256-GCM encryption                                     │
 │  └── HMAC-SHA3 integrity                                        │
 │                                                                 │
@@ -97,7 +97,7 @@ AVON implements a defense-in-depth security model with multiple layers of protec
 
 | Attack | Risk | Mitigation |
 |--------|------|------------|
-| Quantum Computer (Future) | High | Kyber/Dilithium post-quantum algorithms |
+| Quantum Computer (Future) | High | ML-KEM-768/ML-DSA-65 post-quantum algorithms |
 | Key Compromise | Critical | HSM storage, key rotation |
 | Side-Channel | Low | Constant-time implementations |
 
@@ -121,7 +121,7 @@ AVON implements a defense-in-depth security model with multiple layers of protec
 
 | Threat | Component | Mitigation |
 |--------|-----------|------------|
-| **S**poofing | Agent Identity | Dilithium certificates, device binding |
+| **S**poofing | Agent Identity | ML-DSA-65 certificates, device binding |
 | **T**ampering | Network Traffic | AES-GCM authenticated encryption |
 | **R**epudiation | Actions | Comprehensive audit logging |
 | **I**nformation Disclosure | Sensitive Data | Encryption at rest and in transit |
@@ -130,76 +130,68 @@ AVON implements a defense-in-depth security model with multiple layers of protec
 
 ## Cryptographic Algorithms
 
-### Post-Quantum Cryptography
+### Profile (NIST Category 3 + 128-bit classical)
 
-AVON uses NIST-standardized post-quantum algorithms:
+| Primitive | Algorithm | Standard | Size |
+|-----------|-----------|----------|------|
+| KEM | ML-KEM-768 | FIPS 203 | pk 1184, sk 2400, ct 1088, ss 32 |
+| Signature | ML-DSA-65 | FIPS 204 | pk 1952, sk 4032, sig 3309 |
+| Classical KEM | X25519 | RFC 7748 | pk 32, ss 32 |
+| Classical Sig | Ed25519 | RFC 8032 | pk 32, sig 64 |
+| Hybrid KEM | X25519 + ML-KEM-768 | AVON-HYBRID-KEM-V2 | pk 1216, ct 1120 |
+| Hybrid Sig | Ed25519 + ML-DSA-65 | AVON-CERT-V2 etc | pk 1984, sig 3373 |
+| AEAD | AES-256-GCM / ChaCha20-Poly1305 | - | key 32, nonce 12, tag 16 |
+| Hash/KDF | SHA-256, HKDF-SHA256 | RFC 5869 | - |
+| HMAC | HMAC-SHA256 | RFC 2104 | - |
 
-#### Kyber-1024 (Key Encapsulation)
-
-- **Standard**: NIST FIPS 203
-- **Security Level**: NIST Level 5 (256-bit classical, 128-bit quantum)
-- **Public Key Size**: 1,568 bytes
-- **Ciphertext Size**: 1,568 bytes
-- **Shared Secret**: 32 bytes
-- **Use Case**: Session key establishment
+### Hybrid KEM Combiner (AVON-HYBRID-KEM-V2)
 
 ```
-Key Exchange Flow:
-1. Agent generates Kyber keypair (pk, sk)
-2. Agent sends pk to Gateway
-3. Gateway encapsulates: (ciphertext, shared_secret) = Encaps(pk)
-4. Gateway sends ciphertext to Agent
-5. Agent decapsulates: shared_secret = Decaps(sk, ciphertext)
-6. Both derive session keys from shared_secret
+ss = SHA-256("AVON-HYBRID-KEM-V2" || ss_x25519 || ss_mlkem || eph_x25519_pk || x25519_pk || mlkem_ct || mlkem_pk)
 ```
 
-#### Dilithium-5 (Digital Signatures)
+### Composite Signatures with Domain Separation
 
-- **Standard**: NIST FIPS 204
-- **Security Level**: NIST Level 5
-- **Public Key Size**: 2,592 bytes
-- **Signature Size**: 4,595 bytes
-- **Use Case**: Agent certificates, message authentication
+Each component signs `label || u32_be(len(msg)) || msg`:
+
+- `AVON-CERT-V2`, `AVON-CSR-V2`, `AVON-AUTH-V2`, `AVON-SESSION-V2`, `AVON-CRL-V2`, `AVON-OFFER-V2`
+- Verification requires both Ed25519 and ML-DSA-65 to verify.
 
 ### Symmetric Cryptography
 
-#### AES-256-GCM
+#### AES-256-GCM / ChaCha20-Poly1305
 
 - **Key Size**: 256 bits
 - **Nonce Size**: 96 bits (12 bytes)
 - **Tag Size**: 128 bits (16 bytes)
-- **Use Case**: Tunnel encryption
+- **Use Case**: ATP/2 data plane (Suite 1 = AES, Suite 2 = ChaCha)
 
-#### Key Derivation
+#### Key Derivation (ATP/2)
 
 ```
-HKDF-SHA3-256 with domain separation:
-
-traffic_keys = HKDF(
-  IKM = kyber_shared_secret,
-  salt = session_id,
-  info = "avon-v1-traffic",
-  L = 64  // 32 bytes encrypt key + 32 bytes auth key
-)
+transcript = SHA-256("AVON-ATP2" || session_id || initiator_cert_id || responder_cert_id || len(eph_kem_pk) || eph_kem_pk || len(ct_e) || ct_e || len(ct_s) || ct_s || suite)
+prk = HKDF-Extract(salt=transcript, ikm=ss_e || ss_s)
+k_i2r = HKDF-Expand(prk, "i2r" || epoch_be32, 32)
+k_r2i = HKDF-Expand(prk, "r2i" || epoch_be32, 32)
+rekey_secret = HKDF-Expand(prk, "rekey" || epoch_be32, 32)
 ```
 
 ### Hash Functions
 
 | Algorithm | Use Case |
 |-----------|----------|
-| SHA3-256 | General hashing, HKDF |
-| BLAKE3 | Fast hashing, checksums |
+| SHA-256 | Hashing, HKDF, combiner, transcript |
 | Argon2id | Password hashing (admin accounts) |
 
 ### Cryptographic Agility
 
-AVON supports algorithm negotiation for future upgrades:
+AVON supports suite negotiation:
 
 ```protobuf
 message CryptoSuite {
-  KemAlgorithm kem = 1;         // KYBER_1024, etc.
-  SignatureAlgorithm sig = 2;   // DILITHIUM_5, etc.
-  CipherAlgorithm cipher = 3;   // AES_256_GCM, etc.
+  KemAlgorithm kem = 1;         // ML_KEM_768 + X25519
+  SignatureAlgorithm sig = 2;   // ML_DSA_65 + Ed25519
+  CipherAlgorithm cipher = 3;   // AES_256_GCM / ChaCha20Poly1305
 }
 ```
 

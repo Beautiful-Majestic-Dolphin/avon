@@ -24,7 +24,7 @@ AVON is a **post-quantum zero trust network access (ZTNA)** platform that provid
 
 ## Key Features
 
-- **Post-Quantum Security**: Kyber-1024 for key exchange, Dilithium-5 for signatures (NIST standards)
+- **Post-Quantum Security**: Hybrid post-quantum cryptography: X25519 + ML-KEM-768 key exchange, Ed25519 + ML-DSA-65 signatures, AES-256-GCM / ChaCha20-Poly1305 transport
 - **Zero Trust Architecture**: Never trust, always verify - every connection is authenticated
 - **Continuous Verification**: Sessions are validated continuously, not just at connection time
 - **Policy-Based Access**: Fine-grained, context-aware access control
@@ -131,7 +131,7 @@ sudo systemctl start avon-agent
 ```
 avons-corners/
 ├── crates/                    # Rust workspace
-│   ├── avon-crypto/           # Post-quantum cryptography (Kyber, Dilithium)
+│   ├── avon-crypto/           # Post-quantum cryptography (ML-KEM-768, ML-DSA-65)
 │   ├── avon-protocol/         # Wire protocol implementation
 │   ├── avon-common/           # Shared types and utilities
 │   ├── avon-gateway/          # UDP gateway service
@@ -243,7 +243,7 @@ level = "info"
 
 AVON implements defense-in-depth with:
 
-- **Post-Quantum Cryptography**: Kyber-1024 (key exchange), Dilithium-5 (signatures)
+- **Post-Quantum Cryptography**: Hybrid post-quantum cryptography: X25519 + ML-KEM-768 key exchange, Ed25519 + ML-DSA-65 signatures, AES-256-GCM / ChaCha20-Poly1305 transport
 - **Zero Trust Model**: No implicit trust based on network location
 - **Continuous Authentication**: Session tokens rotated every 30 seconds
 - **Policy-Based Access Control**: Context-aware authorization decisions

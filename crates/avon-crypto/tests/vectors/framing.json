@@ -1,0 +1,32 @@
+[
+  {
+    "domain": "AVON-CERT-V2",
+    "message": "766563746f72",
+    "expected": "41564f4e2d434552542d563200000006766563746f72"
+  },
+  {
+    "domain": "AVON-CSR-V2",
+    "message": "766563746f72",
+    "expected": "41564f4e2d4353522d563200000006766563746f72"
+  },
+  {
+    "domain": "AVON-AUTH-V2",
+    "message": "766563746f72",
+    "expected": "41564f4e2d415554482d563200000006766563746f72"
+  },
+  {
+    "domain": "AVON-SESSION-V2",
+    "message": "766563746f72",
+    "expected": "41564f4e2d53455353494f4e2d563200000006766563746f72"
+  },
+  {
+    "domain": "AVON-CRL-V2",
+    "message": "766563746f72",
+    "expected": "41564f4e2d43524c2d563200000006766563746f72"
+  },
+  {
+    "domain": "AVON-OFFER-V2",
+    "message": "766563746f72",
+    "expected": "41564f4e2d4f464645522d563200000006766563746f72"
+  }
+]
