@@ -1,8 +1,3 @@
-# AVON Continuous Integration
-#
-# Runs on all PRs and pushes to main/develop branches.
-# Validates code quality, runs tests, and lints Helm charts.
-
 name: CI
 
 on:
@@ -11,235 +6,168 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  AVON_TEST_DATABASE_URL: postgres://avon:test@localhost:5432/postgres
+  AVON_TEST_REDIS_URL: redis://localhost:6379
 
 jobs:
-  rust-check:
-    name: Rust Checks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "crates -> target"
-
-      - name: Install protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "25.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        # Note: --all-features intentionally not used. The `fido2` feature
-        # in avon-agent is currently broken (uses ctap-hid-fido2 APIs that
-        # don't exist in v3.5) and `tpm` needs libtss2-esys-dev on the runner.
-        # See crates/avon-agent/src/identity/fido2.rs for the TODO.
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Run tests
-        run: cargo test --all
-        env:
-          RUST_LOG: debug
-
-      - name: Check documentation
-        run: cargo doc --no-deps
-        env:
-          RUSTDOCFLAGS: -D warnings
-
-  agent-platform-check:
-    name: Agent Platform Check (${{ matrix.os }})
+  rust:
+    name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos
-            runner: macos-14
-          - os: windows
-            runner: windows-latest
+          - { os: linux,   runner: ubuntu-24.04 }
+          - { os: macos,   runner: macos-14 }
+          - { os: windows, runner: windows-2022 }
+    services:
+      postgres:
+        image: ${{ matrix.os == 'linux' && 'postgres:16' || '' }}
+        env: { POSTGRES_USER: avon, POSTGRES_PASSWORD: test, POSTGRES_DB: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: ${{ matrix.os == 'linux' && 'redis:7' || '' }}
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          components: clippy
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+          toolchain: 1.85.0
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: "crates -> target"
           key: ${{ matrix.os }}
-
-      - name: Install protoc
-        uses: arduino/setup-protoc@v3
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
         with:
           version: "25.x"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run clippy on agent
-        run: cargo clippy -p avon-agent --all-targets -- -D warnings
-
-      - name: Run agent tests
-        run: cargo test -p avon-agent
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: "Unit and integration tests (Linux: with Postgres/Redis)"
+        if: matrix.os == 'linux'
+        run: cargo test --workspace --locked
+      - name: "Unit tests (macOS/Windows: crates without database needs)"
+        if: matrix.os != 'linux'
+        run: cargo test --workspace --locked --exclude avon-db --exclude avon-testkit --exclude avon-observability
+      - name: Docs
+        run: cargo doc --workspace --no-deps --locked
         env:
-          RUST_LOG: debug
+          RUSTDOCFLAGS: -D warnings
 
-  python-check:
-    name: Python Checks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install black ruff mypy pytest pytest-asyncio pytest-cov
-          pip install -e services/policy-engine[dev] || pip install -e services/policy-engine
-          pip install -e api/admin-api[dev] || pip install -e api/admin-api
-
-      - name: Run black
-        # Exclude protobuf-generated files; they're regenerated on build.
-        run: black --check services/ --exclude '\.venv|_pb2(_grpc)?\.py'
-
-      - name: Run ruff
-        run: ruff check services/ --exclude '_pb2.py,_pb2_grpc.py'
-
-      - name: Run mypy
-        run: mypy services/ --ignore-missing-imports
-        continue-on-error: true
-
-      - name: Run tests
-        run: pytest services/ -v --tb=short
-        env:
-          PYTHONPATH: services/policy-engine:api/admin-api
-
-  integration-tests:
-    name: Integration Tests
-    needs: [rust-check, python-check]
-    runs-on: ubuntu-latest
+  python:
+    name: Python
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16
-        env:
-          POSTGRES_USER: avon
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: avon_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
+        env: { POSTGRES_USER: avon, POSTGRES_PASSWORD: test, POSTGRES_DB: postgres }
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
-          workspaces: "crates -> target"
-
-      - name: Install protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "25.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run integration tests
-        run: cargo test --test '*' -- --test-threads=1
-        env:
-          DATABASE_URL: postgres://avon:test@localhost:5432/avon_test
-          REDIS_URL: redis://localhost:6379
-          RUST_LOG: debug
-
-  helm-lint:
-    name: Helm Lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: v3.14.0
-
-      - name: Lint Helm chart
-        run: helm lint deploy/helm/avon
-
-      - name: Validate Helm templates
+          version: "0.5.x"
+      - name: Admin API — sync, lint, test
+        working-directory: api/admin-api
         run: |
-          helm template avon deploy/helm/avon > /dev/null
-          helm template avon deploy/helm/avon -f deploy/helm/avon/values-dev.yaml > /dev/null
-          helm template avon deploy/helm/avon -f deploy/helm/avon/values-staging.yaml > /dev/null
-          helm template avon deploy/helm/avon -f deploy/helm/avon/values-production.yaml > /dev/null
+          uv sync --frozen --extra dev
+          uv run ruff check src tests
+          uv run black --check src tests
+          uv run pytest -q
+        env:
+          AVON_TEST_DATABASE_URL: postgres://avon:test@localhost:5432/postgres
+      - name: "Admin API — dependency audit"
+        working-directory: api/admin-api
+        # Audit the exported requirements: pip-audit cannot resolve the local
+        # project itself against PyPI. PYSEC-2026-1325 (ecdsa, no fix released)
+        # arrives via python-jose, which task 4.9 removes.
+        run: |
+          uv export --frozen --no-dev --format requirements-txt --no-emit-project > requirements.audit.txt
+          uv run pip-audit --strict -r requirements.audit.txt --ignore-vuln PYSEC-2026-1325
+      - name: Policy engine — sync, lint, test (until removed in phase 4)
+        working-directory: services/policy-engine
+        run: |
+          uv sync --frozen --extra dev
+          uv run pytest -q
 
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
+  supply-chain:
+    name: Supply chain
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-
-      - name: Run security audit
-        run: cargo audit
-        continue-on-error: true
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          toolchain: 1.85.0
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check advisories licenses sources
+          arguments: --all-features
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+
+  docker:
+    name: Docker images build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build gateway image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.rust
+          build-args: BIN=avon-gateway
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build admin-api image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.admin-api
+          push: false
+
+  helm:
+    name: Helm lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.16.2
+      - run: helm lint deploy/helm/avon
+      - run: |
+          for f in values.yaml values-dev.yaml values-staging.yaml values-production.yaml; do
+            helm template avon deploy/helm/avon -f deploy/helm/avon/$f > /dev/null
+          done
 
   all-checks-pass:
-    name: All Checks Pass
-    needs: [rust-check, python-check, integration-tests, helm-lint, security-scan]
-    runs-on: ubuntu-latest
+    name: All checks pass
+    if: always()
+    needs: [rust, python, supply-chain, docker, helm]
+    runs-on: ubuntu-24.04
     steps:
-      - name: All checks passed
-        run: echo "All CI checks passed successfully!"
+      - name: Fail if any dependency failed
+        run: |
+          echo '${{ toJSON(needs) }}' | grep -q '"result": "failure"' && exit 1
+          echo '${{ toJSON(needs) }}' | grep -q '"result": "cancelled"' && exit 1
+          echo ok

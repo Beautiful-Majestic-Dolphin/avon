@@ -1,5 +1,6 @@
 //! Tests for CRYSTALS-Dilithium Digital Signature Algorithm.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use avon_crypto::error::CryptoError;
 use avon_crypto::pqc::dilithium::{
     DilithiumKeyPair, DilithiumSignature, DilithiumSigningKey, DilithiumVerifyingKey,

@@ -1,22 +1,21 @@
 """Pod management endpoints for AVON Admin API."""
 
-from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
 import asyncpg
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from admin_api.auth.dependencies import get_current_user, get_current_admin, CurrentUser
+from admin_api.auth.dependencies import CurrentUser, get_current_admin, get_current_user
 from admin_api.db.connection import get_db
-from admin_api.db.queries import PodQueries, ActivityQueries
+from admin_api.db.queries import ActivityQueries, PodQueries
 from admin_api.schemas.pod import (
-    PodResponse,
-    PodDetailResponse,
     PodCreateRequest,
-    PodUpdateRequest,
-    PodListResponse,
+    PodDetailResponse,
     PodDeviceRequest,
+    PodListResponse,
+    PodResponse,
+    PodUpdateRequest,
 )
 
 logger = structlog.get_logger()
@@ -26,7 +25,7 @@ router = APIRouter()
 
 @router.get("/", response_model=PodListResponse)
 async def list_pods(
-    parent_id: Optional[UUID] = Query(None, description="Filter by parent pod"),
+    parent_id: UUID | None = Query(None, description="Filter by parent pod"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
     db: asyncpg.Connection = Depends(get_db),
@@ -110,7 +109,7 @@ async def create_pod(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> PodResponse:
     """Create a new pod.
-    
+
     Requires admin privileges.
     """
     if pod_request.parent_id:
@@ -135,10 +134,15 @@ async def create_pod(
         actor_type="user",
         target_id=pod.id,
         target_type="pod",
-        details={"pod_name": pod.name, "parent_id": str(pod.parent_id) if pod.parent_id else None},
+        details={
+            "pod_name": pod.name,
+            "parent_id": str(pod.parent_id) if pod.parent_id else None,
+        },
     )
 
-    logger.info("pod_created", pod_id=str(pod.id), name=pod.name, by_user=str(current_user.id))
+    logger.info(
+        "pod_created", pod_id=str(pod.id), name=pod.name, by_user=str(current_user.id)
+    )
 
     return PodResponse(
         id=pod.id,
@@ -158,7 +162,7 @@ async def update_pod(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> PodResponse:
     """Update a pod.
-    
+
     Requires admin privileges.
     """
     existing = await PodQueries.get_pod(db, pod_id)
@@ -216,7 +220,7 @@ async def delete_pod(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
     """Delete a pod.
-    
+
     Requires admin privileges. Cannot delete pods with child pods or devices.
     """
     pod = await PodQueries.get_pod(db, pod_id)
@@ -270,7 +274,7 @@ async def add_device_to_pod(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
     """Add a device to a pod.
-    
+
     Requires admin privileges.
     """
     pod = await PodQueries.get_pod(db, pod_id)
@@ -308,7 +312,7 @@ async def remove_device_from_pod(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
     """Remove a device from a pod.
-    
+
     Requires admin privileges.
     """
     pod = await PodQueries.get_pod(db, pod_id)

@@ -514,8 +514,10 @@ fn derive_next_token(
     ikm.extend_from_slice(&sequence.to_le_bytes());
 
     // Derive new token using HKDF-SHA256
-    let derived = hkdf_sha256(&ikm, None, TOKEN_ROTATE_INFO, 32)
-        .expect("HKDF should not fail with valid parameters");
+    let Ok(derived) = hkdf_sha256(&ikm, None, TOKEN_ROTATE_INFO, 32) else {
+        // HKDF-SHA256 only rejects outputs longer than 255 * 32 bytes.
+        unreachable!("HKDF-SHA256 accepts a 32-byte output length")
+    };
 
     let mut result = [0u8; 32];
     result.copy_from_slice(&derived);
@@ -533,6 +535,7 @@ fn constant_time_eq(a: &[u8; 32], b: &[u8; 32]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

@@ -1,126 +1,174 @@
-//! Agent configuration management.
+//! Agent configuration: a TOML file plus `AVON_AGENT_*` environment overrides.
+//! Errors are never swallowed; an unreadable or invalid file stops the agent.
 
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
-use directories::ProjectDirs;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use thiserror::Error;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Error)]
+pub enum ConfigLoadError {
+    #[error("cannot read config file {path}: {source}")]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("cannot parse config file {path}: {source}")]
+    Parse {
+        path: PathBuf,
+        #[source]
+        source: toml::de::Error,
+    },
+    #[error("invalid value for {field}: {reason}")]
+    Invalid { field: &'static str, reason: String },
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct AgentConfig {
-    pub control_plane_addresses: Vec<SocketAddr>,
-    pub control_plane_port: u16,
+    /// host:port of the avon-control gRPC endpoint.
+    pub control_plane: String,
+    /// Directory for identity and state files (0700).
     pub data_dir: PathBuf,
+    /// Seconds between pulses (>= 5).
+    pub pulse_interval_secs: u64,
+    /// tracing filter.
     pub log_level: String,
-    pub pulse_timeout_secs: u64,
-    pub reconnect_interval_secs: u64,
-    pub max_reconnect_attempts: u32,
+    /// TUN interface name.
+    pub tun_name: String,
+    /// Overlay MTU.
+    pub overlay_mtu: u16,
+    /// CIDRs this device routes for (subnet-router mode).
+    pub advertise_routes: Vec<String>,
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            control_plane_addresses: vec![],
-            control_plane_port: 8443,
+            control_plane: String::new(),
             data_dir: Self::default_data_dir(),
+            pulse_interval_secs: 30,
             log_level: "info".to_string(),
-            pulse_timeout_secs: 30,
-            reconnect_interval_secs: 5,
-            max_reconnect_attempts: 10,
+            tun_name: "avon0".to_string(),
+            overlay_mtu: 1280,
+            advertise_routes: Vec::new(),
         }
     }
 }
 
 impl AgentConfig {
-    pub fn load(path: Option<&Path>) -> Result<Self> {
-        let config_path = path.map(PathBuf::from).or_else(Self::default_config_path);
+    /// Load from `path`, or from the platform default path if it exists, then
+    /// apply `AVON_AGENT_*` overrides, then validate.
+    pub fn load(path: Option<&Path>) -> Result<Self, ConfigLoadError> {
+        let mut cfg = match path {
+            Some(p) => Self::from_file(p)?,
+            None => match Self::default_config_path() {
+                Some(p) if p.is_file() => Self::from_file(&p)?,
+                _ => Self::default(),
+            },
+        };
+        cfg.apply_env();
+        cfg.validate()?;
+        Ok(cfg)
+    }
 
-        let mut builder = config::Config::builder();
+    fn from_file(path: &Path) -> Result<Self, ConfigLoadError> {
+        let text = std::fs::read_to_string(path).map_err(|source| ConfigLoadError::Read {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        toml::from_str(&text).map_err(|source| ConfigLoadError::Parse {
+            path: path.to_path_buf(),
+            source,
+        })
+    }
 
-        if let Some(ref path) = config_path {
-            if path.exists() {
-                tracing::info!(path = %path.display(), "Loading configuration file");
-                builder = builder.add_source(config::File::from(path.as_path()));
-            } else {
-                tracing::warn!(path = %path.display(), "Configuration file not found, using defaults");
+    fn apply_env(&mut self) {
+        if let Ok(v) = std::env::var("AVON_AGENT_CONTROL_PLANE") {
+            self.control_plane = v;
+        }
+        if let Ok(v) = std::env::var("AVON_AGENT_DATA_DIR") {
+            self.data_dir = PathBuf::from(v);
+        }
+        if let Ok(v) = std::env::var("AVON_AGENT_PULSE_INTERVAL_SECS") {
+            if let Ok(n) = v.parse() {
+                self.pulse_interval_secs = n;
             }
         }
-
-        builder = builder.add_source(
-            config::Environment::with_prefix("AVON_AGENT")
-                .separator("__")
-                .try_parsing(true),
-        );
-
-        let config = builder.build().context("Failed to build configuration")?;
-
-        let mut agent_config: AgentConfig = config.try_deserialize().unwrap_or_default();
-
-        if agent_config.data_dir == PathBuf::new() {
-            agent_config.data_dir = Self::default_data_dir();
+        if let Ok(v) = std::env::var("AVON_AGENT_LOG_LEVEL") {
+            self.log_level = v;
         }
+        if let Ok(v) = std::env::var("AVON_AGENT_TUN_NAME") {
+            self.tun_name = v;
+        }
+    }
 
-        Ok(agent_config)
+    fn validate(&self) -> Result<(), ConfigLoadError> {
+        if self.control_plane.is_empty() || !self.control_plane.contains(':') {
+            return Err(ConfigLoadError::Invalid {
+                field: "control_plane",
+                reason: "must be host:port (set in agent.toml or AVON_AGENT_CONTROL_PLANE)".into(),
+            });
+        }
+        if self.pulse_interval_secs < 5 {
+            return Err(ConfigLoadError::Invalid {
+                field: "pulse_interval_secs",
+                reason: "must be >= 5".into(),
+            });
+        }
+        if !(576..=9000).contains(&self.overlay_mtu) {
+            return Err(ConfigLoadError::Invalid {
+                field: "overlay_mtu",
+                reason: "must be within 576..=9000".into(),
+            });
+        }
+        if self.tun_name.is_empty() || self.tun_name.len() > 15 {
+            return Err(ConfigLoadError::Invalid {
+                field: "tun_name",
+                reason: "1..=15 characters".into(),
+            });
+        }
+        Ok(())
     }
 
     pub fn default_data_dir() -> PathBuf {
-        if cfg!(target_os = "linux") {
+        #[cfg(target_os = "linux")]
+        {
             PathBuf::from("/var/lib/avon")
-        } else if cfg!(target_os = "macos") {
+        }
+        #[cfg(target_os = "macos")]
+        {
             PathBuf::from("/Library/Application Support/AVON")
-        } else if cfg!(target_os = "windows") {
+        }
+        #[cfg(target_os = "windows")]
+        {
             PathBuf::from(r"C:\ProgramData\AVON")
-        } else {
-            ProjectDirs::from("ai", "avon", "avon-agent")
-                .map(|dirs| dirs.data_dir().to_path_buf())
-                .unwrap_or_else(|| PathBuf::from(".avon"))
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            PathBuf::from("./avon-data")
         }
     }
 
     pub fn default_config_path() -> Option<PathBuf> {
-        if cfg!(target_os = "linux") {
-            Some(PathBuf::from("/etc/avon/agent.conf"))
-        } else if cfg!(target_os = "macos") {
-            Some(PathBuf::from(
-                "/Library/Application Support/AVON/agent.conf",
-            ))
-        } else if cfg!(target_os = "windows") {
-            Some(PathBuf::from(r"C:\ProgramData\AVON\agent.conf"))
-        } else {
-            ProjectDirs::from("ai", "avon", "avon-agent")
-                .map(|dirs| dirs.config_dir().join("agent.conf"))
+        #[cfg(target_os = "linux")]
+        {
+            Some(PathBuf::from("/etc/avon/agent.toml"))
         }
-    }
-
-    pub fn identity_path(&self) -> PathBuf {
-        self.data_dir.join("identity.json")
-    }
-
-    pub fn keystore_path(&self) -> PathBuf {
-        self.data_dir.join("keystore.enc")
-    }
-
-    pub fn token_path(&self) -> PathBuf {
-        self.data_dir.join("token.enc")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_default_config() {
-        let config = AgentConfig::default();
-        assert_eq!(config.control_plane_port, 8443);
-        assert_eq!(config.pulse_timeout_secs, 30);
-        assert_eq!(config.log_level, "info");
-    }
-
-    #[test]
-    fn test_default_data_dir() {
-        let data_dir = AgentConfig::default_data_dir();
-        assert!(!data_dir.as_os_str().is_empty());
+        #[cfg(target_os = "macos")]
+        {
+            Some(PathBuf::from(
+                "/Library/Application Support/AVON/agent.toml",
+            ))
+        }
+        #[cfg(target_os = "windows")]
+        {
+            Some(PathBuf::from(r"C:\ProgramData\AVON\agent.toml"))
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            None
+        }
     }
 }

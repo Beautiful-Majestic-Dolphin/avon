@@ -2,6 +2,7 @@
 //!
 //! Includes RFC 8032 test vectors.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use avon_crypto::error::CryptoError;
 use avon_crypto::signature::{Ed25519KeyPair, Ed25519Signature, Ed25519VerifyingKey};
 

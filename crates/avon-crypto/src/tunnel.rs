@@ -110,7 +110,10 @@ impl TunnelCipher {
     /// let cipher = TunnelCipher::new(key, TunnelDirection::Initiator);
     /// ```
     pub fn new(key: [u8; 32], direction: TunnelDirection) -> Self {
-        let cipher = Aes256GcmCipher::new(&key).expect("Valid key length");
+        let Ok(cipher) = Aes256GcmCipher::new(&key) else {
+            // `key` is `[u8; 32]`, exactly the AES-256 key length.
+            unreachable!("AES-256-GCM accepts a 32-byte key")
+        };
         Self {
             key: TunnelKey(key),
             cipher,
@@ -374,6 +377,7 @@ impl TunnelPacket {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

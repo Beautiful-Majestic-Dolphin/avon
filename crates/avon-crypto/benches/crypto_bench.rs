@@ -2,6 +2,7 @@
 //!
 //! Run with: cargo bench -p avon-crypto
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use avon_crypto::ecdh::X25519KeyPair;

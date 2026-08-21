@@ -36,7 +36,7 @@ updates:
       - "dependencies"
       - "python"
 
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/api/admin-api"
     schedule:
       interval: "weekly"
@@ -73,3 +73,15 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+
+  - package-ecosystem: "uv"
+    directory: "/tests/e2e"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

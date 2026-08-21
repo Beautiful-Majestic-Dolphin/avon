@@ -213,7 +213,9 @@ impl TokenRotationManager {
         if let Some(state) = self.device_tokens.get(device_id) {
             if let Some(last_rotation) = state.last_rotation {
                 let elapsed = Utc::now() - last_rotation;
-                return elapsed >= chrono::Duration::from_std(self.rotation_interval).unwrap();
+                return elapsed
+                    >= chrono::Duration::from_std(self.rotation_interval)
+                        .unwrap_or(chrono::Duration::MAX);
             }
         }
 
@@ -263,6 +265,7 @@ impl TokenRotationManager {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

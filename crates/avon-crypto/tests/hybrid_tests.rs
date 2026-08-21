@@ -1,5 +1,6 @@
 //! Tests for Hybrid Classical + Post-Quantum Cryptography.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use avon_crypto::error::CryptoError;
 use avon_crypto::hybrid::key_exchange::{
     hybrid_encapsulate, HybridEncapsulation, HybridKeyPair, HybridPublicKey,

@@ -4,7 +4,7 @@
 
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 /// Configuration for the authentication service.
 #[derive(Debug, Clone, Deserialize)]
@@ -37,7 +37,7 @@ pub struct AuthConfig {
 }
 
 fn default_listen_addr() -> SocketAddr {
-    "0.0.0.0:50051".parse().unwrap()
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 50051)
 }
 
 fn default_health_port() -> u16 {
@@ -113,6 +113,7 @@ impl AuthConfig {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

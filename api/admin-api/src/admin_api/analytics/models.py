@@ -1,7 +1,6 @@
 """Analytics data models."""
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -13,7 +12,7 @@ class AnalyticsSnapshot(BaseModel):
     id: UUID
     metric_name: str
     metric_value: float
-    labels: Optional[dict] = None
+    labels: dict | None = None
     collected_at: datetime
 
 
@@ -23,10 +22,10 @@ class AnalyticsHourly(BaseModel):
     id: UUID
     metric_name: str
     hour: datetime
-    avg_value: Optional[float] = None
-    min_value: Optional[float] = None
-    max_value: Optional[float] = None
-    sample_count: Optional[int] = None
+    avg_value: float | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    sample_count: int | None = None
 
 
 class AnomalyEvent(BaseModel):
@@ -38,9 +37,9 @@ class AnomalyEvent(BaseModel):
     current_value: float
     expected_value: float
     deviation: float
-    message: Optional[str] = None
+    message: str | None = None
     detected_at: datetime
-    acknowledged_at: Optional[datetime] = None
+    acknowledged_at: datetime | None = None
 
 
 class TrendPoint(BaseModel):

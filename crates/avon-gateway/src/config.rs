@@ -1,7 +1,7 @@
 //! Configuration for the AVON UDP Gateway.
 
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 /// Gateway configuration.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -33,7 +33,7 @@ pub struct GatewayConfig {
 }
 
 fn default_listen_addr() -> SocketAddr {
-    "0.0.0.0:4600".parse().unwrap()
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 4600)
 }
 
 fn default_health_port() -> u16 {
@@ -148,6 +148,7 @@ impl Default for RateLimitConfig {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

@@ -3,13 +3,13 @@
 import base64
 from uuid import UUID
 
+import asyncpg
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from webauthn.helpers.structs import PublicKeyCredentialDescriptor
-import asyncpg
-import structlog
 
-from admin_api.auth.dependencies import get_current_user, CurrentUser
+from admin_api.auth.dependencies import CurrentUser, get_current_user
 from admin_api.auth.jwt import (
     create_token_pair,
     verify_mfa_token,
@@ -120,11 +120,13 @@ async def register_complete(
             expected_challenge=challenge,
         )
     except Exception as e:
-        logger.warning("webauthn_registration_failed", user_id=str(user.id), error=str(e))
+        logger.warning(
+            "webauthn_registration_failed", user_id=str(user.id), error=str(e)
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Registration verification failed: {e}",
-        )
+        ) from e
 
     # Store the credential
     credential = await WebAuthnQueries.create_credential(
@@ -170,7 +172,9 @@ async def list_credentials(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> list[WebAuthnCredentialResponse]:
     """List all registered FIDO2 keys for the current user."""
-    credentials = await WebAuthnQueries.get_credentials_for_user(db, current_user.user.id)
+    credentials = await WebAuthnQueries.get_credentials_for_user(
+        db, current_user.user.id
+    )
     return [
         WebAuthnCredentialResponse(
             id=cred.id,
@@ -190,7 +194,9 @@ async def delete_credential(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """Remove a registered FIDO2 key."""
-    deleted = await WebAuthnQueries.delete_credential(db, credential_id, current_user.user.id)
+    deleted = await WebAuthnQueries.delete_credential(
+        db, credential_id, current_user.user.id
+    )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -243,8 +249,7 @@ async def authenticate_begin(
         )
 
     descriptors = [
-        PublicKeyCredentialDescriptor(id=cred.credential_id)
-        for cred in credentials
+        PublicKeyCredentialDescriptor(id=cred.credential_id) for cred in credentials
     ]
 
     options, challenge = WebAuthnManager.generate_authentication_options_for_user(
@@ -285,11 +290,11 @@ async def authenticate_complete(
     raw_id = request.credential.get("rawId") or request.credential.get("id", "")
     try:
         credential_id_bytes = base64.urlsafe_b64decode(raw_id + "==")
-    except Exception:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid credential ID encoding",
-        )
+        ) from e
 
     stored_credential = await WebAuthnQueries.get_credential_by_credential_id(
         db, credential_id_bytes
@@ -316,7 +321,7 @@ async def authenticate_complete(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Authentication verification failed: {e}",
-        )
+        ) from e
 
     # Update sign count for clone detection
     await WebAuthnQueries.update_sign_count(

@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.7
+# One multi-stage Dockerfile for every Rust service. Build with:
+#   docker build -f deploy/docker/Dockerfile.rust --build-arg BIN=avon-gateway -t avon/gateway .
+ARG RUST_VERSION=1.93.0
+FROM rust:${RUST_VERSION}-bookworm AS builder
+ARG BIN
+RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler=3.21.12-3+deb12u1 && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY rust-toolchain.toml Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY proto ./proto
+COPY migrations ./migrations
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    cargo build --release --locked --bin "${BIN}" \
+ && cp "target/release/${BIN}" "/${BIN}"
+
+FROM gcr.io/distroless/cc-debian12:nonroot
+ARG BIN
+COPY --from=builder "/${BIN}" /usr/local/bin/avon
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/avon"]

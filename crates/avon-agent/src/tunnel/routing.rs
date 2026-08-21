@@ -125,6 +125,7 @@ impl Default for RoutingTable {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     fn make_session_id(n: u8) -> SessionId {

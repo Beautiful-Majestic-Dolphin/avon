@@ -13,7 +13,7 @@ pub mod routing;
 pub mod tun_device;
 pub mod tunnel;
 
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -57,8 +57,8 @@ impl Default for TunnelManagerConfig {
     fn default() -> Self {
         Self {
             tun_name_prefix: "avon".to_string(),
-            tun_address: "10.100.0.1".parse().unwrap(),
-            tun_netmask: "255.255.255.0".parse().unwrap(),
+            tun_address: IpAddr::V4(Ipv4Addr::new(10, 100, 0, 1)),
+            tun_netmask: IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
             tun_mtu: 1400,
             handshake_timeout: Duration::from_secs(30),
             keepalive_interval: Duration::from_secs(30),
@@ -481,6 +481,7 @@ impl TunnelManager {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

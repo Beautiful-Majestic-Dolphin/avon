@@ -1,22 +1,21 @@
 """Policy management endpoints for AVON Admin API."""
 
-from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
 import asyncpg
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from admin_api.auth.dependencies import get_current_user, get_current_admin, CurrentUser
+from admin_api.auth.dependencies import CurrentUser, get_current_admin, get_current_user
 from admin_api.db.connection import get_db
-from admin_api.db.queries import PolicyQueries, PodQueries, ActivityQueries
+from admin_api.db.queries import ActivityQueries, PodQueries, PolicyQueries
 from admin_api.schemas.policy import (
-    PolicyResponse,
-    PolicyDetailResponse,
-    PolicyCreateRequest,
-    PolicyUpdateRequest,
-    PolicyListResponse,
     PolicyConditionsSchema,
+    PolicyCreateRequest,
+    PolicyDetailResponse,
+    PolicyListResponse,
+    PolicyResponse,
+    PolicyUpdateRequest,
 )
 
 logger = structlog.get_logger()
@@ -26,14 +25,16 @@ router = APIRouter()
 
 @router.get("/", response_model=PolicyListResponse)
 async def list_policies(
-    enabled: Optional[bool] = Query(None, description="Filter by enabled status"),
+    enabled: bool | None = Query(None, description="Filter by enabled status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> PolicyListResponse:
     """List all policies with optional filtering."""
-    policies = await PolicyQueries.list_policies(db, enabled=enabled, skip=skip, limit=limit)
+    policies = await PolicyQueries.list_policies(
+        db, enabled=enabled, skip=skip, limit=limit
+    )
     total = await PolicyQueries.count_policies(db, enabled=enabled)
 
     items = [
@@ -106,7 +107,7 @@ async def create_policy(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> PolicyResponse:
     """Create a new policy.
-    
+
     Requires admin privileges.
     """
     source_pod = await PodQueries.get_pod(db, policy_request.source_pod_id)
@@ -182,7 +183,7 @@ async def update_policy(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> PolicyResponse:
     """Update a policy.
-    
+
     Requires admin privileges.
     """
     existing = await PolicyQueries.get_policy(db, policy_id)
@@ -243,7 +244,7 @@ async def delete_policy(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
     """Delete a policy.
-    
+
     Requires admin privileges.
     """
     policy = await PolicyQueries.get_policy(db, policy_id)
@@ -270,7 +271,9 @@ async def delete_policy(
         details={"policy_name": policy.name},
     )
 
-    logger.info("policy_deleted", policy_id=str(policy_id), by_user=str(current_user.id))
+    logger.info(
+        "policy_deleted", policy_id=str(policy_id), by_user=str(current_user.id)
+    )
 
     return {"success": True, "message": f"Policy {policy.name} has been deleted"}
 
@@ -282,7 +285,7 @@ async def enable_policy(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
     """Enable a policy.
-    
+
     Requires admin privileges.
     """
     policy = await PolicyQueries.get_policy(db, policy_id)
@@ -319,7 +322,7 @@ async def disable_policy(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
     """Disable a policy.
-    
+
     Requires admin privileges.
     """
     policy = await PolicyQueries.get_policy(db, policy_id)

@@ -2,6 +2,7 @@
 //!
 //! This module contains tests including RFC test vectors for HKDF and HMAC.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use avon_crypto::{
     aead::Aes256GcmCipher,
     error::CryptoError,

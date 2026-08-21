@@ -4,13 +4,10 @@ Provides trend analysis, security posture, anomaly detection,
 capacity planning, enrollment velocity, and crypto health metrics.
 """
 
-from typing import Optional
-
-from fastapi import APIRouter, Depends, Query
 import asyncpg
 import structlog
+from fastapi import APIRouter, Depends, Query
 
-from admin_api.auth.dependencies import get_current_user, CurrentUser
 from admin_api.analytics.models import (
     AnomalyEvent,
     CapacityResponse,
@@ -21,6 +18,7 @@ from admin_api.analytics.models import (
     TrendResponse,
 )
 from admin_api.analytics.queries import AnalyticsQueries
+from admin_api.auth.dependencies import CurrentUser, get_current_user
 from admin_api.db.connection import get_db
 
 logger = structlog.get_logger()
@@ -30,7 +28,9 @@ router = APIRouter()
 
 @router.get("/trends", response_model=TrendResponse)
 async def get_trends(
-    metric: str = Query(..., description="Metric name (e.g., connected_agents, auth_request_rate)"),
+    metric: str = Query(
+        ..., description="Metric name (e.g., connected_agents, auth_request_rate)"
+    ),
     period: str = Query("24h", description="Time period (e.g., 6h, 24h, 7d, 30d)"),
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -66,9 +66,15 @@ async def get_security_posture(
     """Get aggregate device security posture metrics."""
     # Device counts by status
     total = await db.fetchrow("SELECT COUNT(*) AS c FROM devices")
-    active = await db.fetchrow("SELECT COUNT(*) AS c FROM devices WHERE status = 'active'")
-    suspended = await db.fetchrow("SELECT COUNT(*) AS c FROM devices WHERE status = 'suspended'")
-    revoked = await db.fetchrow("SELECT COUNT(*) AS c FROM devices WHERE status = 'revoked'")
+    active = await db.fetchrow(
+        "SELECT COUNT(*) AS c FROM devices WHERE status = 'active'"
+    )
+    suspended = await db.fetchrow(
+        "SELECT COUNT(*) AS c FROM devices WHERE status = 'suspended'"
+    )
+    revoked = await db.fetchrow(
+        "SELECT COUNT(*) AS c FROM devices WHERE status = 'revoked'"
+    )
 
     total_count = total["c"] if total else 0
     active_count = active["c"] if active else 0
@@ -106,14 +112,18 @@ async def get_security_posture(
 
 @router.get("/anomalies", response_model=list[AnomalyEvent])
 async def get_anomalies(
-    severity: Optional[str] = Query(None, description="Filter by severity (warning, critical)"),
+    severity: str | None = Query(
+        None, description="Filter by severity (warning, critical)"
+    ),
     days: int = Query(30, ge=1, le=365, description="Look back period in days"),
     limit: int = Query(100, ge=1, le=1000),
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> list[AnomalyEvent]:
     """Get detected anomaly events."""
-    return await AnalyticsQueries.get_anomalies(db, severity=severity, days=days, limit=limit)
+    return await AnalyticsQueries.get_anomalies(
+        db, severity=severity, days=days, limit=limit
+    )
 
 
 @router.get("/capacity", response_model=CapacityResponse)

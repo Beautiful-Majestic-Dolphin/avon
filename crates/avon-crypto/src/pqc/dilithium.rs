@@ -316,8 +316,10 @@ impl DilithiumKeyPair {
     /// assert!(keypair.verifying_key().verify(message, &signature).is_ok());
     /// ```
     pub fn sign(&self, message: &[u8]) -> DilithiumSignature {
-        let sk = dilithium3::SecretKey::from_bytes(&self.signing.0)
-            .expect("signing key should be valid");
+        let Ok(sk) = dilithium3::SecretKey::from_bytes(&self.signing.0) else {
+            // `signing` is a fixed-width array that only keygen/deserialization can fill.
+            unreachable!("Dilithium3 secret key has a fixed, validated length")
+        };
 
         let sig = dilithium3::detached_sign(message, &sk);
         DilithiumSignature(sig.as_bytes().to_vec())
@@ -326,6 +328,7 @@ impl DilithiumKeyPair {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

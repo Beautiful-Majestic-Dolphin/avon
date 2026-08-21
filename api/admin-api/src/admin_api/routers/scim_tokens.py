@@ -6,12 +6,12 @@ that identity providers use to authenticate to the SCIM API.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 import asyncpg
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 
-from admin_api.auth.dependencies import get_current_admin, CurrentUser
+from admin_api.auth.dependencies import CurrentUser, get_current_admin
 from admin_api.db.connection import get_db
 from admin_api.db.queries import ActivityQueries, ScimTokenQueries
 from admin_api.scim.auth import generate_token, hash_token
@@ -46,7 +46,9 @@ class ScimTokenCreatedResponse(BaseModel):
     message: str = "Store this token securely. It will not be shown again."
 
 
-@router.post("/", response_model=ScimTokenCreatedResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=ScimTokenCreatedResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_scim_token(
     request: CreateScimTokenRequest,
     db: asyncpg.Connection = Depends(get_db),

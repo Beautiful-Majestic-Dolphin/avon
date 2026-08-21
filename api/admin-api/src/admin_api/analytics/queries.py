@@ -1,12 +1,10 @@
 """Analytics database queries."""
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-from uuid import UUID
+from datetime import UTC, datetime, timedelta
 
 import asyncpg
 
-from admin_api.analytics.models import AnalyticsHourly, AnalyticsSnapshot, AnomalyEvent
+from admin_api.analytics.models import AnalyticsHourly, AnomalyEvent
 
 
 class AnalyticsQueries:
@@ -17,7 +15,7 @@ class AnalyticsQueries:
         conn: asyncpg.Connection,
         metric_name: str,
         metric_value: float,
-        labels: Optional[dict] = None,
+        labels: dict | None = None,
     ) -> None:
         """Store a raw metric snapshot."""
         await conn.execute(
@@ -35,7 +33,7 @@ class AnalyticsQueries:
         hours: int = 24,
     ) -> list[AnalyticsHourly]:
         """Get hourly trend data for a metric."""
-        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+        since = datetime.now(UTC) - timedelta(hours=hours)
         rows = await conn.fetch(
             """SELECT * FROM analytics_hourly
                WHERE metric_name = $1 AND hour >= $2
@@ -73,7 +71,7 @@ class AnalyticsQueries:
         conn: asyncpg.Connection, retention_days: int = 7
     ) -> int:
         """Delete snapshots older than retention period."""
-        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
         result = await conn.execute(
             "DELETE FROM analytics_snapshots WHERE collected_at < $1", cutoff
         )
@@ -86,7 +84,7 @@ class AnalyticsQueries:
         days: int = 7,
     ) -> tuple[float, float]:
         """Get mean and stddev for a metric over the last N days. Returns (mean, stddev)."""
-        since = datetime.now(timezone.utc) - timedelta(days=days)
+        since = datetime.now(UTC) - timedelta(days=days)
         row = await conn.fetchrow(
             """SELECT AVG(avg_value) AS mean, STDDEV(avg_value) AS stddev
                FROM analytics_hourly
@@ -124,12 +122,12 @@ class AnalyticsQueries:
     @staticmethod
     async def get_anomalies(
         conn: asyncpg.Connection,
-        severity: Optional[str] = None,
+        severity: str | None = None,
         days: int = 30,
         limit: int = 100,
     ) -> list[AnomalyEvent]:
         """Get recent anomaly events."""
-        since = datetime.now(timezone.utc) - timedelta(days=days)
+        since = datetime.now(UTC) - timedelta(days=days)
         if severity:
             rows = await conn.fetch(
                 """SELECT * FROM anomaly_events

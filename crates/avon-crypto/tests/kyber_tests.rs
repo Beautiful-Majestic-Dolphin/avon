@@ -1,5 +1,6 @@
 //! Tests for CRYSTALS-Kyber Key Encapsulation Mechanism.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use avon_crypto::error::CryptoError;
 use avon_crypto::pqc::kyber::{
     KyberCiphertext, KyberKeyPair, KyberPublicKey, KyberSecretKey, KYBER768_CIPHERTEXT_BYTES,

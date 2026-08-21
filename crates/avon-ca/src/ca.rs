@@ -297,7 +297,8 @@ impl CertificateAuthority {
         );
 
         let now = Utc::now();
-        let expires_at = now + chrono::Duration::from_std(lifetime).unwrap();
+        let expires_at =
+            now + chrono::Duration::from_std(lifetime).unwrap_or(chrono::Duration::MAX);
 
         let mut params = CertificateParams::default();
 
@@ -416,7 +417,8 @@ impl CertificateAuthority {
         status: CertificateStatus,
     ) -> Result<OcspStaple> {
         let now = Utc::now();
-        let next_update = now + chrono::Duration::from_std(self.ocsp_lifetime).unwrap();
+        let next_update =
+            now + chrono::Duration::from_std(self.ocsp_lifetime).unwrap_or(chrono::Duration::MAX);
 
         let mut response = Vec::new();
 
@@ -476,6 +478,7 @@ impl CertificateAuthority {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     fn test_config() -> CaConfig {

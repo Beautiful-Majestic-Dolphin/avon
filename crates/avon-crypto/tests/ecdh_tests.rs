@@ -2,6 +2,7 @@
 //!
 //! Includes RFC 7748 test vectors.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use avon_crypto::ecdh::{SharedSecret, X25519KeyPair, X25519PrivateKey, X25519PublicKey};
 use avon_crypto::error::CryptoError;
 

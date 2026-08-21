@@ -4,12 +4,11 @@ Implements RFC 7643/7644 for user and group provisioning from identity
 providers (Okta, Azure AD, Google Workspace, etc.).
 """
 
-from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 import asyncpg
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from admin_api.db.connection import get_db
 from admin_api.scim.auth import get_scim_auth
@@ -23,11 +22,9 @@ from admin_api.scim.schemas import (
     SCIM_USER_SCHEMA,
     ScimErrorResponse,
     ScimGroupRequest,
-    ScimGroupResponse,
     ScimListResponse,
     ScimPatchRequest,
     ScimUserRequest,
-    ScimUserResponse,
 )
 from admin_api.scim.service import ScimService
 
@@ -36,7 +33,7 @@ logger = structlog.get_logger()
 router = APIRouter(dependencies=[Depends(get_scim_auth)])
 
 
-def _scim_error(status_code: int, detail: str, scim_type: str = None):
+def _scim_error(status_code: int, detail: str, scim_type: str | None = None):
     """Raise an HTTPException with SCIM error format."""
     raise HTTPException(
         status_code=status_code,
@@ -84,11 +81,21 @@ async def get_schemas() -> dict:
                 "name": "User",
                 "description": "AVON User Account",
                 "attributes": [
-                    {"name": "userName", "type": "string", "required": True, "uniqueness": "server"},
+                    {
+                        "name": "userName",
+                        "type": "string",
+                        "required": True,
+                        "uniqueness": "server",
+                    },
                     {"name": "name", "type": "complex", "required": False},
                     {"name": "displayName", "type": "string", "required": False},
                     {"name": "active", "type": "boolean", "required": False},
-                    {"name": "externalId", "type": "string", "required": False, "uniqueness": "global"},
+                    {
+                        "name": "externalId",
+                        "type": "string",
+                        "required": False,
+                        "uniqueness": "global",
+                    },
                 ],
             },
             {
@@ -97,8 +104,18 @@ async def get_schemas() -> dict:
                 "description": "AVON Pod / Group",
                 "attributes": [
                     {"name": "displayName", "type": "string", "required": True},
-                    {"name": "members", "type": "complex", "required": False, "multiValued": True},
-                    {"name": "externalId", "type": "string", "required": False, "uniqueness": "global"},
+                    {
+                        "name": "members",
+                        "type": "complex",
+                        "required": False,
+                        "multiValued": True,
+                    },
+                    {
+                        "name": "externalId",
+                        "type": "string",
+                        "required": False,
+                        "uniqueness": "global",
+                    },
                 ],
             },
         ],
@@ -135,7 +152,7 @@ async def get_resource_types() -> dict:
 
 @router.get("/Users")
 async def list_users(
-    filter: Optional[str] = Query(None),
+    filter: str | None = Query(None),
     startIndex: int = Query(1, ge=1),
     count: int = Query(100, ge=1, le=1000),
     db: asyncpg.Connection = Depends(get_db),
@@ -297,7 +314,7 @@ async def delete_user(
 
 @router.get("/Groups")
 async def list_groups(
-    filter: Optional[str] = Query(None),
+    filter: str | None = Query(None),
     startIndex: int = Query(1, ge=1),
     count: int = Query(100, ge=1, le=1000),
     db: asyncpg.Connection = Depends(get_db),
@@ -397,7 +414,11 @@ async def patch_group(
 
         if op_type == "replace":
             if path == "displayname" or (not op.path and isinstance(op.value, dict)):
-                name = op.value if isinstance(op.value, str) else op.value.get("displayName")
+                name = (
+                    op.value
+                    if isinstance(op.value, str)
+                    else op.value.get("displayName")
+                )
                 if name:
                     await service.update_group(group_id, display_name=name)
 
@@ -430,7 +451,7 @@ async def delete_group(
 # --- Helpers ---
 
 
-def _scim_to_field(scim_attr: str) -> Optional[str]:
+def _scim_to_field(scim_attr: str) -> str | None:
     """Map a SCIM attribute name to an update_user keyword argument."""
     mapping = {
         "userName": "user_name",

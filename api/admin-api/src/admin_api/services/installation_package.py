@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import json
 import time
-from typing import Optional
 from urllib.parse import urlencode
 
 import structlog
@@ -28,12 +27,12 @@ class InstallationPackageService:
         expires_in: int = 86400,
     ) -> str:
         """Generate a signed installation URL.
-        
+
         Args:
             device_type: Type of device (linux, windows, macos, ios, android)
             enrollment_token: The enrollment token
             expires_in: URL expiration time in seconds (default 24 hours)
-            
+
         Returns:
             Signed installation URL
         """
@@ -59,12 +58,12 @@ class InstallationPackageService:
         device_type: str,
     ) -> str:
         """Generate a configuration file for the agent.
-        
+
         Args:
             device_id: The device ID
             enrollment_token: The enrollment token
             device_type: Type of device
-            
+
         Returns:
             Configuration file contents as string
         """
@@ -95,19 +94,19 @@ class InstallationPackageService:
     def get_download_url(
         self,
         device_type: str,
-        version: Optional[str] = None,
+        version: str | None = None,
     ) -> str:
         """Get the download URL for the agent installer.
-        
+
         Args:
             device_type: Type of device
             version: Specific version to download (default: latest)
-            
+
         Returns:
             Download URL for the installer
         """
         version_str = version or "latest"
-        
+
         filenames = {
             "linux": f"avon-agent-{version_str}-linux-amd64.tar.gz",
             "windows": f"avon-agent-{version_str}-windows-amd64.exe",
@@ -122,14 +121,14 @@ class InstallationPackageService:
     def get_checksum_url(
         self,
         device_type: str,
-        version: Optional[str] = None,
+        version: str | None = None,
     ) -> str:
         """Get the checksum URL for verifying the installer.
-        
+
         Args:
             device_type: Type of device
             version: Specific version (default: latest)
-            
+
         Returns:
             URL for the checksum file
         """
@@ -149,31 +148,31 @@ class InstallationPackageService:
 
     def _sign_params(self, params: dict) -> str:
         """Sign URL parameters using HMAC-SHA256.
-        
+
         Args:
             params: Parameters to sign
-            
+
         Returns:
             Hex-encoded signature
         """
         sorted_params = sorted(params.items())
         message = "&".join(f"{k}={v}" for k, v in sorted_params)
-        
+
         signature = hmac.new(
             settings.jwt_secret_key.encode(),
             message.encode(),
             hashlib.sha256,
         ).hexdigest()
-        
+
         return signature
 
     def verify_signature(self, params: dict, signature: str) -> bool:
         """Verify a URL signature.
-        
+
         Args:
             params: Parameters that were signed
             signature: The signature to verify
-            
+
         Returns:
             True if signature is valid
         """

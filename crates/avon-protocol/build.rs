@@ -11,17 +11,19 @@ fn main() -> Result<()> {
 
     // Use tonic_build to compile all proto files (it includes prost internally)
     // This generates both message types and gRPC service code
-    tonic_build::configure().out_dir("src/generated").compile(
-        &[
-            "../../proto/avon/v1/common.proto",
-            "../../proto/avon/v1/control.proto",
-            "../../proto/avon/v1/tunnel.proto",
-            "../../proto/avon/v1/auth_service.proto",
-            "../../proto/avon/v1/ca_service.proto",
-            "../../proto/avon/v1/pulse_service.proto",
-        ],
-        &["../../proto"],
-    )?;
+    tonic_build::configure()
+        .out_dir("src/generated")
+        .compile_protos(
+            &[
+                "../../proto/avon/v1/common.proto",
+                "../../proto/avon/v1/control.proto",
+                "../../proto/avon/v1/tunnel.proto",
+                "../../proto/avon/v1/auth_service.proto",
+                "../../proto/avon/v1/ca_service.proto",
+                "../../proto/avon/v1/pulse_service.proto",
+            ],
+            &["../../proto"],
+        )?;
 
     Ok(())
 }

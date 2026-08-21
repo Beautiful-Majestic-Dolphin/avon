@@ -5,7 +5,6 @@ group management, and deprovisioning with device suspension.
 """
 
 import secrets
-from typing import Optional
 from uuid import UUID
 
 import asyncpg
@@ -15,7 +14,6 @@ from passlib.context import CryptContext
 from admin_api.db.models import DbPod, DbUser
 from admin_api.db.queries import (
     ActivityQueries,
-    DeviceQueries,
     PodQueries,
     UserPodQueries,
     UserQueries,
@@ -33,8 +31,11 @@ logger = structlog.get_logger()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def _user_to_scim(user: DbUser, groups: list[ScimGroupRef] = []) -> ScimUserResponse:
+def _user_to_scim(
+    user: DbUser, groups: list[ScimGroupRef] | None = None
+) -> ScimUserResponse:
     """Convert a DbUser to a SCIM User response."""
+    groups = groups if groups is not None else []
     name = None
     if user.full_name:
         name = ScimName(formatted=user.full_name)
@@ -55,8 +56,11 @@ def _user_to_scim(user: DbUser, groups: list[ScimGroupRef] = []) -> ScimUserResp
     )
 
 
-def _pod_to_scim(pod: DbPod, members: list[ScimMemberRef] = []) -> ScimGroupResponse:
+def _pod_to_scim(
+    pod: DbPod, members: list[ScimMemberRef] | None = None
+) -> ScimGroupResponse:
     """Convert a DbPod to a SCIM Group response."""
+    members = members if members is not None else []
     return ScimGroupResponse(
         id=str(pod.id),
         displayName=pod.name,
@@ -81,9 +85,9 @@ class ScimService:
     async def create_user(
         self,
         user_name: str,
-        full_name: Optional[str],
+        full_name: str | None,
         active: bool,
-        external_id: Optional[str],
+        external_id: str | None,
     ) -> ScimUserResponse:
         """Create a SCIM-managed user."""
         # Check for existing user by externalId or email
@@ -130,7 +134,7 @@ class ScimService:
         logger.info("scim_user_created", email=user_name, user_id=str(user.id))
         return _user_to_scim(user)
 
-    async def get_user(self, user_id: UUID) -> Optional[ScimUserResponse]:
+    async def get_user(self, user_id: UUID) -> ScimUserResponse | None:
         """Get a user by ID as a SCIM response."""
         user = await UserQueries.get_user(self.db, user_id)
         if user is None:
@@ -148,11 +152,11 @@ class ScimService:
     async def update_user(
         self,
         user_id: UUID,
-        user_name: Optional[str] = None,
-        full_name: Optional[str] = None,
-        active: Optional[bool] = None,
-        external_id: Optional[str] = None,
-    ) -> Optional[ScimUserResponse]:
+        user_name: str | None = None,
+        full_name: str | None = None,
+        active: bool | None = None,
+        external_id: str | None = None,
+    ) -> ScimUserResponse | None:
         """Update a user. Handles deprovisioning if active=False."""
         user = await UserQueries.get_user(self.db, user_id)
         if user is None:
@@ -199,9 +203,9 @@ class ScimService:
         self,
         offset: int = 0,
         limit: int = 100,
-        filter_column: Optional[str] = None,
-        filter_op: Optional[str] = None,
-        filter_value: Optional[str] = None,
+        filter_column: str | None = None,
+        filter_op: str | None = None,
+        filter_value: str | None = None,
     ) -> tuple[list[ScimUserResponse], int]:
         """List users with optional SCIM filter."""
         if filter_column and filter_op and filter_value:
@@ -249,7 +253,7 @@ class ScimService:
     async def create_group(
         self,
         display_name: str,
-        external_id: Optional[str],
+        external_id: str | None,
         member_ids: list[UUID],
     ) -> ScimGroupResponse:
         """Create a SCIM-managed group (Avon pod)."""
@@ -285,7 +289,7 @@ class ScimService:
         logger.info("scim_group_created", name=display_name, pod_id=str(pod.id))
         return await self._pod_to_scim_with_members(pod)
 
-    async def get_group(self, pod_id: UUID) -> Optional[ScimGroupResponse]:
+    async def get_group(self, pod_id: UUID) -> ScimGroupResponse | None:
         """Get a group by ID as a SCIM response."""
         pod = await PodQueries.get_pod(self.db, pod_id)
         if pod is None:
@@ -295,10 +299,10 @@ class ScimService:
     async def update_group(
         self,
         pod_id: UUID,
-        display_name: Optional[str] = None,
-        external_id: Optional[str] = None,
-        member_ids: Optional[list[UUID]] = None,
-    ) -> Optional[ScimGroupResponse]:
+        display_name: str | None = None,
+        external_id: str | None = None,
+        member_ids: list[UUID] | None = None,
+    ) -> ScimGroupResponse | None:
         """Update a group. If member_ids is provided, replaces all members."""
         pod = await PodQueries.get_pod(self.db, pod_id)
         if pod is None:
@@ -351,9 +355,9 @@ class ScimService:
         self,
         offset: int = 0,
         limit: int = 100,
-        filter_column: Optional[str] = None,
-        filter_op: Optional[str] = None,
-        filter_value: Optional[str] = None,
+        filter_column: str | None = None,
+        filter_op: str | None = None,
+        filter_value: str | None = None,
     ) -> tuple[list[ScimGroupResponse], int]:
         """List groups with optional SCIM filter."""
         if filter_column and filter_op and filter_value:
@@ -373,7 +377,5 @@ class ScimService:
     async def _pod_to_scim_with_members(self, pod: DbPod) -> ScimGroupResponse:
         """Convert a pod to SCIM Group response with member list."""
         users = await UserPodQueries.get_pod_users(self.db, pod.id)
-        members = [
-            ScimMemberRef(value=str(u.id), display=u.email) for u in users
-        ]
+        members = [ScimMemberRef(value=str(u.id), display=u.email) for u in users]
         return _pod_to_scim(pod, members)

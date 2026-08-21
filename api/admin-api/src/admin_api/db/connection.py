@@ -1,6 +1,6 @@
 """Database connection management for AVON Admin API."""
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import asyncpg
 import structlog
@@ -21,7 +21,11 @@ class DatabasePool:
         if cls._pool is not None:
             return
 
-        masked_url = settings.database_url.split("@")[-1] if "@" in settings.database_url else settings.database_url
+        masked_url = (
+            settings.database_url.split("@")[-1]
+            if "@" in settings.database_url
+            else settings.database_url
+        )
         logger.info("connecting_to_database", url=masked_url)
 
         cls._pool = await asyncpg.create_pool(
