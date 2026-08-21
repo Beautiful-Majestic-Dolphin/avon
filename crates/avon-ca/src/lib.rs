@@ -5,6 +5,7 @@
 //! trait signatures fix that type, so the lint cannot be satisfied here.
 #![allow(clippy::result_large_err)]
 
+pub mod config;
 pub mod keys;
 pub mod pki;
 pub mod service;

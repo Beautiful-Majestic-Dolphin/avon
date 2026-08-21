@@ -220,6 +220,7 @@ dependencies = [
  "base64ct",
  "chrono",
  "clap",
+ "hex",
  "metrics",
  "prost",
  "rand 0.8.7",
@@ -370,14 +371,17 @@ dependencies = [
 name = "avon-testkit"
 version = "0.2.0"
 dependencies = [
+ "avon-ca",
  "avon-config",
  "avon-crypto",
  "avon-db",
  "avon-protocol",
+ "avon-tls",
  "rcgen",
  "redis",
  "sqlx",
  "tokio",
+ "tonic",
  "url",
  "uuid",
 ]

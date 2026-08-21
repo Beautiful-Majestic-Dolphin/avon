@@ -119,12 +119,14 @@ impl TestPki {
         }
     }
 
-    /// Write `<name>.crt`, `<name>.key`, `ca.crt` into `dir` and return matching TlsArgs.
+    /// Write `<name>.crt`, `<name>.key` and the shared `trust-ca.crt` into `dir`
+    /// and return matching TlsArgs. The trust bundle deliberately does not use
+    /// `ca.crt`: that would collide with the leaf files when `name` is "ca".
     pub fn write_to(&self, dir: &Path, name: &str, spiffe: &str, dns: &[&str]) -> TlsArgs {
         let id = self.issue_tls(spiffe, dns);
         let cert = dir.join(format!("{name}.crt"));
         let key = dir.join(format!("{name}.key"));
-        let ca = dir.join("ca.crt");
+        let ca = dir.join("trust-ca.crt");
         std::fs::write(&cert, id.cert_pem).expect("write cert");
         std::fs::write(&key, id.key_pem).expect("write key");
         std::fs::write(&ca, &self.tls_ca_pem).expect("write ca");
