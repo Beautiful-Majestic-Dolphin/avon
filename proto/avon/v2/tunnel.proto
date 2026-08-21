@@ -1,0 +1,35 @@
+syntax = "proto3";
+package avon.v2;
+import "avon/v2/common.proto";
+
+// Responder side of session establishment (spec §6.2 step 3).
+message SessionAnswer {
+  bytes session_id = 1;
+  bytes ct_e = 2;                          // HybridKemCiphertext to the ephemeral key
+  bytes ct_s = 3;                          // HybridKemCiphertext to the static key in the initiator's certificate
+  uint32 responder_index = 4;
+  string responder_endpoint = 5;           // host:port (gateway) or empty (peer uses candidates)
+  Suite suite = 6;
+  bytes signature = 7;                     // HybridSignature over AVON-SESSION-V2 || transcript.hash()
+}
+
+message SessionClose { bytes session_id = 1; string reason = 2; }
+message RouteUpdate { bytes session_id = 1; repeated string cidrs = 2; bool remove = 3; }
+
+// Frames carried inside ATP/2 data packets with inner_type = 1.
+message TunnelFrame {
+  oneof msg {
+    Rekey rekey = 1;
+    RekeyAck rekey_ack = 2;
+    IndexUpdate index_update = 3;
+    Close close = 4;
+    MtuProbe mtu_probe = 5;
+    MtuProbeAck mtu_probe_ack = 6;
+  }
+}
+message Rekey { uint32 new_epoch = 1; bytes eph_kem_pk = 2; uint32 new_index = 3; }
+message RekeyAck { uint32 new_epoch = 1; bytes ct = 2; uint32 new_index = 3; }
+message IndexUpdate { uint32 new_index = 1; }
+message Close { string reason = 1; }
+message MtuProbe { uint32 size = 1; bytes padding = 2; }
+message MtuProbeAck { uint32 size = 1; }

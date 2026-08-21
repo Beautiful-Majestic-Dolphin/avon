@@ -1,0 +1,43 @@
+syntax = "proto3";
+package avon.v2;
+import "avon/v2/common.proto";
+import "avon/v2/cert.proto";
+import "avon/v2/tunnel.proto";
+
+service GatewayService {
+  rpc Register(GatewayRegistration) returns (GatewayConfig);
+  rpc Events(stream GatewayUp) returns (stream GatewayDown);
+}
+
+message GatewayRegistration { string public_endpoint = 1; string region = 2; uint32 capacity = 3; string version = 4; }
+message GatewayConfig { Chain chain = 1; Crl crl = 2; uint32 keepalive_secs = 3; uint32 rekey_secs = 4; }
+
+message GatewayUp {
+  oneof msg {
+    SessionAnswer session_answer = 1;
+    SessionEvent session_event = 2;
+    GatewayStats stats = 3;
+  }
+}
+message GatewayDown {
+  oneof msg {
+    SessionOffer session_offer = 1;
+    SessionClose close = 2;
+    Crl crl = 3;
+    PolicySnapshot policy = 4;             // defined in phase 4 (placeholder message kept minimal here)
+    RouteUpdate routes = 5;
+  }
+}
+
+message SessionOffer {
+  bytes session_id = 1;
+  Certificate device_certificate = 2;
+  bytes eph_kem_pk = 3;
+  Suite suite = 4;
+  string overlay_ipv4 = 5;
+  string overlay_ipv6 = 6;
+  repeated string advertised_routes = 7;
+}
+message SessionEvent { bytes session_id = 1; string event = 2; string reason = 3; string endpoint = 4; uint64 bytes_tx = 5; uint64 bytes_rx = 6; }
+message GatewayStats { uint32 active_sessions = 1; uint64 packets_per_sec = 2; }
+message PolicySnapshot { uint64 version = 1; bytes encoded = 2; }

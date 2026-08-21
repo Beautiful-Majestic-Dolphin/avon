@@ -1,0 +1,38 @@
+syntax = "proto3";
+package avon.v2;
+
+message Empty {}
+message Ack { bool ok = 1; string message = 2; }
+
+// 16-byte UUID
+message Uuid { bytes value = 1; }
+
+enum Suite {
+  SUITE_UNSPECIFIED = 0;
+  SUITE_AES256_GCM = 1;
+  SUITE_CHACHA20_POLY1305 = 2;
+}
+
+message DevicePosture {
+  string os_name = 1;
+  string os_version = 2;
+  string agent_version = 3;
+  optional bool firewall_enabled = 4;
+  optional bool disk_encrypted = 5;
+  optional bool screen_lock_enabled = 6;
+  optional int64 last_update_unix = 7;    // absent when unknown
+  string key_provider = 8;                // software|tpm2|secure-enclave|cng|secure-element
+  int64 collected_at_unix = 9;
+}
+
+message AttestationEvidence {
+  string format = 1;                      // "tpm2-quote" | "apple-app-attest" | "android-key" | "none"
+  bytes evidence = 2;                     // format-specific
+  bytes nonce = 3;                        // server-provided challenge that was attested
+}
+
+message Fingerprint {
+  uint32 version = 1;                     // 2
+  bytes hash = 2;                         // SHA-256 over stable identifiers (spec §11)
+  repeated string identifier_kinds = 3;   // e.g. ["dmi-uuid","machine-id","tpm-ek"]
+}

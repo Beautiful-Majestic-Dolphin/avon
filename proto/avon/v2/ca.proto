@@ -1,0 +1,31 @@
+syntax = "proto3";
+package avon.v2;
+import "avon/v2/common.proto";
+import "avon/v2/cert.proto";
+
+service CaService {
+  rpc IssueDeviceCredential(IssueDeviceRequest) returns (IssueDeviceResponse);
+  rpc IssueServiceCredential(IssueServiceRequest) returns (IssueServiceResponse);
+  rpc GetChain(Empty) returns (Chain);
+  rpc Revoke(RevokeRequest) returns (Crl);
+  rpc CurrentCrl(Empty) returns (Crl);
+}
+
+message IssueDeviceRequest {
+  Uuid tenant_id = 1;
+  Uuid device_id = 2;
+  Csr csr = 3;
+  uint32 kind = 4;                         // SubjectKind: 3 device, 4 gateway
+  repeated string sans = 5;
+}
+message IssueDeviceResponse { Credential credential = 1; bytes serial = 2; }
+
+message IssueServiceRequest {
+  string service_name = 1;                 // control|gateway|admin
+  Uuid service_id = 2;
+  Csr csr = 3;
+  repeated string dns_sans = 4;
+}
+message IssueServiceResponse { Credential credential = 1; bytes serial = 2; }
+
+message RevokeRequest { bytes serial = 1; string reason = 2; }

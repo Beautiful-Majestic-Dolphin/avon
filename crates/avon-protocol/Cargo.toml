@@ -7,16 +7,13 @@ license.workspace = true
 description = "Wire protocol definitions for AVON"
 
 [dependencies]
-serde.workspace = true
-thiserror.workspace = true
-avon-crypto.workspace = true
 prost.workspace = true
 prost-types.workspace = true
-bytes = "1.5"
 tonic.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
 
 [build-dependencies]
-prost-build = "0.13"
 tonic-build = "0.13"
 
 [lints]

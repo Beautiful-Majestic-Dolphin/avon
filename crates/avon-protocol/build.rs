@@ -1,29 +1,18 @@
-use std::io::Result;
-
-fn main() -> Result<()> {
-    // Tell Cargo to rerun this build script if proto files change
-    println!("cargo:rerun-if-changed=../../proto/avon/v1/common.proto");
-    println!("cargo:rerun-if-changed=../../proto/avon/v1/control.proto");
-    println!("cargo:rerun-if-changed=../../proto/avon/v1/tunnel.proto");
-    println!("cargo:rerun-if-changed=../../proto/avon/v1/auth_service.proto");
-    println!("cargo:rerun-if-changed=../../proto/avon/v1/ca_service.proto");
-    println!("cargo:rerun-if-changed=../../proto/avon/v1/pulse_service.proto");
-
-    // Use tonic_build to compile all proto files (it includes prost internally)
-    // This generates both message types and gRPC service code
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let protos = [
+        "../../proto/avon/v2/common.proto",
+        "../../proto/avon/v2/cert.proto",
+        "../../proto/avon/v2/tunnel.proto",
+        "../../proto/avon/v2/ca.proto",
+        "../../proto/avon/v2/agent.proto",
+        "../../proto/avon/v2/gateway.proto",
+    ];
     tonic_build::configure()
-        .out_dir("src/generated")
-        .compile_protos(
-            &[
-                "../../proto/avon/v1/common.proto",
-                "../../proto/avon/v1/control.proto",
-                "../../proto/avon/v1/tunnel.proto",
-                "../../proto/avon/v1/auth_service.proto",
-                "../../proto/avon/v1/ca_service.proto",
-                "../../proto/avon/v1/pulse_service.proto",
-            ],
-            &["../../proto"],
-        )?;
-
+        .build_server(true)
+        .build_client(true)
+        .compile_protos(&protos, &["../../proto"])?;
+    for p in protos {
+        println!("cargo:rerun-if-changed={p}");
+    }
     Ok(())
 }
