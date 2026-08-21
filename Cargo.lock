@@ -204,6 +204,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "avon-ca"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "avon-common",
+ "avon-config",
+ "avon-crypto",
+ "avon-db",
+ "avon-observability",
+ "avon-protocol",
+ "avon-testkit",
+ "avon-tls",
+ "base64ct",
+ "chrono",
+ "clap",
+ "metrics",
+ "prost",
+ "rand 0.8.7",
+ "rcgen",
+ "sha2",
+ "sqlx",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tonic",
+ "tracing",
+ "uuid",
+ "x509-parser",
+ "zeroize",
+]
+
+[[package]]
 name = "avon-common"
 version = "0.2.0"
 dependencies = [
@@ -2531,6 +2564,7 @@ dependencies = [
  "ring",
  "rustls-pki-types",
  "time",
+ "x509-parser",
  "yasna",
 ]
 
@@ -4219,6 +4253,7 @@ dependencies = [
  "lazy_static",
  "nom",
  "oid-registry",
+ "ring",
  "rusticata-macros",
  "thiserror 1.0.69",
  "time",

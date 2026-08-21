@@ -4,64 +4,45 @@ edition.workspace = true
 version.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "AVON Certificate Authority"
+description = "AVON certificate authority"
 
 [[bin]]
 name = "avon-ca"
 path = "src/main.rs"
 
 [lib]
-name = "avon_ca"
 path = "src/lib.rs"
 
 [dependencies]
-tokio.workspace = true
-serde.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-thiserror.workspace = true
-anyhow.workspace = true
-avon-crypto.workspace = true
-avon-protocol.workspace = true
 avon-common.workspace = true
+avon-config.workspace = true
+avon-crypto.workspace = true
+avon-db.workspace = true
+avon-observability.workspace = true
+avon-protocol.workspace = true
+avon-tls.workspace = true
+tokio.workspace = true
+tonic = { workspace = true, features = ["tls-aws-lc"] }
 prost.workspace = true
-
-# gRPC
-tonic.workspace = true
-
-# Database
 sqlx.workspace = true
-# sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chrono"] }
-
-# Certificate handling
-rcgen = "0.13"
-x509-parser = "0.16"
-
-# Time
-chrono.workspace = true
-# chrono = { version = "0.4", features = ["serde"] }
-time = "0.3"
-num-traits = "0.2"
-
-# UUID
-uuid.workspace = true
-# uuid = { version = "1.7", features = ["v4", "serde"] }
-
-# Metrics and config
-metrics.workspace = true
-metrics-exporter-prometheus.workspace = true
-config = "0.14"
 clap.workspace = true
-# clap = { version = "4.4", features = ["derive", "env"] }
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+zeroize.workspace = true
+base64ct = { workspace = true, features = ["alloc"] }
+async-trait = "0.1"
+rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
+x509-parser = "0.16"
+sha2 = "0.10"
+metrics.workspace = true
+rand = "0.8"
 
-# Concurrent data structures
-dashmap = "5.5"
-
-# JSON serialization
-serde_json = "1.0"
-
-# Async streams
-futures = "0.3"
+[dev-dependencies]
+avon-testkit.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true
