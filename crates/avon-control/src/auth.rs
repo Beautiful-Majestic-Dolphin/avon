@@ -65,22 +65,52 @@ pub async fn verify_device_certificate(
     }
 }
 
-/// For every device RPC after Authenticate.
-pub async fn authenticated_device<T>(
-    state: &AppState,
-    req: &Request<T>,
-) -> Result<SessionInfo, Status> {
-    let (tenant, device, tls_hash) = require_device(req)?;
+/// What a request claims about the caller, read without awaiting. Streaming
+/// requests are not `Sync`, so a handler cannot hold `&Request<Streaming<_>>`
+/// across an await; it calls this first, then [`session_for`].
+pub struct DeviceCredentials {
+    pub tenant: TenantId,
+    pub device: DeviceId,
+    pub tls_cert_sha256: [u8; 32],
+    pub token: [u8; 32],
+}
+
+pub fn device_credentials<T>(req: &Request<T>) -> Result<DeviceCredentials, Status> {
+    let (tenant, device, tls_cert_sha256) = require_device(req)?;
     let token = session_token(req)?;
+    Ok(DeviceCredentials {
+        tenant,
+        device,
+        tls_cert_sha256,
+        token,
+    })
+}
+
+/// Resolve the session and check it against the TLS identity that presented it.
+pub async fn session_for(
+    state: &AppState,
+    creds: DeviceCredentials,
+) -> Result<SessionInfo, Status> {
     let info = state
         .sessions
-        .lookup(&token)
+        .lookup(&creds.token)
         .await?
         .ok_or_else(|| Status::unauthenticated("session expired"))?;
-    if info.tenant != tenant || info.device != device || info.tls_cert_sha256 != tls_hash {
+    if info.tenant != creds.tenant
+        || info.device != creds.device
+        || info.tls_cert_sha256 != creds.tls_cert_sha256
+    {
         return Err(Status::unauthenticated(
             "session does not match TLS identity",
         ));
     }
     Ok(info)
+}
+
+/// For every unary device RPC after Authenticate.
+pub async fn authenticated_device<T: Sync>(
+    state: &AppState,
+    req: &Request<T>,
+) -> Result<SessionInfo, Status> {
+    session_for(state, device_credentials(req)?).await
 }

@@ -6,16 +6,18 @@ use avon_crypto::hybrid::signature::{Domain, HybridSignature};
 use avon_crypto::session_token::seal_session_token;
 use avon_protocol::v2::agent_service_server::AgentService;
 use avon_protocol::v2::{
-    auth_message as auth_msg, Ack, AuthChallenge, AuthMessage, AuthResult, Certificate as PbCert,
-    Chain, Empty, EnrollRequest, EnrollResponse, OpenSessionRequest, OpenSessionResponse,
-    PeerAnswer, PeerSessionRequest, PeerSessionResponse, PulseDown, PulseUp, RenewRequest,
-    RenewResponse, SessionReport, WhoAmIResponse,
+    auth_message as auth_msg, pulse_down, pulse_up, Ack, AuthChallenge, AuthMessage, AuthResult,
+    Certificate as PbCert, Chain, Empty, EnrollRequest, EnrollResponse, OpenSessionRequest,
+    OpenSessionResponse, PeerAnswer, PeerSessionRequest, PeerSessionResponse, PulseAck, PulseDown,
+    PulseUp, RenewRequest, RenewResponse, SessionReport, WhoAmIResponse,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;
 use tonic::{Request, Response, Status, Streaming};
 
-use crate::auth::{auth_message, authenticated_device, verify_device_certificate};
+use crate::auth::{
+    auth_message, authenticated_device, device_credentials, session_for, verify_device_certificate,
+};
 use crate::authz::require_device;
 
 use super::AppState;
@@ -172,18 +174,87 @@ impl AgentService for AgentServiceImpl {
 
     async fn renew_credential(
         &self,
-        _req: Request<RenewRequest>,
+        req: Request<RenewRequest>,
     ) -> Result<Response<RenewResponse>, Status> {
-        Err(Status::unimplemented("renew_credential"))
+        let info = authenticated_device(&self.state, &req).await?;
+        let csr = req
+            .into_inner()
+            .csr
+            .ok_or_else(|| Status::invalid_argument("csr required"))?;
+        let credential = crate::renew::renew(&self.state, &info, csr).await?;
+        Ok(Response::new(RenewResponse {
+            credential: Some(credential),
+        }))
     }
 
     type PulseStream = Pin<Box<dyn Stream<Item = Result<PulseDown, Status>> + Send>>;
 
     async fn pulse(
         &self,
-        _req: Request<Streaming<PulseUp>>,
+        req: Request<Streaming<PulseUp>>,
     ) -> Result<Response<Self::PulseStream>, Status> {
-        Err(Status::unimplemented("pulse"))
+        // Extract before `into_inner`: the streaming request is not Sync, so a
+        // borrow of it cannot be held across the session lookup.
+        let creds = device_credentials(&req)?;
+        let state = self.state.clone();
+        let mut inbound = req.into_inner();
+        let info = session_for(&state, creds).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel::<Result<PulseDown, Status>>(32);
+        // Other subsystems address this device through `state.devices`.
+        let (down_tx, mut down_rx) = tokio::sync::mpsc::channel::<PulseDown>(32);
+        state.devices.insert(info.device, down_tx);
+
+        let forward_tx = tx.clone();
+        tokio::spawn(async move {
+            while let Some(msg) = down_rx.recv().await {
+                if forward_tx.send(Ok(msg)).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let device = info.device;
+        tokio::spawn(async move {
+            loop {
+                let next = match inbound.message().await {
+                    Ok(Some(m)) => m,
+                    Ok(None) => break,
+                    Err(e) => {
+                        let _ = tx.send(Err(e)).await;
+                        break;
+                    }
+                };
+                let reply = match next.msg {
+                    Some(pulse_up::Msg::Heartbeat(hb)) => {
+                        match crate::pulse::handle_heartbeat(&state, &info, hb).await {
+                            Ok(ack) => Some(PulseDown {
+                                msg: Some(pulse_down::Msg::Ack(ack)),
+                            }),
+                            Err(e) => {
+                                let _ = tx.send(Err(e)).await;
+                                break;
+                            }
+                        }
+                    }
+                    // Attestation verification lands in phase 5; peer answers and
+                    // session reports in phase 3. Acknowledge the liveness signal.
+                    Some(_) => Some(PulseDown {
+                        msg: Some(pulse_down::Msg::Ack(PulseAck {
+                            server_time_unix: chrono::Utc::now().timestamp(),
+                            next_interval_secs: state.pulse_interval_secs,
+                        })),
+                    }),
+                    None => None,
+                };
+                if let Some(reply) = reply {
+                    if tx.send(Ok(reply)).await.is_err() {
+                        break;
+                    }
+                }
+            }
+            state.devices.remove(device);
+        });
+        Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
     }
 
     async fn open_session(
