@@ -405,7 +405,9 @@ impl ServerTokenState {
     /// assert_eq!(input.server_nonce, server_nonce);
     /// ```
     pub fn generate_rotation_input(&self) -> (TokenRotationInput, [u8; 32]) {
-        let server_nonce = random_bytes_fixed::<32>().unwrap_or([0u8; 32]);
+        let Ok(server_nonce) = random_bytes_fixed::<32>() else {
+            unreachable!("random generation failed")
+        };
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())

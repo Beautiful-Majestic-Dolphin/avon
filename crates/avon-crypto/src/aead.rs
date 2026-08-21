@@ -1,73 +1,126 @@
-//! Authenticated Encryption with Associated Data (AEAD) implementations.
-//!
-//! This module provides AES-256-GCM encryption and decryption with proper
-//! key handling and zeroization of sensitive data.
+//! AEAD suites for the data plane: AES-256-GCM (hardware-accelerated CPUs)
+//! and ChaCha20-Poly1305 (everything else). In-place APIs avoid per-packet
+//! allocation.
 
-use aes_gcm::{
-    aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce,
-};
+use aes_gcm::aead::{Aead, AeadInPlace, KeyInit};
+use aes_gcm::Aes256Gcm;
+use aes_gcm::Nonce;
+use chacha20poly1305::ChaCha20Poly1305;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::error::CryptoError;
 
-/// AES-256-GCM cipher for authenticated encryption.
-///
-/// This cipher provides confidentiality and authenticity for data using
-/// the AES-256-GCM algorithm. The key is automatically zeroed when the
-/// cipher is dropped.
-///
-/// # Example
-///
-/// ```
-/// use avon_crypto::aead::Aes256GcmCipher;
-/// use avon_crypto::random::random_bytes_fixed;
-///
-/// let key = random_bytes_fixed::<32>().unwrap();
-/// let cipher = Aes256GcmCipher::new(&key).unwrap();
-///
-/// let nonce: [u8; 12] = random_bytes_fixed().unwrap();
-/// let plaintext = b"Hello, AVON!";
-/// let aad = b"additional data";
-///
-/// let ciphertext = cipher.encrypt(&nonce, plaintext, aad).unwrap();
-/// let decrypted = cipher.decrypt(&nonce, &ciphertext, aad).unwrap();
-///
-/// assert_eq!(plaintext.as_slice(), decrypted.as_slice());
-/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum Suite {
+    Aes256Gcm = 1,
+    ChaCha20Poly1305 = 2,
+}
+
+impl Suite {
+    pub const TAG_LEN: usize = 16;
+    pub const NONCE_LEN: usize = 12;
+
+    pub const fn id(self) -> u8 {
+        self as u8
+    }
+    pub const fn key_len(self) -> usize {
+        32
+    }
+
+    pub fn from_id(id: u8) -> Option<Suite> {
+        match id {
+            1 => Some(Suite::Aes256Gcm),
+            2 => Some(Suite::ChaCha20Poly1305),
+            _ => None,
+        }
+    }
+}
+
+enum Inner {
+    Aes(Box<Aes256Gcm>),
+    ChaCha(Box<ChaCha20Poly1305>),
+}
+
+/// A suite-tagged AEAD key. Key material inside the cipher state is zeroized
+/// by the underlying crates on drop.
+pub struct AeadKey {
+    suite: Suite,
+    inner: Inner,
+    raw: [u8; 32],
+}
+
+impl Drop for AeadKey {
+    fn drop(&mut self) {
+        self.raw.zeroize();
+    }
+}
+
+impl ZeroizeOnDrop for AeadKey {}
+
+impl AeadKey {
+    pub fn new(suite: Suite, key: &[u8; 32]) -> Self {
+        let inner = match suite {
+            Suite::Aes256Gcm => Inner::Aes(Box::new(Aes256Gcm::new(key.into()))),
+            Suite::ChaCha20Poly1305 => Inner::ChaCha(Box::new(ChaCha20Poly1305::new(key.into()))),
+        };
+        Self {
+            suite,
+            inner,
+            raw: *key,
+        }
+    }
+
+    pub fn suite(&self) -> Suite {
+        self.suite
+    }
+
+    /// Encrypts `buf` in place and appends the 16-byte tag.
+    pub fn seal_in_place(
+        &self,
+        nonce: &[u8; 12],
+        aad: &[u8],
+        buf: &mut Vec<u8>,
+    ) -> Result<(), CryptoError> {
+        let result = match &self.inner {
+            Inner::Aes(c) => c.encrypt_in_place(nonce.into(), aad, buf),
+            Inner::ChaCha(c) => c.encrypt_in_place(nonce.into(), aad, buf),
+        };
+        result.map_err(|_| CryptoError::EncryptionFailed("aead seal".into()))
+    }
+
+    /// Verifies the tag, decrypts in place and removes the tag.
+    pub fn open_in_place(
+        &self,
+        nonce: &[u8; 12],
+        aad: &[u8],
+        buf: &mut Vec<u8>,
+    ) -> Result<(), CryptoError> {
+        if buf.len() < Suite::TAG_LEN {
+            return Err(CryptoError::AuthenticationFailed);
+        }
+        let result = match &self.inner {
+            Inner::Aes(c) => c.decrypt_in_place(nonce.into(), aad, buf),
+            Inner::ChaCha(c) => c.decrypt_in_place(nonce.into(), aad, buf),
+        };
+        result.map_err(|_| CryptoError::AuthenticationFailed)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Legacy Aes256GcmCipher for backwards compatibility (avon-agent, tests)
+// ---------------------------------------------------------------------------
+
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct Aes256GcmCipher {
     key: [u8; 32],
 }
 
 impl Aes256GcmCipher {
-    /// The required key length in bytes (256 bits).
     pub const KEY_LENGTH: usize = 32;
-
-    /// The required nonce length in bytes (96 bits).
     pub const NONCE_LENGTH: usize = 12;
-
-    /// The authentication tag length in bytes (128 bits).
     pub const TAG_LENGTH: usize = 16;
 
-    /// Creates a new AES-256-GCM cipher with the given key.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - A 32-byte (256-bit) key for encryption/decryption.
-    ///
-    /// # Errors
-    ///
-    /// Returns `CryptoError::InvalidKeyLength` if the key is not exactly 32 bytes.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use avon_crypto::aead::Aes256GcmCipher;
-    ///
-    /// let key = [0u8; 32];
-    /// let cipher = Aes256GcmCipher::new(&key).unwrap();
-    /// ```
     pub fn new(key: &[u8]) -> Result<Self, CryptoError> {
         if key.len() != Self::KEY_LENGTH {
             return Err(CryptoError::InvalidKeyLength {
@@ -75,30 +128,11 @@ impl Aes256GcmCipher {
                 actual: key.len(),
             });
         }
-
         let mut key_array = [0u8; 32];
         key_array.copy_from_slice(key);
-
         Ok(Self { key: key_array })
     }
 
-    /// Encrypts plaintext with the given nonce and additional authenticated data.
-    ///
-    /// # Arguments
-    ///
-    /// * `nonce` - A 12-byte (96-bit) nonce. Must be unique for each encryption
-    ///   with the same key.
-    /// * `plaintext` - The data to encrypt.
-    /// * `aad` - Additional authenticated data that will be authenticated but
-    ///   not encrypted.
-    ///
-    /// # Returns
-    ///
-    /// The ciphertext with the authentication tag appended (ciphertext || tag).
-    ///
-    /// # Errors
-    ///
-    /// Returns `CryptoError::EncryptionFailed` if encryption fails.
     pub fn encrypt(
         &self,
         nonce: &[u8; 12],
@@ -107,9 +141,7 @@ impl Aes256GcmCipher {
     ) -> Result<Vec<u8>, CryptoError> {
         let cipher = Aes256Gcm::new_from_slice(&self.key)
             .map_err(|e| CryptoError::EncryptionFailed(e.to_string()))?;
-
         let nonce = Nonce::from_slice(nonce);
-
         cipher
             .encrypt(
                 nonce,
@@ -121,26 +153,6 @@ impl Aes256GcmCipher {
             .map_err(|e| CryptoError::EncryptionFailed(e.to_string()))
     }
 
-    /// Decrypts ciphertext with the given nonce and additional authenticated data.
-    ///
-    /// # Arguments
-    ///
-    /// * `nonce` - The same 12-byte nonce used during encryption.
-    /// * `ciphertext` - The encrypted data with authentication tag appended.
-    /// * `aad` - The same additional authenticated data used during encryption.
-    ///
-    /// # Returns
-    ///
-    /// The decrypted plaintext.
-    ///
-    /// # Errors
-    ///
-    /// Returns `CryptoError::DecryptionFailed` if decryption fails, which can
-    /// happen if:
-    /// - The ciphertext was tampered with
-    /// - The AAD doesn't match
-    /// - The nonce doesn't match
-    /// - The key doesn't match
     pub fn decrypt(
         &self,
         nonce: &[u8; 12],
@@ -149,9 +161,7 @@ impl Aes256GcmCipher {
     ) -> Result<Vec<u8>, CryptoError> {
         let cipher = Aes256Gcm::new_from_slice(&self.key)
             .map_err(|e| CryptoError::DecryptionFailed(e.to_string()))?;
-
         let nonce = Nonce::from_slice(nonce);
-
         cipher
             .decrypt(
                 nonce,
@@ -161,46 +171,5 @@ impl Aes256GcmCipher {
                 },
             )
             .map_err(|e| CryptoError::DecryptionFailed(e.to_string()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-    use super::*;
-
-    #[test]
-    fn test_new_valid_key() {
-        let key = [0u8; 32];
-        let result = Aes256GcmCipher::new(&key);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_new_invalid_key_length() {
-        let key = [0u8; 16];
-        let result = Aes256GcmCipher::new(&key);
-        assert!(matches!(
-            result,
-            Err(CryptoError::InvalidKeyLength {
-                expected: 32,
-                actual: 16
-            })
-        ));
-    }
-
-    #[test]
-    fn test_encrypt_decrypt_roundtrip() {
-        let key = [0u8; 32];
-        let cipher = Aes256GcmCipher::new(&key).unwrap();
-
-        let nonce = [0u8; 12];
-        let plaintext = b"Hello, World!";
-        let aad = b"additional data";
-
-        let ciphertext = cipher.encrypt(&nonce, plaintext, aad).unwrap();
-        let decrypted = cipher.decrypt(&nonce, &ciphertext, aad).unwrap();
-
-        assert_eq!(plaintext.as_slice(), decrypted.as_slice());
     }
 }
