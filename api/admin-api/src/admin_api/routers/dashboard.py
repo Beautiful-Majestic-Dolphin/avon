@@ -1,20 +1,19 @@
 """Dashboard endpoints for AVON Admin API."""
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query
 import asyncpg
 import structlog
+from fastapi import APIRouter, Depends, Query
 
-from admin_api.auth.dependencies import get_current_user, CurrentUser
+from admin_api.auth.dependencies import CurrentUser, get_current_user
 from admin_api.db.connection import get_db
 from admin_api.db.queries import (
+    ActivityQueries,
     DeviceQueries,
     PodQueries,
     PolicyQueries,
     TunnelQueries,
-    ActivityQueries,
 )
 
 logger = structlog.get_logger()
@@ -64,7 +63,7 @@ async def get_dashboard_overview(
             "total_bytes_sent": tunnel_stats.get("total_bytes_sent", 0),
             "total_bytes_received": tunnel_stats.get("total_bytes_received", 0),
         },
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 

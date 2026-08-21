@@ -1,5 +1,6 @@
 //! Tests for tunnel encryption and session key derivation.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use avon_crypto::hybrid::key_exchange::{hybrid_encapsulate, HybridKeyPair};
 use avon_crypto::session::TunnelKeys;
 use avon_crypto::tunnel::{TunnelCipher, TunnelDirection, TunnelPacket};

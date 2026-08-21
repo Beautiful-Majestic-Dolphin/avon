@@ -1,16 +1,15 @@
 """Tunnel management endpoints for AVON Admin API."""
 
-from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
 import asyncpg
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from admin_api.auth.dependencies import get_current_user, CurrentUser
+from admin_api.auth.dependencies import CurrentUser, get_current_user
 from admin_api.db.connection import get_db
-from admin_api.db.queries import TunnelQueries
 from admin_api.db.models import DbTunnel
+from admin_api.db.queries import TunnelQueries
 
 logger = structlog.get_logger()
 
@@ -46,8 +45,12 @@ class TunnelListResponse:
 
 @router.get("/")
 async def list_tunnels(
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by tunnel status"),
-    device_id: Optional[UUID] = Query(None, description="Filter by device (source or destination)"),
+    status_filter: str | None = Query(
+        None, alias="status", description="Filter by tunnel status"
+    ),
+    device_id: UUID | None = Query(
+        None, description="Filter by device (source or destination)"
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
     db: asyncpg.Connection = Depends(get_db),
@@ -70,7 +73,9 @@ async def list_tunnels(
             "source_device_id": str(tunnel.source_device_id),
             "destination_device_id": str(tunnel.destination_device_id),
             "status": tunnel.status,
-            "established_at": tunnel.established_at.isoformat() if tunnel.established_at else None,
+            "established_at": (
+                tunnel.established_at.isoformat() if tunnel.established_at else None
+            ),
             "closed_at": tunnel.closed_at.isoformat() if tunnel.closed_at else None,
             "bytes_sent": tunnel.bytes_sent,
             "bytes_received": tunnel.bytes_received,
@@ -127,7 +132,9 @@ async def get_tunnel(
         "source_device_id": str(tunnel.source_device_id),
         "destination_device_id": str(tunnel.destination_device_id),
         "status": tunnel.status,
-        "established_at": tunnel.established_at.isoformat() if tunnel.established_at else None,
+        "established_at": (
+            tunnel.established_at.isoformat() if tunnel.established_at else None
+        ),
         "closed_at": tunnel.closed_at.isoformat() if tunnel.closed_at else None,
         "bytes_sent": tunnel.bytes_sent,
         "bytes_received": tunnel.bytes_received,

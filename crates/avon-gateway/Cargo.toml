@@ -24,11 +24,15 @@ anyhow.workspace = true
 avon-crypto.workspace = true
 avon-protocol.workspace = true
 avon-common.workspace = true
-metrics = "0.22"
-metrics-exporter-prometheus = "0.13"
+metrics.workspace = true
+metrics-exporter-prometheus.workspace = true
 dashmap = "5.5"
 governor = "0.6"
-tonic = "0.11"
+tonic.workspace = true
 config = "0.14"
-clap = { version = "4.4", features = ["derive"] }
+clap.workspace = true
+# clap = { version = "4.4", features = ["derive"] }
 prost.workspace = true
+
+[lints]
+workspace = true

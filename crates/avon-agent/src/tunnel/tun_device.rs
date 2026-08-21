@@ -714,6 +714,7 @@ impl StubTunHandle {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     #[test]
     fn test_tun_device_name() {
         // Basic test - actual TUN device tests require root privileges

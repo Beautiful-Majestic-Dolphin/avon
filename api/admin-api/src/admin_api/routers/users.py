@@ -1,26 +1,25 @@
 """User management endpoints for AVON Admin API."""
 
-from typing import Optional, Union
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from passlib.context import CryptContext
 import asyncpg
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from passlib.context import CryptContext
 
-from admin_api.auth.dependencies import get_current_user, get_current_admin, CurrentUser
+from admin_api.auth.dependencies import CurrentUser, get_current_admin, get_current_user
 from admin_api.auth.jwt import create_mfa_token, create_token_pair, refresh_access_token
 from admin_api.db.connection import get_db
-from admin_api.db.queries import UserQueries, ActivityQueries, WebAuthnQueries
+from admin_api.db.queries import ActivityQueries, UserQueries, WebAuthnQueries
 from admin_api.schemas.common import (
-    MfaRequiredResponse,
-    TokenResponse,
-    LoginRequest,
-    RefreshTokenRequest,
-    UserResponse,
-    UserCreateRequest,
-    UserUpdateRequest,
     ChangePasswordRequest,
+    LoginRequest,
+    MfaRequiredResponse,
+    RefreshTokenRequest,
+    TokenResponse,
+    UserCreateRequest,
+    UserResponse,
+    UserUpdateRequest,
 )
 
 logger = structlog.get_logger()
@@ -40,11 +39,11 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
-@router.post("/login", response_model=Union[TokenResponse, MfaRequiredResponse])
+@router.post("/login", response_model=TokenResponse | MfaRequiredResponse)
 async def login(
     login_request: LoginRequest,
     db: asyncpg.Connection = Depends(get_db),
-) -> Union[TokenResponse, MfaRequiredResponse]:
+) -> TokenResponse | MfaRequiredResponse:
     """Authenticate user and return tokens.
 
     If the user has registered FIDO2 hardware security keys, returns an
@@ -156,7 +155,9 @@ async def change_password(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """Change current user's password."""
-    if not verify_password(password_request.current_password, current_user.user.hashed_password):
+    if not verify_password(
+        password_request.current_password, current_user.user.hashed_password
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
@@ -189,7 +190,7 @@ async def list_users(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> list[UserResponse]:
     """List all users.
-    
+
     Requires admin privileges.
     """
     users = await UserQueries.list_users(db, skip=skip, limit=limit)
@@ -214,7 +215,7 @@ async def create_user(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> UserResponse:
     """Create a new user.
-    
+
     Requires admin privileges.
     """
     existing = await UserQueries.get_user_by_email(db, user_request.email)
@@ -243,7 +244,12 @@ async def create_user(
         details={"email": user.email, "is_admin": user.is_admin},
     )
 
-    logger.info("user_created", user_id=str(user.id), email=user.email, by_user=str(current_user.id))
+    logger.info(
+        "user_created",
+        user_id=str(user.id),
+        email=user.email,
+        by_user=str(current_user.id),
+    )
 
     return UserResponse(
         id=user.id,
@@ -263,7 +269,7 @@ async def get_user(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> UserResponse:
     """Get user by ID.
-    
+
     Requires admin privileges.
     """
     user = await UserQueries.get_user(db, user_id)
@@ -292,7 +298,7 @@ async def update_user(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> UserResponse:
     """Update a user.
-    
+
     Requires admin privileges.
     """
     user = await UserQueries.get_user(db, user_id)

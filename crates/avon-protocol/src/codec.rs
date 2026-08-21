@@ -283,6 +283,7 @@ pub fn decode_control_message(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
     use crate::v1::{control_message::Payload, DeviceId, PulseRequest, Timestamp};
 

@@ -9,7 +9,6 @@ description = "Cryptographic primitives for AVON"
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
-ring = "0.17"
 aes-gcm = "0.10"
 hkdf = "0.12"
 hmac = "0.12"
@@ -30,3 +29,6 @@ criterion = "0.5"
 [[bench]]
 name = "crypto_bench"
 harness = false
+
+[lints]
+workspace = true

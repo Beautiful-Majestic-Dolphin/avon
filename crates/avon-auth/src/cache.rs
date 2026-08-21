@@ -175,8 +175,8 @@ impl AuthCache {
                 }
             };
 
-            let mut pubsub = match client.get_async_connection().await {
-                Ok(conn) => conn.into_pubsub(),
+            let mut pubsub = match client.get_async_pubsub().await {
+                Ok(pubsub) => pubsub,
                 Err(e) => {
                     warn!("Failed to create pubsub connection: {}", e);
                     return;
@@ -245,6 +245,7 @@ pub struct TokenRotationMessage {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

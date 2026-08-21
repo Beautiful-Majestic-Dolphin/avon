@@ -1,0 +1,18 @@
+[package]
+name = "avon-config"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Shared configuration arguments and validation for AVON services"
+
+[dependencies]
+clap.workspace = true
+thiserror.workspace = true
+url = "2.5"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

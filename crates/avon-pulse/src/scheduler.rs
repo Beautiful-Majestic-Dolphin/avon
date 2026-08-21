@@ -290,7 +290,8 @@ impl PulseScheduler {
 
     async fn check_missed_pulses(&self) {
         let now = Utc::now();
-        let timeout = chrono::Duration::from_std(self.pulse_interval * 2).unwrap();
+        let timeout =
+            chrono::Duration::from_std(self.pulse_interval * 2).unwrap_or(chrono::Duration::MAX);
 
         let mut expired_keys = Vec::new();
 
@@ -335,11 +336,16 @@ impl PulseScheduler {
         if let Some(state) = self.device_states.get(device_id) {
             let elapsed = now - state.last_seen;
 
-            if elapsed < chrono::Duration::from_std(self.stale_threshold).unwrap() {
+            if elapsed
+                < chrono::Duration::from_std(self.stale_threshold).unwrap_or(chrono::Duration::MAX)
+            {
                 LivenessStatus::Online {
                     last_seen: state.last_seen,
                 }
-            } else if elapsed < chrono::Duration::from_std(self.offline_threshold).unwrap() {
+            } else if elapsed
+                < chrono::Duration::from_std(self.offline_threshold)
+                    .unwrap_or(chrono::Duration::MAX)
+            {
                 LivenessStatus::Stale {
                     last_seen: state.last_seen,
                 }
@@ -384,6 +390,7 @@ impl PulseScheduler {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[allow(dead_code)]

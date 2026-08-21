@@ -31,9 +31,7 @@ METRIC_QUERIES = {
 }
 
 
-async def query_prometheus(
-    client: httpx.AsyncClient, query: str
-) -> float | None:
+async def query_prometheus(client: httpx.AsyncClient, query: str) -> float | None:
     """Query Prometheus and return the scalar value."""
     try:
         response = await client.get(
@@ -69,34 +67,31 @@ async def collect_metrics() -> None:
         logger.warning("analytics_collector_no_db")
         return
 
-    async with httpx.AsyncClient() as client:
-        async with pool.acquire() as conn:
-            collected = 0
-            for metric_name, query in METRIC_QUERIES.items():
-                value = await query_prometheus(client, query)
-                if value is not None:
-                    await AnalyticsQueries.store_snapshot(
-                        conn, metric_name, value
-                    )
-                    collected += 1
+    async with httpx.AsyncClient() as client, pool.acquire() as conn:
+        collected = 0
+        for metric_name, query in METRIC_QUERIES.items():
+            value = await query_prometheus(client, query)
+            if value is not None:
+                await AnalyticsQueries.store_snapshot(conn, metric_name, value)
+                collected += 1
 
-            if collected > 0:
-                logger.debug("analytics_collected", metrics=collected)
+        if collected > 0:
+            logger.debug("analytics_collected", metrics=collected)
 
-            # Hourly rollup
-            rollups = await AnalyticsQueries.rollup_hourly(conn)
-            if rollups > 0:
-                logger.debug("analytics_rollup", new_rollups=rollups)
+        # Hourly rollup
+        rollups = await AnalyticsQueries.rollup_hourly(conn)
+        if rollups > 0:
+            logger.debug("analytics_rollup", new_rollups=rollups)
 
-            # Anomaly detection
-            await run_anomaly_detection(conn)
+        # Anomaly detection
+        await run_anomaly_detection(conn)
 
-            # Cleanup old snapshots
-            deleted = await AnalyticsQueries.cleanup_old_snapshots(
-                conn, retention_days=settings.analytics_retention_days
-            )
-            if deleted > 0:
-                logger.debug("analytics_cleanup", deleted=deleted)
+        # Cleanup old snapshots
+        deleted = await AnalyticsQueries.cleanup_old_snapshots(
+            conn, retention_days=settings.analytics_retention_days
+        )
+        if deleted > 0:
+            logger.debug("analytics_cleanup", deleted=deleted)
 
 
 async def collector_loop() -> None:

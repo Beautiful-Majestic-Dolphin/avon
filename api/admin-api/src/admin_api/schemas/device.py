@@ -1,7 +1,6 @@
 """Device schemas for AVON Admin API."""
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -10,13 +9,13 @@ from pydantic import BaseModel, Field
 class DevicePostureResponse(BaseModel):
     """Device posture information."""
 
-    os_version: Optional[str] = None
-    agent_version: Optional[str] = None
-    firewall_enabled: Optional[bool] = None
-    disk_encrypted: Optional[bool] = None
-    last_update_check: Optional[datetime] = None
-    antivirus_enabled: Optional[bool] = None
-    screen_lock_enabled: Optional[bool] = None
+    os_version: str | None = None
+    agent_version: str | None = None
+    firewall_enabled: bool | None = None
+    disk_encrypted: bool | None = None
+    last_update_check: datetime | None = None
+    antivirus_enabled: bool | None = None
+    screen_lock_enabled: bool | None = None
 
 
 class DeviceResponse(BaseModel):
@@ -25,8 +24,8 @@ class DeviceResponse(BaseModel):
     id: UUID
     name: str
     status: str
-    last_seen_at: Optional[datetime] = None
-    last_pulse_at: Optional[datetime] = None
+    last_seen_at: datetime | None = None
+    last_pulse_at: datetime | None = None
     enrolled_at: datetime
     pod_ids: list[UUID] = Field(default_factory=list)
 
@@ -38,15 +37,15 @@ class DeviceDetailResponse(BaseModel):
     name: str
     status: str
     hardware_fingerprint: str
-    last_seen_at: Optional[datetime] = None
-    last_pulse_at: Optional[datetime] = None
-    last_known_ip: Optional[str] = None
+    last_seen_at: datetime | None = None
+    last_pulse_at: datetime | None = None
+    last_known_ip: str | None = None
     enrolled_at: datetime
-    enrolled_by: Optional[UUID] = None
+    enrolled_by: UUID | None = None
     created_at: datetime
     updated_at: datetime
     pod_ids: list[UUID] = Field(default_factory=list)
-    posture: Optional[DevicePostureResponse] = None
+    posture: DevicePostureResponse | None = None
     active_tunnels: int = 0
 
 
@@ -56,7 +55,7 @@ class DeviceEnrollmentRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     device_type: str = Field(..., pattern="^(linux|windows|macos|ios|android)$")
     assigned_pods: list[UUID] = Field(default_factory=list)
-    description: Optional[str] = None
+    description: str | None = None
     require_fido2: bool = False
 
 
@@ -75,14 +74,14 @@ class EnrollmentTokenResponse(BaseModel):
 class DeviceUpdateRequest(BaseModel):
     """Device update request."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    pod_ids: Optional[list[UUID]] = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    pod_ids: list[UUID] | None = None
 
 
 class DeviceSuspendRequest(BaseModel):
     """Device suspend request."""
 
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class DeviceListResponse(BaseModel):

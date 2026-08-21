@@ -1,0 +1,19 @@
+[project]
+name = "avon-e2e"
+version = "0.2.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-timeout>=2.3.0",
+    "httpx>=0.27.0",
+    "tenacity>=9.0.0",
+    "pyyaml>=6.0.2",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+timeout = 300

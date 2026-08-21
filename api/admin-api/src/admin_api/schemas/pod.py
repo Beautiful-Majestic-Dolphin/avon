@@ -1,7 +1,6 @@
 """Pod schemas for AVON Admin API."""
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -12,8 +11,8 @@ class PodResponse(BaseModel):
 
     id: UUID
     name: str
-    parent_id: Optional[UUID] = None
-    description: Optional[str] = None
+    parent_id: UUID | None = None
+    description: str | None = None
     device_count: int = 0
     created_at: datetime
 
@@ -23,8 +22,8 @@ class PodDetailResponse(BaseModel):
 
     id: UUID
     name: str
-    parent_id: Optional[UUID] = None
-    description: Optional[str] = None
+    parent_id: UUID | None = None
+    description: str | None = None
     created_at: datetime
     updated_at: datetime
     device_count: int = 0
@@ -36,15 +35,15 @@ class PodCreateRequest(BaseModel):
     """Pod creation request."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    parent_id: Optional[UUID] = None
-    description: Optional[str] = Field(None, max_length=1000)
+    parent_id: UUID | None = None
+    description: str | None = Field(None, max_length=1000)
 
 
 class PodUpdateRequest(BaseModel):
     """Pod update request."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=1000)
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = Field(None, max_length=1000)
 
 
 class PodDeviceRequest(BaseModel):
@@ -68,7 +67,7 @@ class PodHierarchyResponse(BaseModel):
 
     id: UUID
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     children: list["PodHierarchyResponse"] = Field(default_factory=list)
     device_count: int = 0
 

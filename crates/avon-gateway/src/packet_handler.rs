@@ -176,8 +176,7 @@ impl PacketHandler {
             timestamp: Some(Timestamp {
                 seconds: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as i64,
+                    .map_or(0, |d| d.as_secs() as i64),
                 nanos: 0,
             }),
             rotation_ack: request.request_rotation,
@@ -276,6 +275,7 @@ impl PacketHandler {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[tokio::test]

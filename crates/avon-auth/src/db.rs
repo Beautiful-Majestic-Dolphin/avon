@@ -271,34 +271,11 @@ impl AuthDatabase {
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
-
-    /// Runs database migrations from the migrations directory.
-    pub async fn run_migrations(&self) -> Result<(), DbError> {
-        // Note: In production, migrations should be run separately
-        // This is a convenience method for development
-        info!("Running database migrations...");
-
-        // Execute migration SQL files manually since sqlx::migrate! requires compile-time path
-        let migrations = [
-            include_str!("../migrations/001_create_devices.sql"),
-            include_str!("../migrations/002_create_enrollment_tokens.sql"),
-        ];
-
-        for (i, migration) in migrations.iter().enumerate() {
-            debug!("Running migration {}", i + 1);
-            sqlx::query(migration)
-                .execute(&self.pool)
-                .await
-                .map_err(|e| DbError::InvalidData(format!("Migration {} failed: {}", i + 1, e)))?;
-        }
-
-        info!("Database migrations completed");
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

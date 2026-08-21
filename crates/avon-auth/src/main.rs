@@ -2,6 +2,7 @@
 //!
 //! Handles device authentication, enrollment, and token rotation for the AVON network.
 
+use anyhow::Context;
 use avon_auth::{AuthCache, AuthConfig, AuthDatabase, AuthServiceImpl};
 use avon_protocol::v1::auth_service_server::AuthServiceServer;
 use clap::Parser;
@@ -92,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
     PrometheusBuilder::new()
         .with_http_listener(metrics_addr)
         .install()
-        .expect("Failed to install Prometheus exporter");
+        .context("failed to install Prometheus exporter")?;
     info!(?metrics_addr, "Prometheus metrics server started");
 
     // Connect to database
@@ -100,21 +101,15 @@ async fn main() -> anyhow::Result<()> {
     let db = Arc::new(
         AuthDatabase::new(&config.database_url)
             .await
-            .expect("Failed to connect to database"),
+            .context("failed to connect to database")?,
     );
-
-    // Run migrations (optional, can be disabled in production)
-    if std::env::var("AVON_RUN_MIGRATIONS").unwrap_or_default() == "true" {
-        info!("Running database migrations...");
-        db.run_migrations().await?;
-    }
 
     // Connect to Redis
     info!("Connecting to Redis...");
     let cache = Arc::new(
         AuthCache::new(&config.redis_url, config.cache_ttl_secs)
             .await
-            .expect("Failed to connect to Redis"),
+            .context("failed to connect to Redis")?,
     );
 
     // Create gRPC service

@@ -22,9 +22,9 @@ avon-crypto.workspace = true
 avon-protocol.workspace = true
 avon-common.workspace = true
 prost.workspace = true
-clap = { version = "4.4", features = ["derive"] }
-config = "0.14"
-directories = "5.0"
+clap.workspace = true
+toml = "0.8"
+# clap = { version = "4.4", features = ["derive"] }
 sysinfo = "0.30"
 uuid = { version = "1.7", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -51,3 +51,10 @@ fido2 = ["ctap-hid-fido2"]
 
 [dev-dependencies]
 tempfile = "3.10"
+
+[lints]
+workspace = true
+
+[lib]
+name = "avon_agent"
+path = "src/lib.rs"

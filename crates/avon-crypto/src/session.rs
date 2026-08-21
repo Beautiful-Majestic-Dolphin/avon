@@ -193,6 +193,7 @@ impl SessionContext {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
     use crate::hybrid::key_exchange::{hybrid_encapsulate, HybridKeyPair};
 

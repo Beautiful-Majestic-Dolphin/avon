@@ -5,6 +5,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use anyhow::Context;
 use avon_ca::{CaConfig, CaServiceImpl, CertificateAuthority, OcspResponder};
 use avon_protocol::v1::ca_service_server::CaServiceServer;
 use clap::Parser;
@@ -95,14 +96,17 @@ async fn main() -> anyhow::Result<()> {
     let ca = Arc::new(
         CertificateAuthority::new(&config)
             .await
-            .expect("Failed to initialize CA"),
+            .context("failed to initialize CA")?,
     );
 
     let ocsp = Arc::new(OcspResponder::new(ca.clone()));
 
     let service = CaServiceImpl::new(ca.clone(), ocsp.clone());
 
-    let addr = args.listen_addr.parse().expect("Invalid listen address");
+    let addr: SocketAddr = args
+        .listen_addr
+        .parse()
+        .with_context(|| format!("invalid listen address: {}", args.listen_addr))?;
 
     // Start health server
     let health_port: u16 = std::env::var("AVON_HEALTH_PORT")

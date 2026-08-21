@@ -340,6 +340,7 @@ impl TunnelHandshake {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     #[test]
     fn test_handshake_creation() {
         // This test would require a mock identity manager

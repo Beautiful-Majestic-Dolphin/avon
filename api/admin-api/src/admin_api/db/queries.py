@@ -1,22 +1,21 @@
 """Database queries for AVON Admin API."""
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 import asyncpg
 import structlog
 
 from admin_api.db.models import (
+    DbActivityLog,
     DbDevice,
+    DbEnrollmentToken,
     DbPod,
     DbPolicy,
-    DbUser,
-    DbWebAuthnCredential,
-    DbEnrollmentToken,
     DbScimToken,
     DbTunnel,
-    DbActivityLog,
+    DbUser,
+    DbWebAuthnCredential,
 )
 
 logger = structlog.get_logger()
@@ -28,8 +27,8 @@ class DeviceQueries:
     @staticmethod
     async def list_devices(
         conn: asyncpg.Connection,
-        status: Optional[str] = None,
-        pod_id: Optional[UUID] = None,
+        status: str | None = None,
+        pod_id: UUID | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[DbDevice]:
@@ -53,14 +52,16 @@ class DeviceQueries:
             params.append(pod_id)
             param_idx += 1
 
-        query += f" ORDER BY d.created_at DESC OFFSET ${param_idx} LIMIT ${param_idx + 1}"
+        query += (
+            f" ORDER BY d.created_at DESC OFFSET ${param_idx} LIMIT ${param_idx + 1}"
+        )
         params.extend([skip, limit])
 
         rows = await conn.fetch(query, *params)
         return [DbDevice(**dict(row)) for row in rows]
 
     @staticmethod
-    async def get_device(conn: asyncpg.Connection, device_id: UUID) -> Optional[DbDevice]:
+    async def get_device(conn: asyncpg.Connection, device_id: UUID) -> DbDevice | None:
         """Get a device by ID."""
         row = await conn.fetchrow(
             "SELECT * FROM devices WHERE id = $1",
@@ -99,14 +100,16 @@ class DeviceQueries:
     async def delete_device(conn: asyncpg.Connection, device_id: UUID) -> bool:
         """Delete a device."""
         async with conn.transaction():
-            await conn.execute("DELETE FROM device_pods WHERE device_id = $1", device_id)
+            await conn.execute(
+                "DELETE FROM device_pods WHERE device_id = $1", device_id
+            )
             result = await conn.execute("DELETE FROM devices WHERE id = $1", device_id)
         return result == "DELETE 1"
 
     @staticmethod
     async def count_devices(
         conn: asyncpg.Connection,
-        status: Optional[str] = None,
+        status: str | None = None,
     ) -> int:
         """Count devices with optional status filter."""
         if status:
@@ -133,7 +136,7 @@ class PodQueries:
     @staticmethod
     async def list_pods(
         conn: asyncpg.Connection,
-        parent_id: Optional[UUID] = None,
+        parent_id: UUID | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[DbPod]:
@@ -163,7 +166,7 @@ class PodQueries:
         return [DbPod(**dict(row)) for row in rows]
 
     @staticmethod
-    async def get_pod(conn: asyncpg.Connection, pod_id: UUID) -> Optional[DbPod]:
+    async def get_pod(conn: asyncpg.Connection, pod_id: UUID) -> DbPod | None:
         """Get a pod by ID."""
         row = await conn.fetchrow("SELECT * FROM pods WHERE id = $1", pod_id)
         return DbPod(**dict(row)) if row else None
@@ -172,8 +175,8 @@ class PodQueries:
     async def create_pod(
         conn: asyncpg.Connection,
         name: str,
-        parent_id: Optional[UUID] = None,
-        description: Optional[str] = None,
+        parent_id: UUID | None = None,
+        description: str | None = None,
     ) -> DbPod:
         """Create a new pod."""
         row = await conn.fetchrow(
@@ -192,9 +195,9 @@ class PodQueries:
     async def update_pod(
         conn: asyncpg.Connection,
         pod_id: UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-    ) -> Optional[DbPod]:
+        name: str | None = None,
+        description: str | None = None,
+    ) -> DbPod | None:
         """Update a pod."""
         updates = []
         params: list = [pod_id]
@@ -278,7 +281,7 @@ class PodQueries:
     @staticmethod
     async def get_pod_by_external_id(
         conn: asyncpg.Connection, external_id: str
-    ) -> Optional[DbPod]:
+    ) -> DbPod | None:
         """Get a pod by its external IdP identifier."""
         row = await conn.fetchrow(
             "SELECT * FROM pods WHERE external_id = $1", external_id
@@ -318,7 +321,9 @@ class PodQueries:
 
         rows = await conn.fetch(
             f"SELECT * FROM pods WHERE {where} ORDER BY created_at OFFSET ${len(params)+1} LIMIT ${len(params)+2}",
-            *params, offset, limit,
+            *params,
+            offset,
+            limit,
         )
         return [DbPod(**dict(row)) for row in rows], total
 
@@ -329,7 +334,7 @@ class PolicyQueries:
     @staticmethod
     async def list_policies(
         conn: asyncpg.Connection,
-        enabled: Optional[bool] = None,
+        enabled: bool | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[DbPolicy]:
@@ -359,7 +364,7 @@ class PolicyQueries:
         return [DbPolicy(**dict(row)) for row in rows]
 
     @staticmethod
-    async def get_policy(conn: asyncpg.Connection, policy_id: UUID) -> Optional[DbPolicy]:
+    async def get_policy(conn: asyncpg.Connection, policy_id: UUID) -> DbPolicy | None:
         """Get a policy by ID."""
         row = await conn.fetchrow("SELECT * FROM policies WHERE id = $1", policy_id)
         return DbPolicy(**dict(row)) if row else None
@@ -372,12 +377,13 @@ class PolicyQueries:
         destination_pod_id: UUID,
         action: str,
         priority: int = 100,
-        description: Optional[str] = None,
-        conditions: Optional[dict] = None,
-        created_by: Optional[UUID] = None,
+        description: str | None = None,
+        conditions: dict | None = None,
+        created_by: UUID | None = None,
     ) -> DbPolicy:
         """Create a new policy."""
         import json
+
         row = await conn.fetchrow(
             """
             INSERT INTO policies (
@@ -403,15 +409,16 @@ class PolicyQueries:
     async def update_policy(
         conn: asyncpg.Connection,
         policy_id: UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        action: Optional[str] = None,
-        priority: Optional[int] = None,
-        enabled: Optional[bool] = None,
-        conditions: Optional[dict] = None,
-    ) -> Optional[DbPolicy]:
+        name: str | None = None,
+        description: str | None = None,
+        action: str | None = None,
+        priority: int | None = None,
+        enabled: bool | None = None,
+        conditions: dict | None = None,
+    ) -> DbPolicy | None:
         """Update a policy."""
         import json
+
         updates = []
         params: list = [policy_id]
         param_idx = 2
@@ -463,7 +470,7 @@ class PolicyQueries:
     @staticmethod
     async def count_policies(
         conn: asyncpg.Connection,
-        enabled: Optional[bool] = None,
+        enabled: bool | None = None,
     ) -> int:
         """Count policies with optional enabled filter."""
         if enabled is not None:
@@ -480,13 +487,13 @@ class UserQueries:
     """Database queries for users."""
 
     @staticmethod
-    async def get_user_by_email(conn: asyncpg.Connection, email: str) -> Optional[DbUser]:
+    async def get_user_by_email(conn: asyncpg.Connection, email: str) -> DbUser | None:
         """Get a user by email."""
         row = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email)
         return DbUser(**dict(row)) if row else None
 
     @staticmethod
-    async def get_user(conn: asyncpg.Connection, user_id: UUID) -> Optional[DbUser]:
+    async def get_user(conn: asyncpg.Connection, user_id: UUID) -> DbUser | None:
         """Get a user by ID."""
         row = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
         return DbUser(**dict(row)) if row else None
@@ -496,7 +503,7 @@ class UserQueries:
         conn: asyncpg.Connection,
         email: str,
         hashed_password: str,
-        full_name: Optional[str] = None,
+        full_name: str | None = None,
         is_admin: bool = False,
     ) -> DbUser:
         """Create a new user."""
@@ -542,7 +549,7 @@ class UserQueries:
     @staticmethod
     async def get_user_by_external_id(
         conn: asyncpg.Connection, external_id: str
-    ) -> Optional[DbUser]:
+    ) -> DbUser | None:
         """Get a user by their external IdP identifier."""
         row = await conn.fetchrow(
             "SELECT * FROM users WHERE external_id = $1", external_id
@@ -582,7 +589,9 @@ class UserQueries:
 
         rows = await conn.fetch(
             f"SELECT * FROM users WHERE {where} ORDER BY created_at OFFSET ${len(params)+1} LIMIT ${len(params)+2}",
-            *params, offset, limit,
+            *params,
+            offset,
+            limit,
         )
         return [DbUser(**dict(row)) for row in rows], total
 
@@ -596,14 +605,14 @@ class UserQueries:
     async def update_user(
         conn: asyncpg.Connection,
         user_id: UUID,
-        email: Optional[str] = None,
-        full_name: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        is_admin: Optional[bool] = None,
-        external_id: Optional[str] = None,
-        managed_by: Optional[str] = None,
-        hashed_password: Optional[str] = None,
-    ) -> Optional[DbUser]:
+        email: str | None = None,
+        full_name: str | None = None,
+        is_active: bool | None = None,
+        is_admin: bool | None = None,
+        external_id: str | None = None,
+        managed_by: str | None = None,
+        hashed_password: str | None = None,
+    ) -> DbUser | None:
         """Update a user's fields. Only non-None values are updated."""
         updates = []
         params: list = [user_id]
@@ -653,6 +662,7 @@ class EnrollmentQueries:
     ) -> DbEnrollmentToken:
         """Create a new enrollment token."""
         import json
+
         row = await conn.fetchrow(
             """
             INSERT INTO enrollment_tokens (
@@ -675,7 +685,7 @@ class EnrollmentQueries:
     async def get_enrollment_token(
         conn: asyncpg.Connection,
         token: str,
-    ) -> Optional[DbEnrollmentToken]:
+    ) -> DbEnrollmentToken | None:
         """Get an enrollment token."""
         row = await conn.fetchrow(
             "SELECT * FROM enrollment_tokens WHERE token = $1",
@@ -708,8 +718,8 @@ class TunnelQueries:
     @staticmethod
     async def list_tunnels(
         conn: asyncpg.Connection,
-        status: Optional[str] = None,
-        device_id: Optional[UUID] = None,
+        status: str | None = None,
+        device_id: UUID | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[DbTunnel]:
@@ -735,7 +745,7 @@ class TunnelQueries:
         return [DbTunnel(**dict(row)) for row in rows]
 
     @staticmethod
-    async def get_tunnel(conn: asyncpg.Connection, tunnel_id: UUID) -> Optional[DbTunnel]:
+    async def get_tunnel(conn: asyncpg.Connection, tunnel_id: UUID) -> DbTunnel | None:
         """Get a tunnel by ID."""
         row = await conn.fetchrow("SELECT * FROM tunnels WHERE id = $1", tunnel_id)
         return DbTunnel(**dict(row)) if row else None
@@ -743,7 +753,7 @@ class TunnelQueries:
     @staticmethod
     async def count_tunnels(
         conn: asyncpg.Connection,
-        status: Optional[str] = None,
+        status: str | None = None,
     ) -> int:
         """Count tunnels with optional status filter."""
         if status:
@@ -762,11 +772,11 @@ class TunnelQueries:
             "SELECT status, COUNT(*) as count FROM tunnels GROUP BY status"
         )
         stats = {row["status"]: row["count"] for row in rows}
-        
+
         total_bytes = await conn.fetchrow(
             "SELECT COALESCE(SUM(bytes_sent), 0) as sent, COALESCE(SUM(bytes_received), 0) as received FROM tunnels"
         )
-        
+
         return {
             "by_status": stats,
             "total_bytes_sent": total_bytes["sent"] if total_bytes else 0,
@@ -781,15 +791,16 @@ class ActivityQueries:
     async def log_activity(
         conn: asyncpg.Connection,
         event_type: str,
-        actor_id: Optional[UUID] = None,
+        actor_id: UUID | None = None,
         actor_type: str = "system",
-        target_id: Optional[UUID] = None,
-        target_type: Optional[str] = None,
-        details: Optional[dict] = None,
-        ip_address: Optional[str] = None,
+        target_id: UUID | None = None,
+        target_type: str | None = None,
+        details: dict | None = None,
+        ip_address: str | None = None,
     ) -> DbActivityLog:
         """Log an activity event."""
         import json
+
         row = await conn.fetchrow(
             """
             INSERT INTO activity_logs (
@@ -855,7 +866,7 @@ class WebAuthnQueries:
     @staticmethod
     async def get_credential_by_credential_id(
         conn: asyncpg.Connection, credential_id: bytes
-    ) -> Optional[DbWebAuthnCredential]:
+    ) -> DbWebAuthnCredential | None:
         """Get a WebAuthn credential by its credential_id bytes."""
         row = await conn.fetchrow(
             "SELECT * FROM webauthn_credentials WHERE credential_id = $1",
@@ -871,7 +882,7 @@ class WebAuthnQueries:
         public_key: bytes,
         sign_count: int,
         transports: list[str],
-        aaguid: Optional[bytes],
+        aaguid: bytes | None,
         name: str,
     ) -> DbWebAuthnCredential:
         """Store a new WebAuthn credential."""
@@ -999,7 +1010,7 @@ class ScimTokenQueries:
     @staticmethod
     async def get_active_by_hash(
         conn: asyncpg.Connection, token_hash: str
-    ) -> Optional[DbScimToken]:
+    ) -> DbScimToken | None:
         """Get an active SCIM token by its hash."""
         row = await conn.fetchrow(
             "SELECT * FROM scim_tokens WHERE token_hash = $1 AND is_active = TRUE",
@@ -1015,9 +1026,7 @@ class ScimTokenQueries:
     @staticmethod
     async def list_tokens(conn: asyncpg.Connection) -> list[DbScimToken]:
         """List all SCIM tokens (active and revoked)."""
-        rows = await conn.fetch(
-            "SELECT * FROM scim_tokens ORDER BY created_at DESC"
-        )
+        rows = await conn.fetch("SELECT * FROM scim_tokens ORDER BY created_at DESC")
         return [DbScimToken(**dict(row)) for row in rows]
 
     @staticmethod

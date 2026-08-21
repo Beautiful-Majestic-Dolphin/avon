@@ -1,15 +1,12 @@
 """Common schemas for AVON Admin API."""
 
 from datetime import datetime
-from typing import Generic, TypeVar, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-T = TypeVar("T")
 
-
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     """Paginated response wrapper."""
 
     items: list[T]
@@ -23,7 +20,7 @@ class ErrorResponse(BaseModel):
     """Error response."""
 
     detail: str
-    error_code: Optional[str] = None
+    error_code: str | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -65,7 +62,7 @@ class WebAuthnCredentialResponse(BaseModel):
     id: UUID
     name: str
     created_at: datetime
-    last_used_at: Optional[datetime] = None
+    last_used_at: datetime | None = None
     transports: list[str] = []
 
 
@@ -87,11 +84,11 @@ class UserResponse(BaseModel):
 
     id: UUID
     email: str
-    full_name: Optional[str] = None
+    full_name: str | None = None
     is_admin: bool
     is_active: bool
     created_at: datetime
-    last_login_at: Optional[datetime] = None
+    last_login_at: datetime | None = None
 
 
 class UserCreateRequest(BaseModel):
@@ -99,17 +96,17 @@ class UserCreateRequest(BaseModel):
 
     email: str
     password: str
-    full_name: Optional[str] = None
+    full_name: str | None = None
     is_admin: bool = False
 
 
 class UserUpdateRequest(BaseModel):
     """User update request."""
 
-    email: Optional[str] = None
-    full_name: Optional[str] = None
-    is_admin: Optional[bool] = None
-    is_active: Optional[bool] = None
+    email: str | None = None
+    full_name: str | None = None
+    is_admin: bool | None = None
+    is_active: bool | None = None
 
 
 class ChangePasswordRequest(BaseModel):

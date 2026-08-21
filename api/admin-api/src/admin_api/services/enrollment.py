@@ -1,8 +1,7 @@
 """Enrollment service for AVON Admin API."""
 
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import asyncpg
@@ -29,27 +28,27 @@ class EnrollmentService:
         device_type: str,
         assigned_pods: list[UUID],
         created_by: UUID,
-        expires_hours: Optional[int] = None,
+        expires_hours: int | None = None,
         require_fido2: bool = False,
     ) -> EnrollmentTokenResponse:
         """Create a new device enrollment.
-        
+
         Args:
             name: Device name
             device_type: Type of device (linux, windows, macos, ios, android)
             assigned_pods: List of pod IDs to assign the device to
             created_by: User ID who created the enrollment
             expires_hours: Hours until token expires (default from settings)
-            
+
         Returns:
             EnrollmentTokenResponse with token and installation details
         """
         token = self._generate_enrollment_token()
-        
+
         if expires_hours is None:
             expires_hours = settings.enrollment_token_expire_hours
-        
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_hours)
+
+        expires_at = datetime.now(UTC) + timedelta(hours=expires_hours)
 
         await EnrollmentQueries.create_enrollment_token(
             self.db,
@@ -97,14 +96,14 @@ class EnrollmentService:
         device_id: UUID,
     ) -> bool:
         """Complete device enrollment.
-        
+
         Called by the agent on first connect.
-        
+
         Args:
             enrollment_token: The enrollment token
             hardware_fingerprint: Device hardware fingerprint
             device_id: The device ID
-            
+
         Returns:
             True if enrollment was successful
         """
@@ -114,15 +113,21 @@ class EnrollmentService:
         )
 
         if token_record is None:
-            logger.warning("enrollment_token_not_found", token=enrollment_token[:8] + "...")
+            logger.warning(
+                "enrollment_token_not_found", token=enrollment_token[:8] + "..."
+            )
             return False
 
         if token_record.consumed_at is not None:
-            logger.warning("enrollment_token_already_consumed", token=enrollment_token[:8] + "...")
+            logger.warning(
+                "enrollment_token_already_consumed", token=enrollment_token[:8] + "..."
+            )
             return False
 
-        if token_record.expires_at < datetime.now(timezone.utc):
-            logger.warning("enrollment_token_expired", token=enrollment_token[:8] + "...")
+        if token_record.expires_at < datetime.now(UTC):
+            logger.warning(
+                "enrollment_token_expired", token=enrollment_token[:8] + "..."
+            )
             return False
 
         success = await EnrollmentQueries.consume_enrollment_token(
@@ -140,12 +145,12 @@ class EnrollmentService:
 
         return success
 
-    async def get_enrollment_status(self, token: str) -> Optional[dict]:
+    async def get_enrollment_status(self, token: str) -> dict | None:
         """Get the status of an enrollment token.
-        
+
         Args:
             token: The enrollment token
-            
+
         Returns:
             Dict with token status or None if not found
         """
@@ -153,7 +158,7 @@ class EnrollmentService:
         if token_record is None:
             return None
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         is_expired = token_record.expires_at < now
         is_consumed = token_record.consumed_at is not None
 
@@ -169,8 +174,14 @@ class EnrollmentService:
             "device_type": token_record.device_type,
             "status": status,
             "expires_at": token_record.expires_at.isoformat(),
-            "consumed_at": token_record.consumed_at.isoformat() if token_record.consumed_at else None,
-            "device_id": str(token_record.device_id) if token_record.device_id else None,
+            "consumed_at": (
+                token_record.consumed_at.isoformat()
+                if token_record.consumed_at
+                else None
+            ),
+            "device_id": (
+                str(token_record.device_id) if token_record.device_id else None
+            ),
         }
 
     def _generate_enrollment_token(self) -> str:
@@ -180,7 +191,7 @@ class EnrollmentService:
     def _get_installation_instructions(self, device_type: str, token: str) -> str:
         """Get installation instructions for a device type."""
         base_url = settings.installation_package_base_url
-        
+
         instructions = {
             "linux": f"""To install the AVON agent on Linux:
 

@@ -1,22 +1,20 @@
 """Device management endpoints for AVON Admin API."""
 
-from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
 import asyncpg
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from admin_api.auth.dependencies import get_current_user, get_current_admin, CurrentUser
+from admin_api.auth.dependencies import CurrentUser, get_current_admin, get_current_user
 from admin_api.db.connection import get_db
-from admin_api.db.queries import DeviceQueries, ActivityQueries
+from admin_api.db.queries import ActivityQueries, DeviceQueries
 from admin_api.schemas.device import (
-    DeviceResponse,
     DeviceDetailResponse,
     DeviceEnrollmentRequest,
-    EnrollmentTokenResponse,
-    DeviceUpdateRequest,
     DeviceListResponse,
+    DeviceResponse,
+    EnrollmentTokenResponse,
 )
 from admin_api.services.enrollment import EnrollmentService
 
@@ -27,15 +25,17 @@ router = APIRouter()
 
 @router.get("/", response_model=DeviceListResponse)
 async def list_devices(
-    status: Optional[str] = Query(None, description="Filter by device status"),
-    pod_id: Optional[UUID] = Query(None, description="Filter by pod membership"),
+    status: str | None = Query(None, description="Filter by device status"),
+    pod_id: UUID | None = Query(None, description="Filter by pod membership"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DeviceListResponse:
     """List all devices with optional filtering."""
-    devices = await DeviceQueries.list_devices(db, status=status, pod_id=pod_id, skip=skip, limit=limit)
+    devices = await DeviceQueries.list_devices(
+        db, status=status, pod_id=pod_id, skip=skip, limit=limit
+    )
     total = await DeviceQueries.count_devices(db, status=status)
 
     items = []
@@ -101,7 +101,7 @@ async def create_enrollment(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> EnrollmentTokenResponse:
     """Create an enrollment token for a new device.
-    
+
     Requires admin privileges.
     """
     enrollment_service = EnrollmentService(db)
@@ -135,7 +135,7 @@ async def suspend_device(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
     """Suspend a device, revoking its access.
-    
+
     Requires admin privileges.
     """
     device = await DeviceQueries.get_device(db, device_id)
@@ -168,7 +168,9 @@ async def suspend_device(
         details={"device_name": device.name},
     )
 
-    logger.info("device_suspended", device_id=str(device_id), by_user=str(current_user.id))
+    logger.info(
+        "device_suspended", device_id=str(device_id), by_user=str(current_user.id)
+    )
 
     return {"success": True, "message": f"Device {device.name} has been suspended"}
 
@@ -180,7 +182,7 @@ async def activate_device(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
     """Reactivate a suspended device.
-    
+
     Requires admin privileges.
     """
     device = await DeviceQueries.get_device(db, device_id)
@@ -213,7 +215,9 @@ async def activate_device(
         details={"device_name": device.name},
     )
 
-    logger.info("device_activated", device_id=str(device_id), by_user=str(current_user.id))
+    logger.info(
+        "device_activated", device_id=str(device_id), by_user=str(current_user.id)
+    )
 
     return {"success": True, "message": f"Device {device.name} has been activated"}
 
@@ -225,7 +229,7 @@ async def delete_device(
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
     """Permanently delete a device.
-    
+
     Requires admin privileges. This action cannot be undone.
     """
     device = await DeviceQueries.get_device(db, device_id)
@@ -252,6 +256,8 @@ async def delete_device(
         details={"device_name": device.name},
     )
 
-    logger.info("device_deleted", device_id=str(device_id), by_user=str(current_user.id))
+    logger.info(
+        "device_deleted", device_id=str(device_id), by_user=str(current_user.id)
+    )
 
     return {"success": True, "message": f"Device {device.name} has been deleted"}

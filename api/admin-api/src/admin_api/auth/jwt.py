@@ -1,12 +1,11 @@
 """JWT token handling for AVON Admin API."""
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import structlog
 from jose import JWTError, jwt
 from pydantic import BaseModel
-import structlog
 
 from admin_api.config import settings
 
@@ -36,13 +35,13 @@ def create_access_token(
     user_id: UUID,
     email: str,
     is_admin: bool = False,
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Create a JWT access token."""
     if expires_delta is None:
         expires_delta = timedelta(minutes=settings.jwt_access_token_expire_minutes)
 
-    expire = datetime.now(timezone.utc) + expires_delta
+    expire = datetime.now(UTC) + expires_delta
     to_encode = {
         "sub": str(user_id),
         "email": email,
@@ -62,13 +61,13 @@ def create_access_token(
 def create_refresh_token(
     user_id: UUID,
     email: str,
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Create a JWT refresh token."""
     if expires_delta is None:
         expires_delta = timedelta(days=settings.jwt_refresh_token_expire_days)
 
-    expire = datetime.now(timezone.utc) + expires_delta
+    expire = datetime.now(UTC) + expires_delta
     to_encode = {
         "sub": str(user_id),
         "email": email,
@@ -100,7 +99,7 @@ def create_token_pair(
     )
 
 
-def verify_token(token: str, expected_type: str = "access") -> Optional[TokenData]:
+def verify_token(token: str, expected_type: str = "access") -> TokenData | None:
     """Verify and decode a JWT token."""
     try:
         payload = jwt.decode(
@@ -111,7 +110,9 @@ def verify_token(token: str, expected_type: str = "access") -> Optional[TokenDat
 
         token_type = payload.get("type", "access")
         if token_type != expected_type:
-            logger.warning("token_type_mismatch", expected=expected_type, actual=token_type)
+            logger.warning(
+                "token_type_mismatch", expected=expected_type, actual=token_type
+            )
             return None
 
         user_id = payload.get("sub")
@@ -127,7 +128,7 @@ def verify_token(token: str, expected_type: str = "access") -> Optional[TokenDat
             user_id=UUID(user_id),
             email=email,
             is_admin=is_admin,
-            exp=datetime.fromtimestamp(exp, tz=timezone.utc),
+            exp=datetime.fromtimestamp(exp, tz=UTC),
             token_type=token_type,
         )
 
@@ -136,7 +137,7 @@ def verify_token(token: str, expected_type: str = "access") -> Optional[TokenDat
         return None
 
 
-def refresh_access_token(refresh_token: str) -> Optional[str]:
+def refresh_access_token(refresh_token: str) -> str | None:
     """Create a new access token from a refresh token."""
     token_data = verify_token(refresh_token, expected_type="refresh")
     if token_data is None:
@@ -160,9 +161,7 @@ def create_mfa_token(
     This token proves password auth passed but FIDO2 key tap is still required.
     It cannot be used as an access token (type is 'mfa_challenge').
     """
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.mfa_token_expire_minutes
-    )
+    expire = datetime.now(UTC) + timedelta(minutes=settings.mfa_token_expire_minutes)
     to_encode = {
         "sub": str(user_id),
         "email": email,
@@ -177,6 +176,6 @@ def create_mfa_token(
     )
 
 
-def verify_mfa_token(token: str) -> Optional[TokenData]:
+def verify_mfa_token(token: str) -> TokenData | None:
     """Verify an MFA challenge token. Returns None if invalid/expired."""
     return verify_token(token, expected_type="mfa_challenge")

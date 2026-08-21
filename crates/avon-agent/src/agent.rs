@@ -90,7 +90,7 @@ impl AvonAgent {
         let shutdown_signal = Self::shutdown_signal();
         tokio::pin!(shutdown_signal);
 
-        let pulse_interval = Duration::from_secs(self.config.pulse_timeout_secs);
+        let pulse_interval = Duration::from_secs(self.config.pulse_interval_secs);
         let mut pulse_timer = tokio::time::interval(pulse_interval);
 
         loop {
@@ -162,17 +162,23 @@ impl AvonAgent {
 
     async fn shutdown_signal() {
         let ctrl_c = async {
-            signal::ctrl_c()
-                .await
-                .expect("Failed to install Ctrl+C handler");
+            if let Err(error) = signal::ctrl_c().await {
+                tracing::error!(%error, "failed to install Ctrl+C handler");
+                std::future::pending::<()>().await;
+            }
         };
 
         #[cfg(unix)]
         let terminate = async {
-            signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("Failed to install signal handler")
-                .recv()
-                .await;
+            match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+                Ok(mut sigterm) => {
+                    sigterm.recv().await;
+                }
+                Err(error) => {
+                    tracing::error!(%error, "failed to install SIGTERM handler");
+                    std::future::pending::<()>().await;
+                }
+            }
         };
 
         #[cfg(not(unix))]
@@ -187,6 +193,7 @@ impl AvonAgent {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

@@ -32,7 +32,10 @@ type HmacSha256 = Hmac<Sha256>;
 /// assert_eq!(tag.len(), 32);
 /// ```
 pub fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
-    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+    let Ok(mut mac) = HmacSha256::new_from_slice(key) else {
+        // `Hmac` hashes over-long keys and zero-pads short ones, so this is unreachable.
+        unreachable!("HMAC accepts keys of any length")
+    };
     mac.update(data);
     let result = mac.finalize();
     result.into_bytes().into()
@@ -70,13 +73,17 @@ pub fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
 /// assert!(!hmac_sha256_verify(key, data, &bad_tag));
 /// ```
 pub fn hmac_sha256_verify(key: &[u8], data: &[u8], tag: &[u8]) -> bool {
-    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+    let Ok(mut mac) = HmacSha256::new_from_slice(key) else {
+        // `Hmac` hashes over-long keys and zero-pads short ones, so this is unreachable.
+        unreachable!("HMAC accepts keys of any length")
+    };
     mac.update(data);
     mac.verify_slice(tag).is_ok()
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     use super::*;
 
     #[test]

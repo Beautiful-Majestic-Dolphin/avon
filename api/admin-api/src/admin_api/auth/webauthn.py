@@ -46,8 +46,7 @@ class WebAuthnManager:
             user_name=user_email,
             user_display_name=user_name or user_email,
             exclude_credentials=[
-                PublicKeyCredentialDescriptor(id=cid)
-                for cid in existing_credential_ids
+                PublicKeyCredentialDescriptor(id=cid) for cid in existing_credential_ids
             ],
             authenticator_selection=AuthenticatorSelectionCriteria(
                 authenticator_attachment=AuthenticatorAttachment.CROSS_PLATFORM,

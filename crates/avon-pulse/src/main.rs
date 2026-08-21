@@ -6,6 +6,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context;
 use avon_protocol::v1::pulse_service_server::PulseServiceServer;
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
@@ -113,10 +114,8 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    let db = Arc::new(PulseDatabase::new(
-        pool.unwrap_or_else(|| panic!("Database URL is required for pulse manager")),
-        args.redis_url.clone(),
-    ));
+    let pool = pool.context("a database URL is required for the pulse manager")?;
+    let db = Arc::new(PulseDatabase::new(pool, args.redis_url.clone()));
 
     let rotation_manager = Arc::new(TokenRotationManager::new(
         db.clone(),
@@ -135,7 +134,10 @@ async fn main() -> anyhow::Result<()> {
 
     let service = PulseServiceImpl::new(scheduler.clone(), rotation_manager.clone());
 
-    let addr = args.listen_addr.parse().expect("Invalid listen address");
+    let addr: SocketAddr = args
+        .listen_addr
+        .parse()
+        .with_context(|| format!("invalid listen address: {}", args.listen_addr))?;
 
     // Start health server
     let health_port: u16 = std::env::var("AVON_HEALTH_PORT")

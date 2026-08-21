@@ -7,9 +7,9 @@ admins and given to identity providers. Tokens are stored as SHA-256 hashes.
 import hashlib
 import secrets
 
+import asyncpg
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-import asyncpg
 
 from admin_api.db.connection import get_db
 from admin_api.db.queries import ScimTokenQueries

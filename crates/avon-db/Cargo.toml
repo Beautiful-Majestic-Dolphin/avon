@@ -1,0 +1,27 @@
+[package]
+name = "avon-db"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Database pool, migrations and tenant helpers for AVON services"
+
+[[bin]]
+name = "avon-migrate"
+path = "src/bin/avon-migrate.rs"
+
+[dependencies]
+avon-config.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+avon-testkit.workspace = true
+
+[lints]
+workspace = true

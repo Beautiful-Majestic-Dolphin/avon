@@ -9,7 +9,6 @@ No compound filters (and/or) initially.
 """
 
 import re
-from typing import Optional
 
 # SCIM attribute -> database column mapping
 SCIM_USER_ATTRIBUTES = {
@@ -38,9 +37,9 @@ class ScimFilter:
 
 
 def parse_filter(
-    filter_str: Optional[str],
+    filter_str: str | None,
     attribute_map: dict[str, str],
-) -> Optional[ScimFilter]:
+) -> ScimFilter | None:
     """Parse a SCIM filter string into a ScimFilter.
 
     Returns None if filter_str is None or empty.

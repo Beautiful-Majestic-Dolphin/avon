@@ -1,7 +1,6 @@
 """Policy schemas for AVON Admin API."""
 
 from datetime import datetime, time
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -22,11 +21,11 @@ class TimeWindowSchema(BaseModel):
 class PostureRequirementSchema(BaseModel):
     """Device posture requirements for policy conditions."""
 
-    min_os_version: Optional[str] = None
-    min_agent_version: Optional[str] = None
+    min_os_version: str | None = None
+    min_agent_version: str | None = None
     require_firewall: bool = False
     require_disk_encryption: bool = False
-    max_days_since_update: Optional[int] = None
+    max_days_since_update: int | None = None
     require_antivirus: bool = False
     require_screen_lock: bool = False
 
@@ -34,8 +33,8 @@ class PostureRequirementSchema(BaseModel):
 class PolicyConditionsSchema(BaseModel):
     """Policy conditions."""
 
-    time_window: Optional[TimeWindowSchema] = None
-    posture_requirements: Optional[PostureRequirementSchema] = None
+    time_window: TimeWindowSchema | None = None
+    posture_requirements: PostureRequirementSchema | None = None
 
 
 class PolicyResponse(BaseModel):
@@ -43,7 +42,7 @@ class PolicyResponse(BaseModel):
 
     id: UUID
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     source_pod_id: UUID
     destination_pod_id: UUID
     action: str
@@ -57,41 +56,41 @@ class PolicyDetailResponse(BaseModel):
 
     id: UUID
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     source_pod_id: UUID
-    source_pod_name: Optional[str] = None
+    source_pod_name: str | None = None
     destination_pod_id: UUID
-    destination_pod_name: Optional[str] = None
+    destination_pod_name: str | None = None
     action: str
     priority: int
     enabled: bool
-    conditions: Optional[PolicyConditionsSchema] = None
+    conditions: PolicyConditionsSchema | None = None
     created_at: datetime
     updated_at: datetime
-    created_by: Optional[UUID] = None
+    created_by: UUID | None = None
 
 
 class PolicyCreateRequest(BaseModel):
     """Policy creation request."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=1000)
+    description: str | None = Field(None, max_length=1000)
     source_pod_id: UUID
     destination_pod_id: UUID
     action: str = Field(..., pattern="^(allow|deny)$")
     priority: int = Field(default=100, ge=1, le=10000)
-    conditions: Optional[PolicyConditionsSchema] = None
+    conditions: PolicyConditionsSchema | None = None
 
 
 class PolicyUpdateRequest(BaseModel):
     """Policy update request."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=1000)
-    action: Optional[str] = Field(None, pattern="^(allow|deny)$")
-    priority: Optional[int] = Field(None, ge=1, le=10000)
-    enabled: Optional[bool] = None
-    conditions: Optional[PolicyConditionsSchema] = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = Field(None, max_length=1000)
+    action: str | None = Field(None, pattern="^(allow|deny)$")
+    priority: int | None = Field(None, ge=1, le=10000)
+    enabled: bool | None = None
+    conditions: PolicyConditionsSchema | None = None
 
 
 class PolicyListResponse(BaseModel):
@@ -115,7 +114,7 @@ class PolicyEvaluationResponse(BaseModel):
     """Policy evaluation result."""
 
     action: str
-    policy_id: Optional[UUID] = None
-    policy_name: Optional[str] = None
+    policy_id: UUID | None = None
+    policy_name: str | None = None
     reason: str
     evaluation_time_ms: float

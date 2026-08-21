@@ -1,5 +1,6 @@
 //! Tests for the rotating token system.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use avon_crypto::token::{RotatingToken, ServerTokenState, TokenRotationInput, TokenVerifyResult};
 
 mod token_creation_tests {

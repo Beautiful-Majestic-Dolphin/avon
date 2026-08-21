@@ -1,0 +1,64 @@
+[graph]
+all-features = false
+targets = [
+  { triple = "x86_64-unknown-linux-gnu" },
+  { triple = "aarch64-unknown-linux-gnu" },
+  { triple = "x86_64-unknown-linux-musl" },
+  { triple = "aarch64-unknown-linux-musl" },
+  { triple = "x86_64-apple-darwin" },
+  { triple = "aarch64-apple-darwin" },
+  { triple = "x86_64-pc-windows-msvc" },
+]
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+version = 2
+yanked = "deny"
+# Only `unmaintained` advisories with no upgrade path are ignored; every
+# vulnerability and unsoundness advisory must be fixed by upgrading.
+ignore = [
+  # Removed in phase 1: task 1.1 migrates to pqcrypto-mlkem (FIPS 203) and
+  # task 1.2 to pqcrypto-mldsa (FIPS 204). The `[bans]` entries below already
+  # forbid these crates; CI enables the bans check once the migration lands.
+  { id = "RUSTSEC-2024-0381", reason = "pqcrypto-kyber, replaced in task 1.1" },
+  { id = "RUSTSEC-2024-0380", reason = "pqcrypto-dilithium, replaced in task 1.2" },
+  # No upgrade path: pqcrypto-mlkem/pqcrypto-mldsa depend on these too, and the
+  # spec mandates pqcrypto-traits 0.3. Revisit if PQClean finds a new maintainer.
+  { id = "RUSTSEC-2026-0162", reason = "pqcrypto-traits is unmaintained upstream" },
+  { id = "RUSTSEC-2026-0163", reason = "pqcrypto-internals is unmaintained upstream" },
+  # No upgrade path within redis 0.27, which pins rustls-native-certs 0.7.
+  { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile is unmaintained; pulled in by redis 0.27" },
+]
+
+[licenses]
+version = 2
+allow = [
+  "MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause",
+  "ISC", "Unicode-3.0", "Unicode-DFS-2016", "Zlib", "MPL-2.0", "CC0-1.0", "OpenSSL", "BSL-1.0",
+  # `webpki-roots` ships the Mozilla CA bundle as data under CDLA-Permissive-2.0.
+  "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.8
+
+[[licenses.clarify]]
+crate = "aws-lc-sys"
+expression = "ISC AND (Apache-2.0 OR ISC) AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0 }]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+deny = [
+  { crate = "pqcrypto-kyber", reason = "round-3 Kyber; use pqcrypto-mlkem (FIPS 203)" },
+  { crate = "pqcrypto-dilithium", reason = "round-3 Dilithium; use pqcrypto-mldsa (FIPS 204)" },
+  { crate = "openssl", reason = "use rustls/aws-lc-rs" },
+  { crate = "native-tls", reason = "use rustls" },
+]
+skip = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

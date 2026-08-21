@@ -1,17 +1,16 @@
 """FastAPI dependencies for authentication."""
 
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import asyncpg
 import structlog
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from admin_api.auth.jwt import verify_token, TokenData
+from admin_api.auth.jwt import TokenData, verify_token
 from admin_api.db.connection import get_db
-from admin_api.db.queries import UserQueries
 from admin_api.db.models import DbUser
+from admin_api.db.queries import UserQueries
 
 logger = structlog.get_logger()
 
@@ -38,16 +37,16 @@ class CurrentUser:
         return self.user.is_admin
 
     @property
-    def full_name(self) -> Optional[str]:
+    def full_name(self) -> str | None:
         return self.user.full_name
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: asyncpg.Connection = Depends(get_db),
 ) -> CurrentUser:
     """Get the current authenticated user.
-    
+
     Raises HTTPException if not authenticated.
     """
     if credentials is None:
@@ -86,7 +85,7 @@ async def get_current_admin(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> CurrentUser:
     """Get the current authenticated admin user.
-    
+
     Raises HTTPException if not an admin.
     """
     if not current_user.is_admin:
@@ -98,11 +97,11 @@ async def get_current_admin(
 
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: asyncpg.Connection = Depends(get_db),
-) -> Optional[CurrentUser]:
+) -> CurrentUser | None:
     """Get the current user if authenticated, None otherwise.
-    
+
     Does not raise exceptions for missing/invalid tokens.
     """
     if credentials is None:
