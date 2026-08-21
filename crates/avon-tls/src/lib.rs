@@ -23,7 +23,17 @@ pub enum TlsError {
     X509(String),
 }
 
-pub(crate) fn ensure_provider() {
+/// Install aws-lc-rs as the process-wide rustls provider.
+///
+/// Call this once at the top of `main`, before anything else builds a rustls
+/// config. Several dependencies (redis over `rediss://`, sqlx) construct their
+/// own configs, and rustls panics rather than guessing when more than one
+/// provider crate is in the dependency graph.
+pub fn install_default_provider() {
     // Installing twice returns Err; that is fine.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
+pub(crate) fn ensure_provider() {
+    install_default_provider();
 }

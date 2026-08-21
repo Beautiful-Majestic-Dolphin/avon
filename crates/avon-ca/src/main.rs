@@ -11,6 +11,7 @@ use tonic::transport::Server;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    avon_tls::install_default_provider();
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::GenerateMasterKey(c) => {

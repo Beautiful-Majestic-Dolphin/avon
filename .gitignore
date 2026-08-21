@@ -70,3 +70,6 @@ api/admin-api/requirements.audit.txt
 # Fuzz artifacts
 crates/avon-crypto/fuzz/artifacts/
 crates/avon-crypto/fuzz/corpus/
+
+# Locally generated TLS material for the compose stack
+deploy/compose/infra-certs/

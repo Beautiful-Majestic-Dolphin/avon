@@ -1,60 +1,120 @@
+# Local AVON stack. Everything speaks TLS, including Postgres and Redis.
+#
+# First run:
+#   cp .env.example .env && ./deploy/compose/gen-infra-certs.sh && docker compose up -d
+#
+# The infra CA under deploy/compose/infra-certs only covers Postgres and Redis:
+# they must be up before avon-ca exists, so their certificates cannot be
+# AVON-issued. Everything AVON issues lives in the `certs` volume.
+
+x-common-env: &common-env
+  AVON_DATABASE_URL: postgres://avon:${POSTGRES_PASSWORD}@postgres:5432/avon
+  AVON_DATABASE_TLS_CA: /infra/ca.crt
+  AVON_REDIS_URL: rediss://:${REDIS_PASSWORD}@redis:6379/0
+  AVON_REDIS_TLS_CA: /infra/ca.crt
+  AVON_CA_MASTER_KEY_FILE: /ca/master.key
+  AVON_LOG_LEVEL: ${AVON_LOG_LEVEL:-info}
+  AVON_LOG_FORMAT: json
+
 services:
-  # Infrastructure Services
   postgres:
     image: postgres:16-bookworm
-    container_name: avon-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-avon}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-avon_dev_password}
-      POSTGRES_DB: ${POSTGRES_DB:-avon}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: avon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: avon
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/pgcerts/postgres.crt
+      - -c
+      - ssl_key_file=/pgcerts/postgres.key
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - avon-network
+      - pgdata:/var/lib/postgresql/data
+      - pgcerts:/pgcerts:ro
+    depends_on:
+      pg-cert-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-avon}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -U avon"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Postgres refuses a key that is group- or world-readable and must own it, so
+  # the bind-mounted files are copied into a volume with the right ownership.
+  pg-cert-init:
+    image: alpine:3.20
+    command:
+      - sh
+      - -c
+      - "cp /in/postgres.crt /in/postgres.key /out/ && chown 999:999 /out/postgres.* && chmod 600 /out/postgres.key && chmod 644 /out/postgres.crt"
+    volumes:
+      - ./deploy/compose/infra-certs:/in:ro
+      - pgcerts:/out
 
   redis:
     image: redis:7-bookworm
-    container_name: avon-redis
-    ports:
-      - "6379:6379"
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?set in .env}
+      - --port
+      - "0"
+      - --tls-port
+      - "6379"
+      - --tls-cert-file
+      - /infra/redis.crt
+      - --tls-key-file
+      - /infra/redis.key
+      - --tls-ca-cert-file
+      - /infra/ca.crt
+      - --tls-auth-clients
+      - "no"
     volumes:
-      - redis_data:/data
-    networks:
-      - avon-network
+      - ./deploy/compose/infra-certs:/infra:ro
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "redis-cli", "--tls", "--cacert", "/infra/ca.crt", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
-  # Rust Control Plane Services
-  gateway:
+  # Named volumes are created root-owned; every AVON image runs as uid 65532.
+  vol-init:
+    image: alpine:3.20
+    command:
+      - sh
+      - -c
+      - "chown 65532:65532 /certs /ca && chmod 755 /certs && chmod 700 /ca"
+    volumes:
+      - certs:/certs
+      - cakey:/ca
+
+  # Migrations, CA master key, CA chain, service credentials, first owner.
+  bootstrap:
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.rust
       args:
-        BIN: avon-gateway
-    container_name: avon-gateway
+        BIN: avon-bootstrap
+    command: ["init", "--out", "/certs", "--dns", "ca=ca,control=control,gateway=gateway,admin=admin"]
     environment:
-      RUST_LOG: ${LOG_LEVEL:-info}
-      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-    ports:
-      - "4600:4600/udp"
-    networks:
-      - avon-network
+      <<: *common-env
+      AVON_BOOTSTRAP_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-owner@example.com}
+    volumes:
+      - certs:/certs
+      - cakey:/ca
+      - ./deploy/compose/infra-certs:/infra:ro
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      vol-init:
+        condition: service_completed_successfully
 
   ca:
     build:
@@ -62,80 +122,51 @@ services:
       dockerfile: deploy/docker/Dockerfile.rust
       args:
         BIN: avon-ca
-    container_name: avon-ca
+    command: ["serve"]
     environment:
-      RUST_LOG: ${LOG_LEVEL:-info}
-      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-    ports:
-      - "50052:50052"
-    networks:
-      - avon-network
+      <<: *common-env
+      AVON_TLS_CERT: /certs/ca.crt
+      AVON_TLS_KEY: /certs/ca.key
+      AVON_TLS_CA: /certs/trust-ca.crt
+      AVON_CA_LISTEN_ADDR: 0.0.0.0:50052
+      AVON_HEALTH_ADDR: 0.0.0.0:8080
+      AVON_METRICS_ADDR: 0.0.0.0:9090
+    volumes:
+      - certs:/certs:ro
+      - cakey:/ca:ro
+      - ./deploy/compose/infra-certs:/infra:ro
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
 
-  agent:
+  control:
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.rust
       args:
-        BIN: avon-agent
-    container_name: avon-agent
+        BIN: avon-control
     environment:
-      RUST_LOG: ${LOG_LEVEL:-info}
-    networks:
-      - avon-network
+      <<: *common-env
+      AVON_TLS_CERT: /certs/control.crt
+      AVON_TLS_KEY: /certs/control.key
+      AVON_TLS_CA: /certs/trust-ca.crt
+      AVON_CONTROL_CA_URL: https://ca:50052
+      AVON_CONTROL_CA_SERVER_NAME: ca
+      AVON_CONTROL_LISTEN_ADDR: 0.0.0.0:50051
+      AVON_HEALTH_ADDR: 0.0.0.0:8080
+      AVON_METRICS_ADDR: 0.0.0.0:9090
+    ports:
+      - "50051:50051"
+      - "8080:8080"
+    volumes:
+      - certs:/certs:ro
+      - ./deploy/compose/infra-certs:/infra:ro
     depends_on:
-      gateway:
+      ca:
         condition: service_started
 
-  # Python Services
-  policy-engine:
-    build:
-      context: .
-      dockerfile: deploy/docker/Dockerfile.policy-engine
-    container_name: avon-policy-engine
-    environment:
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-    ports:
-      - "8081:8081"
-    networks:
-      - avon-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  admin-api:
-    build:
-      context: .
-      dockerfile: deploy/docker/Dockerfile.admin-api
-    container_name: avon-admin-api
-    environment:
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
-    ports:
-      - "8080:8080"
-    networks:
-      - avon-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-networks:
-  avon-network:
-    driver: bridge
-
 volumes:
-  postgres_data:
-  redis_data:
+  pgdata: {}
+  pgcerts: {}
+  certs: {}
+  cakey: {}

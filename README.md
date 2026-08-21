@@ -81,14 +81,27 @@ AVON is a **post-quantum zero trust network access (ZTNA)** platform that provid
 git clone https://github.com/Beautiful-Majestic-Dolphin/avon.git
 cd avon
 
-# Start all services with Docker Compose
+# Passwords for Postgres, Redis and the first owner account
+cp .env.example .env && $EDITOR .env
+
+# TLS for the Postgres and Redis listeners. These cannot be AVON-issued: both
+# databases must be up before avon-ca exists. Written to
+# deploy/compose/infra-certs/ (gitignored), trusted only by this stack.
+./deploy/compose/gen-infra-certs.sh
+
+# Start the stack. A one-shot `bootstrap` container applies the schema, creates
+# the CA master key and chain, issues every service certificate, and prints an
+# enrollment token for the first agent.
 docker compose up -d
 
 # Verify services are running
 docker compose ps
 
-# View logs
-docker compose logs -f gateway
+# The enrollment token is printed once, here
+docker compose logs bootstrap
+
+# Control reports database, Redis and CA health on /ready
+curl -fsS http://localhost:8080/ready
 ```
 
 ### Kubernetes Deployment

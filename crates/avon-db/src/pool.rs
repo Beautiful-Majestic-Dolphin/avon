@@ -34,11 +34,11 @@ pub async fn connect(args: &DatabaseArgs) -> Result<PgPool, DbError> {
         .map_err(DbError::Connect)
 }
 
-/// Apply the embedded migrations from `migrations/` at the repository root.
+/// Apply the migrations from `migrations/` at the repository root. They are
+/// embedded at compile time, so this works from any working directory and
+/// inside a distroless image that ships only the binary.
 pub async fn migrate(pool: &PgPool) -> Result<(), DbError> {
-    sqlx::migrate::Migrator::new(std::path::Path::new("../../migrations"))
-        .await
-        .map_err(DbError::Migrate)?
+    sqlx::migrate!("../../migrations")
         .run(pool)
         .await
         .map_err(DbError::Migrate)?;
