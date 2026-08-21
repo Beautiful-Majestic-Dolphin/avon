@@ -130,15 +130,32 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-      - name: Build gateway image
+      # avon-gateway is out of the workspace until phase 3 rewrites it.
+      - name: Build control image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: deploy/docker/Dockerfile.rust
-          build-args: BIN=avon-gateway
+          build-args: BIN=avon-control
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build ca image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.rust
+          build-args: BIN=avon-ca
+          push: false
+          cache-from: type=gha
+      - name: Build bootstrap image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.rust
+          build-args: BIN=avon-bootstrap
+          push: false
+          cache-from: type=gha
       - name: Build admin-api image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
@@ -154,11 +171,20 @@ jobs:
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.16.2
+      - name: Install kubeconform
+        run: |
+          curl -sSfL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
       - run: helm lint deploy/helm/avon
       - run: |
           for f in values.yaml values-dev.yaml values-staging.yaml values-production.yaml; do
-            helm template avon deploy/helm/avon -f deploy/helm/avon/$f > /dev/null
+            helm template avon deploy/helm/avon -f deploy/helm/avon/$f \
+              --set control.existingSecret=avon-control-secret > /dev/null
           done
+      - name: Validate rendered manifests against the Kubernetes schemas
+        run: |
+          helm template avon deploy/helm/avon --set control.existingSecret=avon-control-secret \
+            | kubeconform -strict -ignore-missing-schemas
 
   fuzz-smoke:
     name: Fuzz smoke (60s per target)
@@ -176,10 +202,22 @@ jobs:
             cargo +nightly-2025-06-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
           done
 
+  compose-smoke:
+    name: Compose stack reaches ready
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Bring the stack up and wait for control
+        run: bash tests/compose/test_compose_up.sh
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
   all-checks-pass:
     name: All checks pass
     if: always()
-    needs: [rust, python, supply-chain, docker, helm, fuzz-smoke]
+    needs: [rust, python, supply-chain, docker, helm, fuzz-smoke, compose-smoke]
     runs-on: ubuntu-24.04
     steps:
       - name: Fail if any dependency failed

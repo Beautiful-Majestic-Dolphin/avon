@@ -1,0 +1,46 @@
+{{- if .Values.migrateJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "avon.fullname" . }}-migrate
+  labels:
+    {{- include "avon.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrateJob.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "avon.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+      annotations:
+        # The migration must not be intercepted by a sidecar that outlives it.
+        sidecar.istio.io/inject: "false"
+        linkerd.io/inject: disabled
+    spec:
+      restartPolicy: Never
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.control.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: {{ include "avon.image" (dict "global" .Values.global "image" .Values.migrateJob.image) }}
+          imagePullPolicy: {{ .Values.migrateJob.image.pullPolicy }}
+          args: ["up"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.control.existingSecret | default (include "avon.control.fullname" .) }}
+          env:
+            - { name: AVON_DATABASE_REQUIRE_TLS, value: {{ .Values.control.requireDatabaseTls | quote }} }
+          resources:
+            {{- toYaml .Values.migrateJob.resources | nindent 12 }}
+{{- end }}
