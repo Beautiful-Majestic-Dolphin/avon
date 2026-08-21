@@ -118,6 +118,21 @@ impl HybridKemPublicKey {
 }
 
 impl HybridKemCiphertext {
+    pub fn eph_x25519(&self) -> &X25519PublicKey {
+        &self.eph_x25519
+    }
+    pub fn mlkem(&self) -> &MlKemCiphertext {
+        &self.mlkem
+    }
+
+    // Compatibility aliases for legacy code
+    pub fn classical_public(&self) -> &X25519PublicKey {
+        &self.eph_x25519
+    }
+    pub fn pqc_ciphertext(&self) -> &MlKemCiphertext {
+        &self.mlkem
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(HYBRID_KEM_CIPHERTEXT_BYTES);
         out.extend_from_slice(&self.eph_x25519.to_bytes());

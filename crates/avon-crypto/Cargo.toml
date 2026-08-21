@@ -21,6 +21,9 @@ pqcrypto-mlkem = "0.1"
 pqcrypto-mldsa = "0.1"
 pqcrypto-traits = "0.3"
 
+[features]
+test-vectors = []
+
 [dev-dependencies]
 hex = "0.4"
 serde_json = "1.0"

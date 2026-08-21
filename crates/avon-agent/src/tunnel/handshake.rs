@@ -8,7 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use avon_crypto::hybrid::key_exchange::{hybrid_encapsulate, HybridEncapsulation, HybridKeyPair};
+use avon_crypto::hybrid::kem::{HybridKemCiphertext, HybridKemKeyPair};
+use avon_crypto::hybrid::key_exchange::hybrid_encapsulate;
 use avon_crypto::session::TunnelKeys;
 use avon_protocol::v1::{
     tunnel_handshake, HybridEncapsulation as ProtoEncapsulation, TunnelConfirm,
@@ -31,7 +32,7 @@ const MAX_HANDSHAKE_PACKET_SIZE: usize = 8192;
 pub struct TunnelHandshake {
     session_id: SessionId,
     identity: Arc<IdentityManager>,
-    local_keypair: Option<HybridKeyPair>,
+    local_keypair: Option<HybridKemKeyPair>,
 }
 
 impl TunnelHandshake {
@@ -72,7 +73,7 @@ impl TunnelHandshake {
             .context("Failed to connect handshake socket")?;
 
         // Generate ephemeral keypair for this tunnel
-        let keypair = HybridKeyPair::generate().context("Failed to generate hybrid keypair")?;
+        let keypair = HybridKemKeyPair::generate().context("Failed to generate hybrid keypair")?;
 
         self.local_keypair = Some(keypair);
 
@@ -199,7 +200,7 @@ impl TunnelHandshake {
             .context("Failed to connect handshake socket")?;
 
         // Generate our keypair
-        let keypair = HybridKeyPair::generate().context("Failed to generate hybrid keypair")?;
+        let keypair = HybridKemKeyPair::generate().context("Failed to generate hybrid keypair")?;
 
         self.local_keypair = Some(keypair);
 
@@ -240,7 +241,7 @@ impl TunnelHandshake {
 
         let initiator_public_bytes = self.reconstruct_public_key(&initiator_public_key)?;
         let initiator_public =
-            avon_crypto::hybrid::key_exchange::HybridPublicKey::from_bytes(&initiator_public_bytes)
+            avon_crypto::hybrid::kem::HybridKemPublicKey::from_bytes(&initiator_public_bytes)
                 .context("Failed to parse initiator public key")?;
 
         // 3. Perform encapsulation to initiator's public key
@@ -250,8 +251,8 @@ impl TunnelHandshake {
         // 4. Send TunnelResponse
         let response = TunnelResponse {
             encapsulation: Some(ProtoEncapsulation {
-                classical_public: encapsulation.classical_public.to_bytes().to_vec(),
-                pqc_ciphertext: encapsulation.pqc_ciphertext.to_bytes().to_vec(),
+                classical_public: encapsulation.classical_public().to_bytes().to_vec(),
+                pqc_ciphertext: encapsulation.pqc_ciphertext().to_bytes().to_vec(),
             }),
             encrypted_cert: vec![], // Certificate would be encrypted in production
         };
@@ -302,12 +303,12 @@ impl TunnelHandshake {
     }
 
     /// Parses a protocol encapsulation into a crypto encapsulation.
-    fn parse_encapsulation(&self, encap: &ProtoEncapsulation) -> Result<HybridEncapsulation> {
+    fn parse_encapsulation(&self, encap: &ProtoEncapsulation) -> Result<HybridKemCiphertext> {
         let mut bytes = Vec::with_capacity(32 + 1088);
         bytes.extend_from_slice(&encap.classical_public);
         bytes.extend_from_slice(&encap.pqc_ciphertext);
 
-        HybridEncapsulation::from_bytes(&bytes).context("Failed to parse encapsulation")
+        HybridKemCiphertext::from_bytes(&bytes).context("Failed to parse encapsulation")
     }
 
     /// Reconstructs the responder's public key from encapsulation.

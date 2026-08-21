@@ -292,6 +292,11 @@ impl Ed25519KeyPair {
         })
     }
 
+    /// Returns the 32-byte seed of the signing key.
+    pub fn seed(&self) -> &[u8; 32] {
+        self.signing.as_bytes()
+    }
+
     /// Returns a reference to the verifying (public) key.
     ///
     /// # Example
