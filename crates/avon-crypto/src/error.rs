@@ -40,4 +40,12 @@ pub enum CryptoError {
     /// Random number generation failed.
     #[error("random generation failed: {0}")]
     RandomGenerationFailed(String),
+
+    /// A data-plane packet failed the anti-replay check.
+    #[error("replay check failed: {0:?}")]
+    Replay(crate::session::ReplayError),
+
+    /// The send counter is exhausted; the session must be rekeyed.
+    #[error("send counter exhausted")]
+    CounterExhausted,
 }
