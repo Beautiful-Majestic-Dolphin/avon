@@ -37,6 +37,7 @@ async-trait = "0.1"
 rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
 x509-parser = "0.16"
 sha2 = "0.10"
+time = "0.3"
 metrics.workspace = true
 rand = "0.8"
 
