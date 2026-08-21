@@ -8,6 +8,7 @@ exclude = ["crates/avon-crypto/fuzz"]
 members = [
     "crates/avon-crypto",
     "crates/avon-protocol",
+    "crates/avon-tls",
     "crates/avon-common",
     "crates/avon-config",
     "crates/avon-db",
@@ -57,6 +58,7 @@ avon-common = { path = "crates/avon-common" }
 avon-config = { path = "crates/avon-config" }
 avon-db = { path = "crates/avon-db" }
 avon-observability = { path = "crates/avon-observability" }
+avon-tls = { path = "crates/avon-tls" }
 avon-testkit = { path = "crates/avon-testkit" }
 
 [workspace.lints.rust]
