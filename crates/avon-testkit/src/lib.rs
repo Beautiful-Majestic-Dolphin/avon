@@ -3,6 +3,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 pub mod db;
+pub mod device;
 pub mod net;
 pub mod pki;
 pub mod redis;
