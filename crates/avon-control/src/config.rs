@@ -53,3 +53,22 @@ impl Validate for ControlConfig {
         Ok(())
     }
 }
+
+/// Build a Redis client that honours `--redis-tls-ca`.
+///
+/// `redis::Client::open` only ever trusts the system roots, so a `rediss://`
+/// URL against a privately-issued certificate fails verification and
+/// `ConnectionManager` retries forever. Every caller must go through this.
+pub fn redis_client(args: &RedisArgs) -> anyhow::Result<redis::Client> {
+    let Some(ca_path) = &args.tls_ca else {
+        return Ok(redis::Client::open(args.url.as_str())?);
+    };
+    let root_cert = std::fs::read(ca_path)?;
+    Ok(redis::Client::build_with_tls(
+        args.url.as_str(),
+        redis::TlsCertificates {
+            client_tls: None,
+            root_cert: Some(root_cert),
+        },
+    )?)
+}

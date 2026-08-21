@@ -1,0 +1,31 @@
+[package]
+name = "avon-bootstrap"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "One-shot initialisation for an AVON deployment: schema, CA chain, service credentials, first owner"
+
+[[bin]]
+name = "avon-bootstrap"
+path = "src/main.rs"
+
+[dependencies]
+avon-ca.workspace = true
+avon-config.workspace = true
+avon-crypto.workspace = true
+avon-db.workspace = true
+avon-protocol.workspace = true
+avon-tls.workspace = true
+anyhow.workspace = true
+argon2 = "0.5"
+clap.workspace = true
+hex = "0.4"
+rcgen = { version = "0.13", features = ["pem"] }
+sha2 = "0.10"
+sqlx.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

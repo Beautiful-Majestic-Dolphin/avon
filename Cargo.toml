@@ -10,6 +10,7 @@ members = [
     "crates/avon-tls",
     "crates/avon-control",
     "crates/avon-ca",
+    "crates/avon-bootstrap",
     "crates/avon-common",
     "crates/avon-config",
     "crates/avon-db",
