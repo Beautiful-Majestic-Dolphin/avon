@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Session key derivation for AVON tunnels.
 //!
 //! This module provides key derivation functions for establishing tunnel
