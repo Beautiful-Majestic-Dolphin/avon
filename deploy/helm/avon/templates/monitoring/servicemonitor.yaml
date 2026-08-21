@@ -25,7 +25,7 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "avon.fullname" . }}-auth
+  name: {{ include "avon.fullname" . }}-control
   labels:
     {{- include "avon.labels" . | nindent 4 }}
     {{- with .Values.monitoring.serviceMonitor.labels }}
@@ -34,7 +34,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      {{- include "avon.auth.selectorLabels" . | nindent 6 }}
+      {{- include "avon.control.selectorLabels" . | nindent 6 }}
   endpoints:
     - port: metrics
       interval: {{ .Values.monitoring.serviceMonitor.interval | default "30s" }}
@@ -57,28 +57,6 @@ spec:
   selector:
     matchLabels:
       {{- include "avon.ca.selectorLabels" . | nindent 6 }}
-  endpoints:
-    - port: metrics
-      interval: {{ .Values.monitoring.serviceMonitor.interval | default "30s" }}
-      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | default "10s" }}
-      path: /metrics
-  namespaceSelector:
-    matchNames:
-      - {{ .Release.Namespace }}
----
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: {{ include "avon.fullname" . }}-pulse
-  labels:
-    {{- include "avon.labels" . | nindent 4 }}
-    {{- with .Values.monitoring.serviceMonitor.labels }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-spec:
-  selector:
-    matchLabels:
-      {{- include "avon.pulse.selectorLabels" . | nindent 6 }}
   endpoints:
     - port: metrics
       interval: {{ .Values.monitoring.serviceMonitor.interval | default "30s" }}

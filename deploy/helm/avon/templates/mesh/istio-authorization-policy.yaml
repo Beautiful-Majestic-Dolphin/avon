@@ -3,13 +3,13 @@
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
-  name: {{ include "avon.auth.fullname" . }}
+  name: {{ include "avon.control.fullname" . }}
   labels:
-    {{- include "avon.auth.labels" . | nindent 4 }}
+    {{- include "avon.control.labels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/component: auth
+      app.kubernetes.io/component: control
   action: ALLOW
   rules:
     - from:
@@ -30,26 +30,6 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: ca
-  action: ALLOW
-  rules:
-    - from:
-        - source:
-            principals:
-              - "cluster.local/ns/{{ .Release.Namespace }}/sa/{{ include "avon.serviceAccountName" . }}"
-    - to:
-        - operation:
-            ports: ["8080"]
----
-apiVersion: security.istio.io/v1beta1
-kind: AuthorizationPolicy
-metadata:
-  name: {{ include "avon.pulse.fullname" . }}
-  labels:
-    {{- include "avon.pulse.labels" . | nindent 4 }}
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/component: pulse
   action: ALLOW
   rules:
     - from:

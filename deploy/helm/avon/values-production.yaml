@@ -48,7 +48,7 @@ gateway:
         matchLabels:
           app.kubernetes.io/component: gateway
 
-auth:
+control:
   replicaCount: 3
   logLevel: warn
   image:
@@ -75,22 +75,6 @@ ca:
   hsm:
     enabled: true
     provider: "aws-cloudhsm"
-  resources:
-    requests:
-      cpu: 250m
-      memory: 256Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-
-pulse:
-  replicaCount: 3
-  logLevel: warn
-  image:
-    tag: ""
-    pullPolicy: IfNotPresent
-  pulseInterval: "10s"
-  tokenRotationInterval: "30s"
   resources:
     requests:
       cpu: 250m

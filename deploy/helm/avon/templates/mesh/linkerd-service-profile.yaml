@@ -3,9 +3,9 @@
 apiVersion: linkerd.io/v1alpha2
 kind: ServiceProfile
 metadata:
-  name: {{ include "avon.auth.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  name: {{ include "avon.control.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
   labels:
-    {{- include "avon.auth.labels" . | nindent 4 }}
+    {{- include "avon.control.labels" . | nindent 4 }}
 spec:
   routes:
     - name: gRPC
@@ -25,19 +25,6 @@ spec:
       condition:
         pathRegex: /.*
       timeout: 30s
----
-apiVersion: linkerd.io/v1alpha2
-kind: ServiceProfile
-metadata:
-  name: {{ include "avon.pulse.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
-  labels:
-    {{- include "avon.pulse.labels" . | nindent 4 }}
-spec:
-  routes:
-    - name: gRPC
-      condition:
-        pathRegex: /.*
-      timeout: 10s
 ---
 apiVersion: linkerd.io/v1alpha2
 kind: ServiceProfile

@@ -15,19 +15,16 @@ SERVICES DEPLOYED:
    {{- end }}
    Port: {{ .Values.gateway.service.port }}/UDP
 
-2. Auth Service (gRPC)
-   Internal: {{ include "avon.auth.fullname" . }}:{{ .Values.auth.service.port }}
+2. Control Plane (gRPC)
+   Internal: {{ include "avon.control.fullname" . }}:{{ .Values.control.service.port }}
 
 3. Certificate Authority (gRPC)
    Internal: {{ include "avon.ca.fullname" . }}:{{ .Values.ca.service.port }}
 
-4. Pulse Manager (gRPC)
-   Internal: {{ include "avon.pulse.fullname" . }}:{{ .Values.pulse.service.port }}
-
-5. Policy Engine (HTTP)
+4. Policy Engine (HTTP)
    Internal: {{ include "avon.policyEngine.fullname" . }}:{{ .Values.policyEngine.service.port }}
 
-6. Admin API (HTTP)
+5. Admin API (HTTP)
    Internal: {{ include "avon.adminApi.fullname" . }}:{{ .Values.adminApi.service.port }}
    {{- if .Values.adminApi.ingress.enabled }}
    External: 
@@ -47,7 +44,7 @@ GETTING STARTED:
 
 3. View logs for a specific service:
    kubectl logs -n {{ .Release.Namespace }} -l "app.kubernetes.io/component=gateway" -f
-   kubectl logs -n {{ .Release.Namespace }} -l "app.kubernetes.io/component=auth" -f
+   kubectl logs -n {{ .Release.Namespace }} -l "app.kubernetes.io/component=control" -f
    kubectl logs -n {{ .Release.Namespace }} -l "app.kubernetes.io/component=admin-api" -f
 
 CONFIGURATION:

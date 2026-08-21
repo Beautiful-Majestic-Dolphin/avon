@@ -3,26 +3,26 @@
 apiVersion: policy.linkerd.io/v1beta2
 kind: Server
 metadata:
-  name: {{ include "avon.auth.fullname" . }}-grpc
+  name: {{ include "avon.control.fullname" . }}-grpc
   labels:
-    {{- include "avon.auth.labels" . | nindent 4 }}
+    {{- include "avon.control.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: auth
-  port: {{ .Values.auth.service.port }}
+      app.kubernetes.io/component: control
+  port: {{ .Values.control.service.port }}
   proxyProtocol: gRPC
 ---
 apiVersion: policy.linkerd.io/v1beta2
 kind: Server
 metadata:
-  name: {{ include "avon.auth.fullname" . }}-health
+  name: {{ include "avon.control.fullname" . }}-health
   labels:
-    {{- include "avon.auth.labels" . | nindent 4 }}
+    {{- include "avon.control.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: auth
+      app.kubernetes.io/component: control
   port: 8080
   proxyProtocol: HTTP/1
 ---
@@ -49,32 +49,6 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/component: ca
-  port: 8080
-  proxyProtocol: HTTP/1
----
-apiVersion: policy.linkerd.io/v1beta2
-kind: Server
-metadata:
-  name: {{ include "avon.pulse.fullname" . }}-grpc
-  labels:
-    {{- include "avon.pulse.labels" . | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/component: pulse
-  port: {{ .Values.pulse.service.port }}
-  proxyProtocol: gRPC
----
-apiVersion: policy.linkerd.io/v1beta2
-kind: Server
-metadata:
-  name: {{ include "avon.pulse.fullname" . }}-health
-  labels:
-    {{- include "avon.pulse.labels" . | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/component: pulse
   port: 8080
   proxyProtocol: HTTP/1
 ---
