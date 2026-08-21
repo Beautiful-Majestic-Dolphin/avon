@@ -6,7 +6,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use avon_crypto::ecdh::X25519KeyPair;
-use avon_crypto::hybrid::key_exchange::{hybrid_encapsulate, HybridKeyPair};
+use avon_crypto::hybrid::kem::HybridKemKeyPair;
 use avon_crypto::hybrid::signature::HybridSigningKeyPair;
 use avon_crypto::pqc::mldsa::MlDsaKeyPair;
 use avon_crypto::pqc::mlkem::MlKemKeyPair;
@@ -49,19 +49,19 @@ fn bench_kyber_decapsulate(c: &mut Criterion) {
 
 /// Benchmark hybrid key exchange (encapsulation side).
 fn bench_hybrid_encapsulate(c: &mut Criterion) {
-    let recipient = HybridKeyPair::generate().unwrap();
+    let recipient = HybridKemKeyPair::generate().unwrap();
 
     c.bench_function("hybrid_encapsulate", |b| {
         b.iter(|| {
-            let _ = black_box(hybrid_encapsulate(&recipient.public_key()).unwrap());
+            let _ = black_box(recipient.public_key().encapsulate().unwrap());
         })
     });
 }
 
 /// Benchmark hybrid key exchange (decapsulation side).
 fn bench_hybrid_decapsulate(c: &mut Criterion) {
-    let recipient = HybridKeyPair::generate().unwrap();
-    let (encapsulation, _) = hybrid_encapsulate(&recipient.public_key()).unwrap();
+    let recipient = HybridKemKeyPair::generate().unwrap();
+    let (encapsulation, _) = recipient.public_key().encapsulate().unwrap();
 
     c.bench_function("hybrid_decapsulate", |b| {
         b.iter(|| {
@@ -175,7 +175,7 @@ fn bench_key_generation(c: &mut Criterion) {
 
     group.bench_function("hybrid_kex", |b| {
         b.iter(|| {
-            let _ = black_box(HybridKeyPair::generate().unwrap());
+            let _ = black_box(HybridKemKeyPair::generate().unwrap());
         })
     });
 
