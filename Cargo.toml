@@ -9,6 +9,7 @@ members = [
     "crates/avon-crypto",
     "crates/avon-protocol",
     "crates/avon-tls",
+    "crates/avon-control",
     "crates/avon-common",
     "crates/avon-config",
     "crates/avon-db",
@@ -59,6 +60,7 @@ avon-config = { path = "crates/avon-config" }
 avon-db = { path = "crates/avon-db" }
 avon-observability = { path = "crates/avon-observability" }
 avon-tls = { path = "crates/avon-tls" }
+avon-control = { path = "crates/avon-control" }
 avon-testkit = { path = "crates/avon-testkit" }
 
 [workspace.lints.rust]
