@@ -277,6 +277,8 @@ dependencies = [
  "chrono",
  "clap",
  "dashmap",
+ "futures",
+ "hex",
  "hkdf",
  "ipnet",
  "metrics",
@@ -294,6 +296,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tracing",
+ "tracing-subscriber",
  "tracing-test",
  "uuid",
 ]
@@ -373,6 +376,7 @@ version = "0.2.0"
 dependencies = [
  "avon-ca",
  "avon-config",
+ "avon-control",
  "avon-crypto",
  "avon-db",
  "avon-protocol",
@@ -380,8 +384,11 @@ dependencies = [
  "rcgen",
  "redis",
  "sqlx",
+ "tempfile",
  "tokio",
  "tonic",
+ "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
 ]

@@ -67,3 +67,17 @@ pub fn server_tls_config(args: &TlsArgs) -> Result<ServerTlsConfig, TlsError> {
         .identity(Identity::from_pem(cert, key))
         .client_ca_root(Certificate::from_pem(ca)))
 }
+
+/// tonic server TLS config that accepts clients without a certificate. Only
+/// for listeners with at least one deliberately unauthenticated RPC (control's
+/// `Enroll`); every other RPC must still call `require_device`/`require_service`.
+pub fn server_tls_config_optional_client(args: &TlsArgs) -> Result<ServerTlsConfig, TlsError> {
+    ensure_provider();
+    let cert = std::fs::read(&args.cert)?;
+    let key = std::fs::read(&args.key)?;
+    let ca = std::fs::read(&args.ca)?;
+    Ok(ServerTlsConfig::new()
+        .identity(Identity::from_pem(cert, key))
+        .client_ca_root(Certificate::from_pem(ca))
+        .client_auth_optional(true))
+}

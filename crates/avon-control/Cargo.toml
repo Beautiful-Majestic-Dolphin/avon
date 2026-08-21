@@ -36,6 +36,7 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 base64ct = { workspace = true, features = ["alloc"] }
+hex = "0.4"
 sha2 = "0.10"
 hkdf = "0.12"
 subtle.workspace = true
@@ -48,6 +49,8 @@ rcgen = { version = "0.13", features = ["pem"] }
 avon-testkit.workspace = true
 tempfile.workspace = true
 tracing-test = "0.2"
+tracing-subscriber.workspace = true
+futures = "0.3"
 
 [lints]
 workspace = true

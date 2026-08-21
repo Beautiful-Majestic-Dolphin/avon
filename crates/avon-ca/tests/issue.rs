@@ -169,3 +169,38 @@ async fn issued_certificates_are_persisted_with_unique_serials() {
         .unwrap();
     assert_eq!(n, 3);
 }
+
+#[tokio::test]
+async fn issuance_accepts_a_template_with_empty_tenant_and_zero_subject() {
+    // A device signs its CSR before enrollment tells it who it is, so control
+    // assigns the tenant and device id.
+    let db = TestDb::new().await;
+    let keys = keys(&db).await;
+    let signing = HybridSigningKeyPair::generate().unwrap();
+    let kem = HybridKemKeyPair::generate().unwrap();
+    let tls_key = KeyPair::generate_for(&PKCS_ED25519).unwrap();
+    let csr = make_csr(
+        &signing,
+        &kem.public_key(),
+        &tls_key,
+        SubjectKind::Device,
+        "",
+        [0; 16],
+    );
+    let subject = Uuid::new_v4();
+    let issued = Issuer { keys: &keys }
+        .issue(
+            verify_csr(&csr).unwrap(),
+            SubjectKind::Device,
+            Some(avon_db::DEFAULT_TENANT_ID.into()),
+            subject,
+            vec![],
+            DEVICE_LIFETIME_SECS,
+        )
+        .unwrap();
+    assert_eq!(issued.certificate.tbs.subject_id, *subject.as_bytes());
+    assert_eq!(
+        issued.certificate.tbs.tenant_id,
+        avon_db::DEFAULT_TENANT_ID.to_string()
+    );
+}

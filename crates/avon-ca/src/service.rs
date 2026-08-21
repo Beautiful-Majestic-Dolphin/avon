@@ -95,10 +95,14 @@ impl CaServiceTrait for CaService {
                 .ok_or_else(|| Status::invalid_argument("csr required"))?,
         )
         .map_err(pki_status)?;
-        if csr.template.kind != kind
-            || csr.template.tenant_id != tenant.to_string()
-            || csr.template.subject_id != *device.as_bytes()
-        {
+        // A device signs its CSR before it knows its tenant or id, so an empty
+        // tenant and a zero subject are accepted and filled from the request;
+        // anything else must match exactly.
+        let template_ok = csr.template.kind == kind
+            && (csr.template.tenant_id.is_empty() || csr.template.tenant_id == tenant.to_string())
+            && (csr.template.subject_id == [0; 16]
+                || csr.template.subject_id == *device.as_bytes());
+        if !template_ok {
             return Err(Status::invalid_argument(
                 "csr template does not match request",
             ));

@@ -1,4 +1,5 @@
-//! avon-control library: service implementations and helpers (binary in main.rs).
+//! avon-control: enrollment, authentication, pulse, sessions and gateway
+//! coordination for the AVON control plane.
 //!
 //! `clippy::result_large_err` is allowed crate-wide: every gRPC handler returns
 //! `Result<_, tonic::Status>`, `Status` is 176 bytes, and tonic's generated
@@ -6,3 +7,11 @@
 #![allow(clippy::result_large_err)]
 
 pub mod authz;
+pub mod ca_client;
+pub mod config;
+pub mod enroll;
+pub mod gateway_stream;
+pub mod pulse;
+pub mod service;
+pub mod session_token;
+pub mod store;

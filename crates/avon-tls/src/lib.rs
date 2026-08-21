@@ -7,7 +7,7 @@ mod server;
 
 pub use client::{client_tls_config, rustls_client_config};
 pub use peer::{cert_sha256_from_pem, peer_identity, spiffe_from_cert_der, PeerIdentity};
-pub use server::{rustls_server_config, server_tls_config};
+pub use server::{rustls_server_config, server_tls_config, server_tls_config_optional_client};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TlsError {
