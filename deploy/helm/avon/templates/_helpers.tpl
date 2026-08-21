@@ -85,26 +85,26 @@ app.kubernetes.io/component: gateway
 {{- end }}
 
 {{/*
-Auth fullname
+Control fullname
 */}}
-{{- define "avon.auth.fullname" -}}
-{{- printf "%s-auth" (include "avon.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- define "avon.control.fullname" -}}
+{{- printf "%s-control" (include "avon.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
-Auth labels
+Control labels
 */}}
-{{- define "avon.auth.labels" -}}
+{{- define "avon.control.labels" -}}
 {{ include "avon.labels" . }}
-app.kubernetes.io/component: auth
+app.kubernetes.io/component: control
 {{- end }}
 
 {{/*
-Auth selector labels
+Control selector labels
 */}}
-{{- define "avon.auth.selectorLabels" -}}
+{{- define "avon.control.selectorLabels" -}}
 {{ include "avon.selectorLabels" . }}
-app.kubernetes.io/component: auth
+app.kubernetes.io/component: control
 {{- end }}
 
 {{/*
@@ -128,29 +128,6 @@ CA selector labels
 {{- define "avon.ca.selectorLabels" -}}
 {{ include "avon.selectorLabels" . }}
 app.kubernetes.io/component: ca
-{{- end }}
-
-{{/*
-Pulse fullname
-*/}}
-{{- define "avon.pulse.fullname" -}}
-{{- printf "%s-pulse" (include "avon.fullname" .) | trunc 63 | trimSuffix "-" }}
-{{- end }}
-
-{{/*
-Pulse labels
-*/}}
-{{- define "avon.pulse.labels" -}}
-{{ include "avon.labels" . }}
-app.kubernetes.io/component: pulse
-{{- end }}
-
-{{/*
-Pulse selector labels
-*/}}
-{{- define "avon.pulse.selectorLabels" -}}
-{{ include "avon.selectorLabels" . }}
-app.kubernetes.io/component: pulse
 {{- end }}
 
 {{/*

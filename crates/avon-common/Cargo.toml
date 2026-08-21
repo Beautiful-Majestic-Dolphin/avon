@@ -9,12 +9,10 @@ description = "Shared types and utilities for AVON"
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
-tracing.workspace = true
-uuid = { version = "1.7", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-
-[dev-dependencies]
-serde_json = "1.0"
+uuid.workspace = true
+sqlx = { workspace = true, features = ["macros"] }
+hex = "0.4"
+getrandom = "0.2"
 
 [lints]
 workspace = true

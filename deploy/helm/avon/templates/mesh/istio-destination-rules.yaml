@@ -3,11 +3,11 @@
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
-  name: {{ include "avon.auth.fullname" . }}
+  name: {{ include "avon.control.fullname" . }}
   labels:
-    {{- include "avon.auth.labels" . | nindent 4 }}
+    {{- include "avon.control.labels" . | nindent 4 }}
 spec:
-  host: {{ include "avon.auth.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  host: {{ include "avon.control.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
   trafficPolicy:
     tls:
       mode: ISTIO_MUTUAL
@@ -23,21 +23,6 @@ metadata:
     {{- include "avon.ca.labels" . | nindent 4 }}
 spec:
   host: {{ include "avon.ca.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
-  trafficPolicy:
-    tls:
-      mode: ISTIO_MUTUAL
-    connectionPool:
-      http:
-        h2UpgradePolicy: UPGRADE
----
-apiVersion: networking.istio.io/v1beta1
-kind: DestinationRule
-metadata:
-  name: {{ include "avon.pulse.fullname" . }}
-  labels:
-    {{- include "avon.pulse.labels" . | nindent 4 }}
-spec:
-  host: {{ include "avon.pulse.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
   trafficPolicy:
     tls:
       mode: ISTIO_MUTUAL

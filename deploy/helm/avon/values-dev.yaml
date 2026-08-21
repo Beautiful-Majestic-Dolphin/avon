@@ -23,7 +23,7 @@ gateway:
       cpu: 200m
       memory: 256Mi
 
-auth:
+control:
   replicaCount: 1
   logLevel: debug
   image:
@@ -46,22 +46,6 @@ ca:
   persistence:
     enabled: true
     size: 1Gi
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      cpu: 200m
-      memory: 256Mi
-
-pulse:
-  replicaCount: 1
-  logLevel: debug
-  image:
-    tag: dev
-    pullPolicy: Always
-  pulseInterval: "5s"
-  tokenRotationInterval: "15s"
   resources:
     requests:
       cpu: 50m

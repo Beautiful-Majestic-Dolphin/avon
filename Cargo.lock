@@ -168,11 +168,11 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 name = "avon-common"
 version = "0.2.0"
 dependencies = [
- "chrono",
+ "getrandom 0.2.17",
+ "hex",
  "serde",
- "serde_json",
+ "sqlx",
  "thiserror 2.0.20",
- "tracing",
  "uuid",
 ]
 
@@ -515,10 +515,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
- "js-sys",
  "num-traits",
- "serde",
- "wasm-bindgen",
  "windows-link",
 ]
 

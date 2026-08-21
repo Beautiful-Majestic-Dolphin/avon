@@ -7,6 +7,6 @@ metadata:
 data:
   LOG_LEVEL: "info"
   POLICY_ENGINE_PORT: "{{ .Values.policyEngine.service.port }}"
-  AUTH_SERVICE_URL: "{{ include "avon.auth.fullname" . }}:{{ .Values.auth.service.port }}"
+  CONTROL_SERVICE_URL: "{{ include "avon.control.fullname" . }}:{{ .Values.control.service.port }}"
   POSTGRESQL_HOST: {{ include "avon.postgresql.host" . | quote }}
   REDIS_HOST: {{ include "avon.redis.host" . | quote }}

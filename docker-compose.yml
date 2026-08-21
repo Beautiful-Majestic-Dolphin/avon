@@ -56,28 +56,6 @@ services:
       redis:
         condition: service_healthy
 
-  auth:
-    build:
-      context: .
-      dockerfile: deploy/docker/Dockerfile.rust
-      args:
-        BIN: avon-auth
-    container_name: avon-auth
-    environment:
-      RUST_LOG: ${LOG_LEVEL:-info}
-      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
-    ports:
-      - "50051:50051"
-    networks:
-      - avon-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
   ca:
     build:
       context: .
@@ -91,27 +69,6 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     ports:
       - "50052:50052"
-    networks:
-      - avon-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  pulse:
-    build:
-      context: .
-      dockerfile: deploy/docker/Dockerfile.rust
-      args:
-        BIN: avon-pulse
-    container_name: avon-pulse
-    environment:
-      RUST_LOG: ${LOG_LEVEL:-info}
-      DATABASE_URL: ${DATABASE_URL:-postgres://avon:avon_dev_password@postgres:5432/avon}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-    ports:
-      - "50053:50053"
     networks:
       - avon-network
     depends_on:

@@ -15,14 +15,14 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "avon.auth.fullname" . }}-pdb
+  name: {{ include "avon.control.fullname" . }}-pdb
   labels:
-    {{- include "avon.auth.labels" . | nindent 4 }}
+    {{- include "avon.control.labels" . | nindent 4 }}
 spec:
   minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
   selector:
     matchLabels:
-      {{- include "avon.auth.selectorLabels" . | nindent 6 }}
+      {{- include "avon.control.selectorLabels" . | nindent 6 }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -35,18 +35,6 @@ spec:
   selector:
     matchLabels:
       {{- include "avon.ca.selectorLabels" . | nindent 6 }}
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: {{ include "avon.pulse.fullname" . }}-pdb
-  labels:
-    {{- include "avon.pulse.labels" . | nindent 4 }}
-spec:
-  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
-  selector:
-    matchLabels:
-      {{- include "avon.pulse.selectorLabels" . | nindent 6 }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

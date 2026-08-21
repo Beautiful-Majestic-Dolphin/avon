@@ -36,10 +36,10 @@ gateway:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
 
-auth:
+control:
   replicaCount: 3
   image:
-    repository: avon/auth
+    repository: avon/control
     tag: latest
     pullPolicy: IfNotPresent
   service:
@@ -96,33 +96,6 @@ ca:
   securityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: false
-
-pulse:
-  replicaCount: 3
-  image:
-    repository: avon/pulse
-    tag: latest
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    port: 50053
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  podAnnotations: {}
-  podSecurityContext:
-    runAsNonRoot: true
-    runAsUser: 1000
-  securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
 
 policyEngine:
   replicaCount: 3
