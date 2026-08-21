@@ -7,7 +7,10 @@ license.workspace = true
 description = "Test infrastructure for AVON (ephemeral databases, Redis, ports, fixtures)"
 
 [dependencies]
+avon-config.workspace = true
+avon-crypto.workspace = true
 avon-db.workspace = true
+rcgen = { version = "0.13", features = ["pem"] }
 sqlx.workspace = true
 redis.workspace = true
 tokio.workspace = true
