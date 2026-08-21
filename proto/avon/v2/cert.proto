@@ -1,0 +1,32 @@
+syntax = "proto3";
+package avon.v2;
+
+// Opaque AVON certificate as encoded by avon_crypto::cert::Certificate::encode().
+message Certificate { bytes encoded = 1; }
+
+// Root + issuing certificates and the X.509 TLS CA chain (PEM).
+message Chain {
+  Certificate root = 1;
+  Certificate issuing = 2;
+  string tls_ca_pem = 3;
+}
+
+// Composite-signed revocation list. `tbs` = u64be(version) || i64be(issued_at) || count32 || serial(16)*
+message Crl {
+  bytes tbs = 1;
+  bytes signature = 2;                    // HybridSignature, domain AVON-CRL-V2
+}
+
+// Certificate signing request proving possession of both signing keys and the TLS key.
+message Csr {
+  bytes tbs_template = 1;                 // TbsCertificate encoded with zero serial, zero issuer_key_id, zero validity
+  bytes proof = 2;                        // HybridSignature over tbs_template, domain AVON-CSR-V2
+  string tls_csr_pem = 3;                 // PKCS#10 for the Ed25519 TLS key
+}
+
+message Credential {
+  Certificate certificate = 1;
+  string tls_certificate_pem = 2;
+  Chain chain = 3;
+  int64 renew_after_unix = 4;
+}

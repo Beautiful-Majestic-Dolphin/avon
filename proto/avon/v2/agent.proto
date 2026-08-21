@@ -1,0 +1,97 @@
+syntax = "proto3";
+package avon.v2;
+import "avon/v2/common.proto";
+import "avon/v2/cert.proto";
+import "avon/v2/tunnel.proto";
+
+service AgentService {
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+  rpc Authenticate(stream AuthMessage) returns (stream AuthMessage);
+  rpc RenewCredential(RenewRequest) returns (RenewResponse);
+  rpc Pulse(stream PulseUp) returns (stream PulseDown);
+  rpc OpenSession(OpenSessionRequest) returns (OpenSessionResponse);
+  rpc RequestPeerSession(PeerSessionRequest) returns (PeerSessionResponse);
+  rpc AnswerPeerSession(PeerAnswer) returns (Ack);
+  rpc ReportSession(SessionReport) returns (Ack);
+  rpc WhoAmI(Empty) returns (WhoAmIResponse);
+}
+
+message EnrollRequest {
+  string token = 1;
+  Csr csr = 2;
+  Fingerprint fingerprint = 3;
+  AttestationEvidence attestation = 4;
+  string requested_name = 5;
+  string agent_version = 6;
+}
+message EnrollResponse {
+  Uuid device_id = 1;
+  Uuid tenant_id = 2;
+  Credential credential = 3;
+  string status = 4;                       // active | pending
+}
+
+message AuthMessage {
+  oneof msg {
+    AuthHello hello = 1;                   // client -> server
+    AuthChallenge challenge = 2;           // server -> client
+    AuthProof proof = 3;                   // client -> server
+    AuthResult result = 4;                 // server -> client
+  }
+}
+message AuthHello { Certificate certificate = 1; }
+message AuthChallenge { bytes nonce = 1; bytes server_tls_cert_sha256 = 2; }
+message AuthProof { bytes signature = 1; }  // HybridSignature over AVON-AUTH-V2 || nonce || tls_client_cert_sha256 || server_tls_cert_sha256
+message AuthResult {
+  bytes kem_ciphertext = 1;                // HybridKemCiphertext to the device's static KEM key
+  bytes sealed_token = 2;                  // AES-256-GCM(key = HKDF(ss, "AVON-SESSION-TOKEN"), nonce = 0, aad = nonce) of 32-byte token
+  int64 expires_at_unix = 3;
+  Chain chain = 4;
+  repeated Certificate gateway_certificates = 5;
+}
+
+message RenewRequest { Csr csr = 1; }
+message RenewResponse { Credential credential = 1; }
+
+message PulseUp {
+  oneof msg {
+    PulseHeartbeat heartbeat = 1;
+    AttestationEvidence attestation = 2;
+    PeerAnswer peer_answer = 3;
+    SessionReport session_report = 4;
+  }
+}
+message PulseHeartbeat { DevicePosture posture = 1; repeated SessionStats sessions = 2; }
+message SessionStats { bytes session_id = 1; uint64 bytes_tx = 2; uint64 bytes_rx = 3; uint32 epoch = 4; }
+
+message PulseDown {
+  oneof msg {
+    PulseAck ack = 1;
+    PeerOffer peer_offer = 2;
+    SessionClose close = 3;
+    RouteUpdate routes = 4;
+    AttestationChallenge attest = 5;
+    Crl crl = 6;
+  }
+}
+message PulseAck { int64 server_time_unix = 1; uint32 next_interval_secs = 2; }
+message AttestationChallenge { bytes nonce = 1; }
+
+message OpenSessionRequest { bytes eph_kem_pk = 1; repeated Suite suites = 2; bool wants_overlay_ip = 3; }
+message OpenSessionResponse {
+  bytes session_id = 1;
+  SessionAnswer answer = 2;
+  Certificate gateway_certificate = 3;
+  string overlay_ipv4 = 4;                 // CIDR
+  string overlay_ipv6 = 5;
+  repeated RouteUpdate routes = 6;
+}
+
+message PeerSessionRequest { Uuid target_device = 1; bytes eph_kem_pk = 2; repeated Suite suites = 3; repeated Candidate candidates = 4; }
+message PeerSessionResponse { bytes session_id = 1; }
+message PeerOffer { bytes session_id = 1; Certificate initiator_certificate = 2; bytes eph_kem_pk = 3; Suite suite = 4; repeated Candidate candidates = 5; }
+message PeerAnswer { bytes session_id = 1; SessionAnswer answer = 2; repeated Candidate candidates = 3; }
+message Candidate { string address = 1; uint32 priority = 2; string kind = 3; }   // host|srflx|relay
+
+message SessionReport { bytes session_id = 1; string event = 2; string reason = 3; }
+message WhoAmIResponse { string reflexive_address = 1; }
