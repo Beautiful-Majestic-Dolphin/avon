@@ -5,7 +5,13 @@ use avon_crypto::hybrid::kem::HybridKemKeyPair;
 use avon_crypto::session::{nonce_for, Role, SessionCipher, SessionKeys, Transcript};
 use avon_crypto::CryptoError;
 
-fn transcript(suite: Suite) -> (Transcript, avon_crypto::hybrid::kem::HybridSharedSecret, avon_crypto::hybrid::kem::HybridSharedSecret) {
+fn transcript(
+    suite: Suite,
+) -> (
+    Transcript,
+    avon_crypto::hybrid::kem::HybridSharedSecret,
+    avon_crypto::hybrid::kem::HybridSharedSecret,
+) {
     let eph = HybridKemKeyPair::generate().unwrap();
     let stat = HybridKemKeyPair::generate().unwrap();
     let (ct_e, ss_e) = eph.public_key().encapsulate().unwrap();
@@ -52,7 +58,10 @@ fn replayed_packet_is_rejected() {
     let copy = buf.clone();
     resp.open(c, b"", &mut buf).unwrap();
     let mut again = copy;
-    assert!(matches!(resp.open(c, b"", &mut again), Err(CryptoError::Replay(_))));
+    assert!(matches!(
+        resp.open(c, b"", &mut again),
+        Err(CryptoError::Replay(_))
+    ));
 }
 
 #[test]
@@ -69,7 +78,11 @@ fn transcript_change_changes_keys() {
 fn rekey_advances_epoch_and_changes_keys() {
     let (t, ss_e, ss_s) = transcript(Suite::Aes256Gcm);
     let k0 = SessionKeys::derive(&t, &ss_e, &ss_s).unwrap();
-    let (_, ss_new) = HybridKemKeyPair::generate().unwrap().public_key().encapsulate().unwrap();
+    let (_, ss_new) = HybridKemKeyPair::generate()
+        .unwrap()
+        .public_key()
+        .encapsulate()
+        .unwrap();
     let k1 = k0.rekey(&ss_new).unwrap();
     assert_eq!(k1.epoch, 1);
     assert_ne!(k0.k_i2r, k1.k_i2r);
@@ -78,7 +91,10 @@ fn rekey_advances_epoch_and_changes_keys() {
 
 #[test]
 fn nonce_layout() {
-    assert_eq!(nonce_for(0x0102030405060708), [0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    assert_eq!(
+        nonce_for(0x0102030405060708),
+        [0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8]
+    );
 }
 
 #[test]
@@ -89,5 +105,8 @@ fn directions_do_not_cross() {
     let mut init_rx = SessionCipher::new(&k, Role::Initiator, Suite::ChaCha20Poly1305);
     let mut buf = b"x".to_vec();
     let c = init.seal(b"", &mut buf).unwrap();
-    assert!(init_rx.open(c, b"", &mut buf).is_err(), "initiator must not decrypt its own direction");
+    assert!(
+        init_rx.open(c, b"", &mut buf).is_err(),
+        "initiator must not decrypt its own direction"
+    );
 }

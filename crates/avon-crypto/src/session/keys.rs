@@ -52,7 +52,8 @@ fn expand(prk: &Hkdf<Sha256>, label: &[u8], epoch: u32) -> Result<[u8; 32], Cryp
     info.extend_from_slice(label);
     info.extend_from_slice(&epoch.to_be_bytes());
     let mut out = [0u8; 32];
-    prk.expand(&info, &mut out).map_err(|e| CryptoError::KeyDerivationFailed(e.to_string()))?;
+    prk.expand(&info, &mut out)
+        .map_err(|e| CryptoError::KeyDerivationFailed(e.to_string()))?;
     Ok(out)
 }
 
@@ -66,7 +67,11 @@ impl SessionKeys {
         })
     }
 
-    pub fn derive(transcript: &Transcript, ss_e: &HybridSharedSecret, ss_s: &HybridSharedSecret) -> Result<Self, CryptoError> {
+    pub fn derive(
+        transcript: &Transcript,
+        ss_e: &HybridSharedSecret,
+        ss_s: &HybridSharedSecret,
+    ) -> Result<Self, CryptoError> {
         let salt = transcript.hash();
         let mut ikm = [0u8; 64];
         ikm[..32].copy_from_slice(ss_e.as_bytes());
