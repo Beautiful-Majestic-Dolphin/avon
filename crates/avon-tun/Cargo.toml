@@ -1,0 +1,32 @@
+[package]
+name = "avon-tun"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Platform TUN device for AVON (Linux, macOS, Windows stub)"
+
+[dependencies]
+avon-tunnel.workspace = true
+avon-agent-core.workspace = true
+tokio.workspace = true
+async-trait = "0.1"
+thiserror.workspace = true
+tracing.workspace = true
+ipnet = "2.10"
+parking_lot = "0.12"
+
+[dependencies.libc]
+version = "0.2"
+optional = false
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rtnetlink = "0.15"
+futures = "0.3"
+netlink-packet-route = "0.20"
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

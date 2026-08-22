@@ -1,2 +1,2 @@
-//! AVON Agent library - re-exports for testing
 pub mod config;
+pub mod platform;

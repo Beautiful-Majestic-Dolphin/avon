@@ -1,29 +1,16 @@
-//! AVON Endpoint Agent
-//!
-//! Cross-platform client installed on devices for secure network access.
-
-// Allow dead code as many components are scaffolded but not yet wired up
-#![allow(dead_code)]
-// Allow tunnel/tunnel.rs module naming
-#![allow(clippy::module_inception)]
-
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod agent;
 mod config;
-mod control;
-mod identity;
-mod tunnel;
+mod platform;
 
-use agent::AvonAgent;
 use config::AgentConfig;
 
 #[derive(Parser)]
 #[command(name = "avon-agent")]
-#[command(about = "AVON Endpoint Agent - Secure Zero Trust Network Access")]
+#[command(about = "AVON Endpoint Agent")]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -32,7 +19,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run the agent as a service
+    /// Run the agent
     Run {
         /// Path to configuration file
         #[arg(short, long)]
@@ -40,31 +27,46 @@ enum Commands {
     },
     /// Enroll this device with the AVON network
     Enroll {
-        /// Enrollment token from admin console
-        #[arg(short, long)]
-        token: String,
-        /// Control plane address (e.g., gateway.avon.local:8443)
-        #[arg(short = 'c', long)]
-        control_plane: String,
-        /// Data directory for storing identity
-        #[arg(short, long)]
-        data_dir: Option<PathBuf>,
-        /// Require FIDO2 hardware security key attestation during enrollment
+        /// Control plane address (e.g., https://control:8443)
+        #[arg(long, env = "AVON_CONTROL_URL")]
+        control: String,
+        /// Enrollment token
+        #[arg(long, env = "AVON_AGENT_ENROLL_TOKEN")]
+        token: Option<String>,
+        /// Token file (alternative to --token)
         #[arg(long)]
-        fido2: bool,
+        token_file: Option<PathBuf>,
+        /// PEM CA bundle to trust for control
+        #[arg(long)]
+        ca_file: Option<PathBuf>,
+        /// SHA256 fingerprint of the control server's certificate (hex)
+        #[arg(long)]
+        ca_fingerprint: Option<String>,
+        /// Data directory for storing identity
+        #[arg(long)]
+        data_dir: Option<PathBuf>,
     },
     /// Show agent status
     Status {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
         /// Data directory to check
-        #[arg(short, long)]
+        #[arg(long)]
         data_dir: Option<PathBuf>,
     },
     /// Show version information
     Version,
 }
 
+fn default_data_dir() -> PathBuf {
+    AgentConfig::default_data_dir()
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    avon_tls::install_default_provider();
+
     let cli = Cli::parse();
 
     tracing_subscriber::registry()
@@ -75,96 +77,178 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     match cli.command {
-        Commands::Run {
-            config: config_path,
-        } => {
-            tracing::info!("AVON Agent starting...");
-
-            let config = AgentConfig::load(config_path.as_deref())?;
-            let agent = AvonAgent::new(config).await?;
-
-            agent.run().await?;
+        Commands::Run { config } => {
+            let cfg = AgentConfig::load(config.as_deref())?;
+            // Build AgentCoreConfig from AgentConfig
+            let control = if cfg.control_plane.starts_with("https://") {
+                cfg.control_plane.clone()
+            } else {
+                format!("https://{}", cfg.control_plane)
+            };
+            let data_dir = cfg.data_dir.clone();
+            let identity = avon_agent_core::identity::load(&data_dir).await?;
+            let tun = avon_tun::Tun::create(&cfg.tun_name, cfg.overlay_mtu).await?;
+            let tun: std::sync::Arc<dyn avon_agent_core::traits::TunProvider> =
+                std::sync::Arc::new(tun);
+            let posture = std::sync::Arc::new(platform::posture::PlatformPosture);
+            let agent_cfg = avon_agent_core::AgentCoreConfig {
+                control,
+                pulse_interval: std::time::Duration::from_secs(cfg.pulse_interval_secs),
+                timers: avon_tunnel::TimerConfig::default(),
+                overlay_mtu: cfg.overlay_mtu,
+                bind: std::net::SocketAddr::from(([0, 0, 0, 0], 0)),
+                suites: vec![
+                    avon_crypto::aead::Suite::Aes256Gcm,
+                    avon_crypto::aead::Suite::ChaCha20Poly1305,
+                ],
+            };
+            let agent = avon_agent_core::Agent::new(agent_cfg, identity, tun, posture);
+            let status_handle = agent.status_handle();
+            // Serve status socket.
+            let status_dir = data_dir.clone();
+            tokio::spawn(async move {
+                let _ = avon_agent_core::status::serve_status(status_handle, status_dir).await;
+            });
+            // Graceful shutdown on SIGTERM/SIGINT.
+            let shutdown = async {
+                let _ = tokio::signal::ctrl_c().await;
+                tracing::info!("shutdown signal received");
+            };
+            agent.run(shutdown).await?;
         }
         Commands::Enroll {
+            control,
             token,
-            control_plane,
+            token_file,
+            ca_file,
+            ca_fingerprint,
             data_dir,
-            fido2,
         } => {
-            tracing::info!("Starting device enrollment...");
-
-            let data_dir = data_dir.unwrap_or_else(AgentConfig::default_data_dir);
-
-            // Perform FIDO2 attestation if requested
-            if fido2 {
-                if identity::fido2::is_authenticator_available() {
-                    tracing::info!("FIDO2 authenticator detected");
+            let data_dir = data_dir.unwrap_or_else(default_data_dir);
+            // Resolve token.
+            let token = if let Some(t) = token {
+                t
+            } else if let Some(path) = token_file {
+                std::fs::read_to_string(&path)?.trim().to_string()
+            } else if let Ok(t) = std::env::var("AVON_AGENT_ENROLL_TOKEN") {
+                t
+            } else {
+                anyhow::bail!("token required: --token, --token-file, or AVON_AGENT_ENROLL_TOKEN");
+            };
+            // Resolve CA.
+            let ca_pem: Vec<u8> = if let Some(path) = ca_file {
+                std::fs::read(&path)?
+            } else if let Some(fp) = ca_fingerprint {
+                // Fetch server cert and verify fingerprint.
+                let fp = fp.trim().to_lowercase().replace(':', "");
+                let url = if control.starts_with("https://") {
+                    control.clone()
                 } else {
-                    eprintln!("Warning: --fido2 specified but no FIDO2 authenticator detected.");
-                    eprintln!("Please insert your hardware security key and try again.");
-                    std::process::exit(1);
-                }
-            }
-
-            match identity::IdentityManager::enroll(&token, &control_plane, &data_dir).await {
-                Ok(identity) => {
-                    tracing::info!(
-                        device_id = %identity.device_id(),
-                        fido2 = fido2,
-                        "Device enrolled successfully"
-                    );
-                    println!("Device enrolled successfully!");
-                    println!("Device ID: {}", identity.device_id());
-                    println!("Data directory: {}", data_dir.display());
-                    if fido2 {
-                        println!("FIDO2 attestation: verified");
+                    format!("https://{}", control)
+                };
+                // Connect without verification to get cert, then verify fingerprint.
+                // For now, error if fingerprint provided without ca_file (not fully implemented).
+                anyhow::bail!(
+                    "ca-fingerprint verification not yet implemented; please use --ca-file (fingerprint was {}) for {}",
+                    fp,
+                    url
+                );
+            } else {
+                // Try to read from data_dir/ca.pem if exists, otherwise error.
+                anyhow::bail!("--ca-file or --ca-fingerprint required");
+            };
+            let control_url = if control.starts_with("https://") {
+                control.clone()
+            } else {
+                format!("https://{}", control)
+            };
+            let fp = platform::fingerprint::PlatformFingerprint;
+            let id = avon_agent_core::identity::enroll(
+                &control_url,
+                &token,
+                &data_dir,
+                &ca_pem,
+                // Derive server name from control URL.
+                &url_server_name(&control_url),
+                &fp,
+                env!("CARGO_PKG_VERSION"),
+            )
+            .await?;
+            println!("Device enrolled successfully!");
+            println!("Device ID: {}", id.device_id);
+            println!("Data directory: {}", data_dir.display());
+        }
+        Commands::Status { json, data_dir } => {
+            let data_dir = data_dir.unwrap_or_else(|| {
+                // Try to load from config or default.
+                AgentConfig::default_data_dir()
+            });
+            // Try to fetch from status socket, fallback to reading identity.
+            match avon_agent_core::status::fetch_status(&data_dir).await {
+                Ok(st) => {
+                    if json {
+                        println!("{}", serde_json::to_string_pretty(&st)?);
+                    } else {
+                        println!("AVON Agent Status");
+                        println!("=================");
+                        println!("State: {}", st.state);
+                        println!("Device ID: {}", st.device_id);
+                        println!(
+                            "Overlay v4: {}",
+                            st.overlay_v4.unwrap_or_else(|| "—".into())
+                        );
+                        println!("Session: {}", st.session_id.unwrap_or_else(|| "—".into()));
+                        println!("Gateway: {}", st.gateway.unwrap_or_else(|| "—".into()));
                     }
                 }
-                Err(e) => {
-                    tracing::error!(error = %e, "Enrollment failed");
-                    eprintln!("Enrollment failed: {}", e);
-                    std::process::exit(1);
-                }
-            }
-        }
-        Commands::Status { data_dir } => {
-            let data_dir = data_dir.unwrap_or_else(AgentConfig::default_data_dir);
-
-            match identity::IdentityManager::load(&data_dir).await {
-                Ok(identity) => {
-                    println!("AVON Agent Status");
-                    println!("=================");
-                    println!("Device ID: {}", identity.device_id());
-                    println!("Data directory: {}", data_dir.display());
-                    println!("Identity: Loaded");
-                    println!(
-                        "TPM: {}",
-                        if identity.has_tpm() {
-                            "Available"
-                        } else {
-                            "Not available"
-                        }
-                    );
-                }
                 Err(_) => {
-                    println!("AVON Agent Status");
-                    println!("=================");
-                    println!("Status: Not enrolled");
-                    println!("Data directory: {}", data_dir.display());
-                    println!();
-                    println!("Run 'avon-agent enroll' to enroll this device.");
+                    // Fallback: try to load identity.
+                    match avon_agent_core::identity::load(&data_dir).await {
+                        Ok(id) => {
+                            if json {
+                                let st = serde_json::json!({
+                                    "state": "enrolled",
+                                    "device_id": id.device_id.to_string(),
+                                    "overlay_v4": null,
+                                });
+                                println!("{}", serde_json::to_string_pretty(&st)?);
+                            } else {
+                                println!("AVON Agent Status");
+                                println!("=================");
+                                println!("Device ID: {}", id.device_id);
+                                println!("Data directory: {}", data_dir.display());
+                                println!("Identity: Loaded");
+                                println!("State: enrolled (agent not running)");
+                            }
+                        }
+                        Err(_) => {
+                            if json {
+                                println!("{}", serde_json::json!({"state": "not-enrolled"}));
+                            } else {
+                                println!("AVON Agent Status");
+                                println!("=================");
+                                println!("State: not-enrolled");
+                                println!("Data directory: {}", data_dir.display());
+                            }
+                            std::process::exit(1);
+                        }
+                    }
                 }
             }
         }
         Commands::Version => {
-            println!("AVON Agent v{}", env!("CARGO_PKG_VERSION"));
-            println!("Built with Rust {}", rustc_version());
+            println!("avon-agent {}", env!("CARGO_PKG_VERSION"));
         }
     }
 
     Ok(())
 }
 
-fn rustc_version() -> &'static str {
-    option_env!("RUSTC_VERSION").unwrap_or("unknown")
+fn url_server_name(url: &str) -> String {
+    if let Ok(parsed) = url::Url::parse(url) {
+        if let Some(host) = parsed.host_str() {
+            return host.to_string();
+        }
+    }
+    "localhost".to_string()
 }

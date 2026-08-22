@@ -4,7 +4,7 @@ use avon_common::ids::{DeviceId, SessionId};
 use parking_lot::RwLock;
 use serde::Serialize;
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, serde::Deserialize, Clone, Debug)]
 pub struct Status {
     pub state: String,
     pub device_id: String,
@@ -101,4 +101,67 @@ impl StatusHandle {
             s.state = "degraded".into();
         }
     }
+}
+
+/// Serve status snapshots over a Unix socket at `<data_dir>/status.sock`.
+/// Each connection receives a single JSON object and is then closed. On
+/// Windows this is a named pipe stub returning an error.
+#[cfg(unix)]
+pub async fn serve_status(
+    handle: StatusHandle,
+    data_dir: std::path::PathBuf,
+) -> std::io::Result<()> {
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::UnixListener;
+
+    let sock = data_dir.join("status.sock");
+    // Remove stale socket.
+    let _ = std::fs::remove_file(&sock);
+    let listener = UnixListener::bind(&sock)?;
+    // Restrict to owner.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&sock, std::fs::Permissions::from_mode(0o600));
+    }
+    loop {
+        let (mut stream, _) = listener.accept().await?;
+        let snap = handle.snapshot();
+        let data = serde_json::to_vec(&snap).unwrap_or_else(|_| b"{}".to_vec());
+        let mut out = data;
+        out.push(b'\n');
+        let _ = stream.write_all(&out).await;
+    }
+}
+
+#[cfg(not(unix))]
+pub async fn serve_status(
+    _handle: StatusHandle,
+    _data_dir: std::path::PathBuf,
+) -> std::io::Result<()> {
+    // Windows: named pipe stub.
+    std::future::pending::<()>().await;
+    Ok(())
+}
+
+/// Fetch status from the local socket. Used by `avon-agent status`.
+#[cfg(unix)]
+pub async fn fetch_status(data_dir: &std::path::Path) -> std::io::Result<Status> {
+    use tokio::io::AsyncReadExt;
+    use tokio::net::UnixStream;
+
+    let sock = data_dir.join("status.sock");
+    let mut stream = UnixStream::connect(&sock).await?;
+    let mut buf = Vec::new();
+    stream.read_to_end(&mut buf).await?;
+    serde_json::from_slice(&buf)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+}
+
+#[cfg(not(unix))]
+pub async fn fetch_status(_data_dir: &std::path::Path) -> std::io::Result<Status> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "status socket not supported on this platform",
+    ))
 }
