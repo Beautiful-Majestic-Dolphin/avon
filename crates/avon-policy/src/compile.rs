@@ -1,6 +1,4 @@
-use std::str::FromStr;
-
-use cedar_policy::{PolicySet, Schema};
+use cedar_policy::{Policy, PolicyId, PolicySet, Schema};
 use uuid::Uuid;
 
 use crate::entities::{PolicyEntry, SnapshotData};
@@ -278,7 +276,7 @@ fn parse_os_version(s: &str) -> (i64, i64) {
 
 pub fn compile(data: &SnapshotData, now: i64) -> Result<Compiled, CompileError> {
     let schema = crate::entities::cedar_schema()?;
-    let mut policy_texts: Vec<String> = Vec::new();
+    let mut policies = PolicySet::new();
     let mut active_ids: Vec<Uuid> = Vec::new();
     let mut next_change: Option<i64> = None;
 
@@ -300,16 +298,13 @@ pub fn compile(data: &SnapshotData, now: i64) -> Result<Compiled, CompileError> 
         }
 
         let src = cedar_source(entry)?;
-        policy_texts.push(src);
+        let policy = Policy::parse(Some(PolicyId::new(entry.id.to_string())), src)
+            .map_err(|e| CompileError::Cedar(e.to_string()))?;
+        policies
+            .add(policy)
+            .map_err(|e| CompileError::Cedar(e.to_string()))?;
         active_ids.push(entry.id);
     }
-
-    let combined = policy_texts.join("\n");
-    let policies = if combined.trim().is_empty() {
-        PolicySet::new()
-    } else {
-        PolicySet::from_str(&combined).map_err(|e| CompileError::Cedar(e.to_string()))?
-    };
 
     Ok(Compiled {
         policies,
