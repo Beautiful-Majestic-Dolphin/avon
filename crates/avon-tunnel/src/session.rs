@@ -54,6 +54,9 @@ pub struct Session {
     last_rx_ms: AtomicU64,
     last_tx_ms: AtomicU64,
     closed: AtomicBool,
+    /// Set when a rekey has been signalled and not yet completed, so the timer
+    /// loop asks once rather than every tick.
+    rekey_pending: AtomicBool,
     stats: SessionStats,
 }
 
@@ -98,6 +101,7 @@ impl Session {
             last_rx_ms: AtomicU64::new(now_ms()),
             last_tx_ms: AtomicU64::new(now_ms()),
             closed: AtomicBool::new(false),
+            rekey_pending: AtomicBool::new(false),
             stats: SessionStats::default(),
         })
     }
@@ -155,6 +159,12 @@ impl Session {
     }
     pub fn is_closed(&self) -> bool {
         self.closed.load(Ordering::SeqCst)
+    }
+    pub fn rekey_pending(&self) -> bool {
+        self.rekey_pending.load(Ordering::SeqCst)
+    }
+    pub fn set_rekey_pending(&self, pending: bool) {
+        self.rekey_pending.store(pending, Ordering::SeqCst);
     }
     pub fn idle_for(&self) -> Duration {
         Duration::from_millis(now_ms().saturating_sub(self.last_rx_ms.load(Ordering::Relaxed)))
@@ -273,6 +283,7 @@ impl Session {
         let old = std::mem::replace(&mut epochs.current, new_epoch);
         epochs.previous = Some((old, Instant::now()));
         self.epoch.fetch_add(1, Ordering::Relaxed);
+        self.rekey_pending.store(false, Ordering::SeqCst);
         metrics::counter!("avon_tunnel_rekeys_total").increment(1);
     }
 
@@ -288,5 +299,19 @@ impl Session {
             }
             _ => None,
         }
+    }
+}
+
+impl std::fmt::Debug for Session {
+    /// Deliberately does not touch the epoch mutex: this is called from event
+    /// formatting that may run while another task holds it.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Session")
+            .field("id", &self.id)
+            .field("role", &self.role)
+            .field("suite", &self.suite)
+            .field("epoch", &self.epoch())
+            .field("closed", &self.is_closed())
+            .finish()
     }
 }

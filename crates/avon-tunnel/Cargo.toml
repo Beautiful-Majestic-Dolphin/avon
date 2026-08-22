@@ -13,6 +13,7 @@ avon-protocol.workspace = true
 tokio.workspace = true
 prost.workspace = true
 dashmap.workspace = true
+async-trait = "0.1"
 thiserror.workspace = true
 tracing.workspace = true
 metrics.workspace = true
@@ -21,6 +22,7 @@ parking_lot = "0.12"
 
 [dev-dependencies]
 proptest.workspace = true
+avon-testkit.workspace = true
 
 [lints]
 workspace = true

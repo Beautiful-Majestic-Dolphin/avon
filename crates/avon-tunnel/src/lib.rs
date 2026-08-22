@@ -4,12 +4,16 @@
 //! an AEAD ciphertext of `inner_type || payload`. Keys come from the control
 //! channel; this crate never performs an unauthenticated handshake on UDP.
 
+mod endpoint;
 mod establish;
 mod header;
 mod inner;
 mod session;
+mod sink;
 mod table;
+mod timers;
 
+pub use endpoint::{EndpointConfig, EndpointEvent, UdpEndpoint};
 pub use establish::{
     choose_suite, rekey_answer, rekey_complete, rekey_offer, Established, Initiator, PendingOffer,
     Responder,
@@ -17,7 +21,9 @@ pub use establish::{
 pub use header::{max_udp_payload, Header, FLAG_EPOCH_OVERLAP, HEADER_LEN, TYPE_DATA};
 pub use inner::Inner;
 pub use session::{Epoch, Role, Session, SessionStats};
+pub use sink::{PacketSink, PacketSource};
 pub use table::SessionTable;
+pub use timers::TimerConfig;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TunnelError {
