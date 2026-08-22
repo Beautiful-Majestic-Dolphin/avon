@@ -31,6 +31,7 @@ pub struct SessionManager {
     pub hub: RwLock<Option<Arc<Session>>>,
     // Pending rekey: (ephemeral keypair, new local index)
     pending_rekey: parking_lot::Mutex<Option<(avon_crypto::hybrid::kem::HybridKemKeyPair, u32)>>,
+    pub peer: Arc<crate::peer::PeerManager>,
 }
 
 impl SessionManager {
@@ -40,12 +41,14 @@ impl SessionManager {
         router: Router,
         _timers: TimerConfig,
     ) -> Arc<Self> {
+        let peer = crate::peer::PeerManager::new(table.clone(), endpoint.clone(), router.clone());
         Arc::new(Self {
             endpoint,
             table,
             router,
             hub: RwLock::new(None),
             pending_rekey: parking_lot::Mutex::new(None),
+            peer,
         })
     }
 
@@ -178,6 +181,7 @@ impl SessionManager {
                     }
                 }
                 Some(tunnel_frame::Msg::Close(c)) => {
+                    self.peer.remove_session(&session.id());
                     self.router.remove_session(&session.id());
                     self.table.remove(&session.id());
                     let mut hub = self.hub.write().await;
@@ -222,6 +226,7 @@ impl SessionManager {
                 }
             }
             EndpointEvent::Idle(session) => {
+                self.peer.remove_session(&session.id());
                 self.router.remove_session(&session.id());
                 self.table.remove(&session.id());
                 let mut hub = self.hub.write().await;
@@ -233,7 +238,11 @@ impl SessionManager {
                     *hub = None;
                 }
             }
-            EndpointEvent::PeerEndpointChanged { .. } => {}
+            EndpointEvent::PeerEndpointChanged { session, endpoint } => {
+                // Notify peer manager; hub sessions also update but peer cares.
+                self.peer.on_endpoint_changed(&session);
+                tracing::debug!(session=%session.id(), %endpoint, "endpoint changed");
+            }
         }
         Ok(())
     }
@@ -242,10 +251,17 @@ impl SessionManager {
         // Parse dst.
         let dst =
             parse_dst(packet).ok_or_else(|| AgentError::Protocol("malformed packet".into()))?;
-        let sid = self
-            .router
-            .lookup(dst)
-            .ok_or_else(|| AgentError::Protocol("no route".into()))?;
+        // Prefer direct peer if exists: check peer sessions that cover this dst.
+        let sid = if let Some(peer_sid) = self.peer.lookup_for_dst(dst) {
+            peer_sid
+        } else if let Some(sid) = self.router.lookup(dst) {
+            sid
+        } else if let Some(hub) = self.hub.read().await.clone() {
+            // Fallback to hub for any destination (gateway will relay or egress).
+            hub.id()
+        } else {
+            return Err(AgentError::Protocol("no route".into()));
+        };
         let session = self
             .table
             .by_id(&sid)

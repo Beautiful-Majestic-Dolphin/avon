@@ -236,8 +236,21 @@ impl AgentService for AgentServiceImpl {
                             }
                         }
                     }
-                    // Attestation verification lands in phase 5; peer answers and
-                    // session reports in phase 3. Acknowledge the liveness signal.
+                    Some(pulse_up::Msg::PeerAnswer(ans)) => {
+                        match crate::peer::answer_peer_session(&state, &info, ans).await {
+                            Ok(()) => Some(PulseDown {
+                                msg: Some(pulse_down::Msg::Ack(PulseAck {
+                                    server_time_unix: chrono::Utc::now().timestamp(),
+                                    next_interval_secs: state.pulse_interval_secs,
+                                })),
+                            }),
+                            Err(e) => {
+                                let _ = tx.send(Err(e)).await;
+                                break;
+                            }
+                        }
+                    }
+                    // Attestation verification lands in phase 5; session reports in phase 3.
                     Some(_) => Some(PulseDown {
                         msg: Some(pulse_down::Msg::Ack(PulseAck {
                             server_time_unix: chrono::Utc::now().timestamp(),
@@ -269,16 +282,21 @@ impl AgentService for AgentServiceImpl {
 
     async fn request_peer_session(
         &self,
-        _req: Request<PeerSessionRequest>,
+        req: Request<PeerSessionRequest>,
     ) -> Result<Response<PeerSessionResponse>, Status> {
-        Err(Status::unimplemented("request_peer_session"))
+        let info = authenticated_device(&self.state, &req).await?;
+        crate::peer::request_peer_session(&self.state, &info, req.into_inner())
+            .await
+            .map(Response::new)
     }
 
-    async fn answer_peer_session(
-        &self,
-        _req: Request<PeerAnswer>,
-    ) -> Result<Response<Ack>, Status> {
-        Err(Status::unimplemented("answer_peer_session"))
+    async fn answer_peer_session(&self, req: Request<PeerAnswer>) -> Result<Response<Ack>, Status> {
+        let info = authenticated_device(&self.state, &req).await?;
+        crate::peer::answer_peer_session(&self.state, &info, req.into_inner()).await?;
+        Ok(Response::new(Ack {
+            ok: true,
+            message: String::new(),
+        }))
     }
 
     async fn report_session(&self, req: Request<SessionReport>) -> Result<Response<Ack>, Status> {

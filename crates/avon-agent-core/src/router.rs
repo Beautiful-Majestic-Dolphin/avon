@@ -8,7 +8,7 @@ use ipnet::IpNet;
 /// over the shared `avon_tunnel::RouteTable` so the agent and gateway use
 /// identical lookup semantics.
 pub struct Router {
-    table: RouteTable,
+    table: std::sync::Arc<RouteTable>,
 }
 
 impl Default for Router {
@@ -20,14 +20,24 @@ impl Default for Router {
 impl Router {
     pub fn new() -> Self {
         Self {
-            table: RouteTable::new(),
+            table: std::sync::Arc::new(RouteTable::new()),
         }
     }
 
     pub fn inner(&self) -> &RouteTable {
         &self.table
     }
+}
 
+impl Clone for Router {
+    fn clone(&self) -> Self {
+        Self {
+            table: self.table.clone(),
+        }
+    }
+}
+
+impl Router {
     pub fn set_routes(&self, routes: &[IpNet], session: SessionId) {
         // Remove old routes for this session first.
         self.table.remove_session(&session);

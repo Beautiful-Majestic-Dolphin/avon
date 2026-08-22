@@ -43,6 +43,7 @@ pub struct Agent {
     tun: Arc<dyn TunProvider>,
     posture: Arc<dyn PostureProvider>,
     status: StatusHandle,
+    peer_handle: Arc<tokio::sync::RwLock<Option<Arc<crate::peer::PeerManager>>>>,
 }
 
 impl Agent {
@@ -60,11 +61,20 @@ impl Agent {
             tun,
             posture,
             status,
+            peer_handle: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
 
     pub fn status_handle(&self) -> StatusHandle {
         self.status.clone()
+    }
+
+    pub fn peer_handle(&self) -> Arc<tokio::sync::RwLock<Option<Arc<crate::peer::PeerManager>>>> {
+        self.peer_handle.clone()
+    }
+
+    pub fn control_config(&self) -> (String, Arc<Identity>) {
+        (self.cfg.control.clone(), self.identity.clone())
     }
 
     pub async fn run(
@@ -92,6 +102,8 @@ impl Agent {
             self.cfg.timers.clone(),
         );
         let session_mgr = Arc::new(session_mgr);
+        // Publish peer handle for TestAgentCore dial.
+        *self.peer_handle.write().await = Some(session_mgr.peer.clone());
 
         // Event stream from endpoint.
         let mut events = endpoint.clone().run();
@@ -345,6 +357,18 @@ impl Agent {
                                             }
                                         }
                                     }
+                                }
+                                Some(pulse_down::Msg::PeerOffer(offer)) => {
+                                    let mgr = session_mgr.clone();
+                                    let ctrl = control.clone();
+                                    let id = identity.clone();
+                                    tokio::spawn(async move {
+                                        if let Some(c) = ctrl {
+                                            if let Err(e) = mgr.peer.handle_offer(&c, &id, offer).await {
+                                                tracing::warn!(error=%e, "handle peer offer failed");
+                                            }
+                                        }
+                                    });
                                 }
                                 _ => {}
                             }

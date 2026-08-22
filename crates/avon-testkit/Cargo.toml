@@ -9,6 +9,7 @@ description = "Test infrastructure for AVON (ephemeral databases, Redis, ports, 
 [dependencies]
 avon-agent-core.workspace = true
 avon-ca.workspace = true
+avon-common.workspace = true
 avon-control.workspace = true
 avon-config.workspace = true
 avon-crypto.workspace = true

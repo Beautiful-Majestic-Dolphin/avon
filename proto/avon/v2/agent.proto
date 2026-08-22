@@ -92,9 +92,9 @@ message OpenSessionResponse {
   repeated RouteUpdate routes = 6;
 }
 
-message PeerSessionRequest { Uuid target_device = 1; bytes eph_kem_pk = 2; repeated Suite suites = 3; repeated Candidate candidates = 4; }
-message PeerSessionResponse { bytes session_id = 1; }
-message PeerOffer { bytes session_id = 1; Certificate initiator_certificate = 2; bytes eph_kem_pk = 3; Suite suite = 4; repeated Candidate candidates = 5; }
+message PeerSessionRequest { Uuid target_device = 1; bytes eph_kem_pk = 2; repeated Suite suites = 3; repeated Candidate candidates = 4; uint32 initiator_index = 5; }
+message PeerSessionResponse { bytes session_id = 1; SessionAnswer answer = 2; repeated Candidate candidates = 3; Certificate responder_certificate = 4; string overlay_ipv4 = 5; string overlay_ipv6 = 6; }
+message PeerOffer { bytes session_id = 1; Certificate initiator_certificate = 2; bytes eph_kem_pk = 3; Suite suite = 4; repeated Candidate candidates = 5; string overlay_ipv4 = 6; string overlay_ipv6 = 7; uint32 initiator_index = 8; }
 message PeerAnswer { bytes session_id = 1; SessionAnswer answer = 2; repeated Candidate candidates = 3; }
 message Candidate { string address = 1; uint32 priority = 2; string kind = 3; }   // host|srflx|relay
 

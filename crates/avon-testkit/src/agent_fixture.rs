@@ -131,6 +131,8 @@ pub struct TestAgentCore {
     pub data_dir: tempfile::TempDir,
     agent_task: tokio::task::JoinHandle<()>,
     status_handle: avon_agent_core::StatusHandle,
+    peer_handle: Arc<tokio::sync::RwLock<Option<Arc<avon_agent_core::peer::PeerManager>>>>,
+    control_url: String,
     // Keep the agent's device id for assertions.
     _agent: Option<Agent>,
 }
@@ -176,7 +178,7 @@ impl TestAgentCore {
         let tun_provider: Arc<dyn TunProvider> = test_tun.clone();
 
         let cfg = AgentCoreConfig {
-            control: control_url,
+            control: control_url.clone(),
             pulse_interval: Duration::from_secs(1),
             timers,
             overlay_mtu: 1280,
@@ -189,6 +191,8 @@ impl TestAgentCore {
 
         let agent = Agent::new(cfg, identity, tun_provider, Arc::new(TestPosture));
         let status = agent.status_handle();
+        let peer_handle = agent.peer_handle();
+        let control_url_clone = control_url.clone();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         let agent_task = tokio::spawn(async move {
             let _ = agent
@@ -206,6 +210,14 @@ impl TestAgentCore {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
 
+        // Also wait for peer_handle to be populated.
+        for _ in 0..50 {
+            if peer_handle.read().await.is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
         // Leak shutdown_tx for now? We need to keep it to later shut down.
         // Store it in a way that drop shuts down? For tests, we just leak and let task run until test ends.
         std::mem::forget(shutdown_tx);
@@ -216,6 +228,8 @@ impl TestAgentCore {
             data_dir,
             agent_task,
             status_handle: status,
+            peer_handle,
+            control_url: control_url_clone,
             _agent: None,
         }
     }
@@ -287,18 +301,61 @@ impl TestAgentCore {
         panic!("wait_for_pulse_after timed out");
     }
 
-    pub fn has_direct_peer(&self, _device: uuid::Uuid) -> bool {
-        false
+    pub fn has_direct_peer(&self, device: uuid::Uuid) -> bool {
+        let dev = avon_common::ids::DeviceId::new(device);
+        // Try to use peer manager if available; otherwise check via blocking read.
+        if let Some(mgr) = self.peer_handle.try_read().ok().and_then(|g| g.clone()) {
+            mgr.has_direct_peer(dev)
+        } else {
+            false
+        }
     }
 
-    pub async fn wait_for_direct_peer(&self, _device: uuid::Uuid) {
-        panic!("not implemented")
+    pub async fn wait_for_direct_peer(&self, device: uuid::Uuid) {
+        let dev = avon_common::ids::DeviceId::new(device);
+        for _ in 0..100 {
+            if let Some(mgr) = self.peer_handle.read().await.clone() {
+                if mgr.has_direct_peer(dev) {
+                    return;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("wait_for_direct_peer timed out for {device}");
     }
 
-    pub async fn dial_peer(&self, _target: uuid::Uuid) -> Result<(), avon_agent_core::AgentError> {
-        Err(avon_agent_core::AgentError::Protocol(
-            "peer not implemented in phase 3".into(),
-        ))
+    pub async fn dial_peer(&self, target: uuid::Uuid) -> Result<(), avon_agent_core::AgentError> {
+        let mgr = self
+            .peer_handle
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| avon_agent_core::AgentError::Protocol("peer not ready".into()))?;
+        // Create a fresh control client for the dial (transient)
+        let identity = avon_agent_core::identity::load(self.data_dir.path())
+            .await
+            .map_err(|e| avon_agent_core::AgentError::Protocol(e.to_string()))?;
+        let control =
+            avon_agent_core::control::ControlClient::connect(&identity, &self.control_url).await?;
+        control.authenticate(&identity).await?;
+        mgr.dial_peer(&control, &identity, avon_common::ids::DeviceId::new(target))
+            .await
+    }
+
+    pub async fn enroll_and_connect_with_blackholed_candidates(
+        f: &crate::services::ControlFixture,
+        token: &str,
+    ) -> Self {
+        let this = Self::enroll_and_connect(f, token).await;
+        // Inject blackholed candidates into peer manager
+        if let Some(mgr) = this.peer_handle.read().await.clone() {
+            mgr.set_blackholed_candidates(vec![avon_protocol::v2::Candidate {
+                address: "192.0.2.1:1".into(),
+                priority: 100,
+                kind: "host".into(),
+            }]);
+        }
+        this
     }
 }
 
