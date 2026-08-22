@@ -15,6 +15,10 @@ use sqlx::types::ipnetwork::IpNetwork;
 use tokio::sync::oneshot;
 use tonic::Status;
 
+use avon_common::ids::TenantId;
+use avon_policy::engine::{DecisionRequest, Destination};
+use avon_policy::spec::Protocol;
+
 use crate::service::AppState;
 use crate::session_token::SessionInfo;
 
@@ -120,6 +124,25 @@ pub async fn open_session(
     };
 
     let device = load_device(state, info).await?;
+    // Admission check (policy): deny only on explicit forbid, not on "no matching permit" to keep session establishment permissive when no policies exist.
+    {
+        let tenant = TenantId::new(info.tenant.as_uuid());
+        if let Some(engine) = state.engines.get(&tenant) {
+            let ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(10, 20, 0, 1));
+            let req = DecisionRequest {
+                device: info.device.as_uuid(),
+                destination: Destination::Ip(ip),
+                dst_ip: ip,
+                protocol: Protocol::Any,
+                dst_port: 0,
+                admission: true,
+            };
+            let res = engine.decide(&req);
+            if !res.allow && res.reason == "forbid" {
+                return Err(Status::permission_denied(res.reason));
+            }
+        }
+    }
     let (gateway_id, gateway) = state
         .gateways
         .pick(None)

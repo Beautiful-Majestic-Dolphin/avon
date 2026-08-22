@@ -133,8 +133,13 @@ async fn connect_and_serve(state: &Arc<GatewayState>, cfg: &GatewayConfig) -> an
             }
             Some(gateway_down::Msg::Crl(crl)) => apply_crl(state, &crl).await,
             Some(gateway_down::Msg::Routes(update)) => apply_routes(state, update),
-            // Policy snapshots land in phase 4.
-            Some(gateway_down::Msg::Policy(_)) | None => {}
+            Some(gateway_down::Msg::Policy(_)) => {
+                // Policy snapshots (Task 4.6) – ignored until CedarFlowPolicy lands.
+            }
+            Some(gateway_down::Msg::DeviceUpdate(_)) => {
+                // Device attribute patches (Task 4.7) – handled when policy engine exists.
+            }
+            None => {}
         }
     }
     *state.up.write().await = None;

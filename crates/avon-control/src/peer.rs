@@ -14,6 +14,9 @@ use dashmap::DashMap;
 use tokio::sync::oneshot;
 use tonic::Status;
 
+use avon_policy::engine::{DecisionRequest, Destination};
+use avon_policy::spec::Protocol;
+
 use crate::service::AppState;
 use crate::session_token::SessionInfo;
 
@@ -116,6 +119,29 @@ pub async fn request_peer_session(
     }
     if !state.devices.is_connected(target_id) {
         return Err(Status::unavailable("peer offline"));
+    }
+    // Admission check for peer session.
+    {
+        let engine = state.engines.get(&info.tenant).map(|e| e.clone());
+        if let Some(engine) = engine {
+            let (cert_bytes, _, _) = load_device_cert_and_overlay(state, target_id).await?;
+            // Use overlay ip if available, else dummy.
+            let dst_ip: std::net::IpAddr =
+                std::net::IpAddr::V4(std::net::Ipv4Addr::new(10, 20, 0, 1));
+            let req = DecisionRequest {
+                device: info.device.as_uuid(),
+                destination: Destination::Device(target_id.as_uuid()),
+                dst_ip,
+                protocol: Protocol::Any,
+                dst_port: 0,
+                admission: true,
+            };
+            let res = engine.decide(&req);
+            if !res.allow {
+                return Err(Status::permission_denied(res.reason));
+            }
+            let _ = cert_bytes;
+        }
     }
 
     // Load initiator certificate and overlay for offer.

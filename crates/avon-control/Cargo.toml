@@ -19,6 +19,7 @@ avon-config.workspace = true
 avon-crypto.workspace = true
 avon-db.workspace = true
 avon-observability.workspace = true
+avon-policy.workspace = true
 avon-protocol.workspace = true
 avon-tls.workspace = true
 tokio.workspace = true

@@ -15,6 +15,7 @@ pub mod gateway_stream;
 pub mod ipam;
 pub mod liveness;
 pub mod peer;
+pub mod policy_push;
 pub mod pulse;
 pub mod renew;
 pub mod service;

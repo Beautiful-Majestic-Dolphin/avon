@@ -60,6 +60,11 @@ async fn main() -> anyhow::Result<()> {
         state.clone(),
         cfg.redis.clone(),
     ));
+    tokio::spawn(avon_control::policy_push::policy_listener(
+        state.clone(),
+        cfg.db.url.clone(),
+    ));
+    tokio::spawn(avon_control::policy_push::window_ticker(state.clone()));
 
     let health = grpc_health();
     health

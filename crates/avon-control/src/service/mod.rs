@@ -1,14 +1,19 @@
 pub mod agent;
 pub mod gateway;
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
+use avon_common::ids::{DeviceId, TenantId};
 use avon_config::TlsArgs;
 use avon_crypto::cert::crl::Crl;
 use avon_crypto::cert::{Certificate, ChainVerifier};
+use avon_policy::engine::Engine;
+use dashmap::DashMap;
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::ca_client::CaClient;
 use crate::session_token::SessionStore;
@@ -36,6 +41,8 @@ pub struct AppState {
     pub devices: crate::pulse::DeviceStreams,
     pub pending_answers: crate::sessions::PendingAnswers,
     pub peer_pending: crate::peer::PendingPeerAnswers,
+    pub engines: DashMap<TenantId, Arc<Engine>>,
+    pub device_patch_at: Mutex<HashMap<DeviceId, Instant>>,
 }
 
 impl AppState {
@@ -85,6 +92,8 @@ impl AppState {
             devices: Default::default(),
             pending_answers: Default::default(),
             peer_pending: Default::default(),
+            engines: DashMap::new(),
+            device_patch_at: Mutex::new(HashMap::new()),
         }))
     }
 }

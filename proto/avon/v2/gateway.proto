@@ -16,13 +16,20 @@ message GatewayRegistration {
   string version = 4;
   repeated string protected_cidrs = 5;   // networks this gateway routes into
 }
-message GatewayConfig { Chain chain = 1; Crl crl = 2; uint32 keepalive_secs = 3; uint32 rekey_secs = 4; }
+message GatewayConfig {
+  Chain chain = 1;
+  Crl crl = 2;
+  uint32 keepalive_secs = 3;
+  uint32 rekey_secs = 4;
+  repeated PolicySnapshot snapshots = 5;
+}
 
 message GatewayUp {
   oneof msg {
     SessionAnswer session_answer = 1;
     SessionEvent session_event = 2;
     GatewayStats stats = 3;
+    Decisions decisions = 4;
   }
 }
 message GatewayDown {
@@ -30,8 +37,9 @@ message GatewayDown {
     SessionOffer session_offer = 1;
     SessionClose close = 2;
     Crl crl = 3;
-    PolicySnapshot policy = 4;             // defined in phase 4 (placeholder message kept minimal here)
+    PolicySnapshot policy = 4;
     RouteUpdate routes = 5;
+    DeviceUpdate device_update = 6;
   }
 }
 
@@ -48,3 +56,5 @@ message SessionOffer {
 message SessionEvent { bytes session_id = 1; string event = 2; string reason = 3; string endpoint = 4; uint64 bytes_tx = 5; uint64 bytes_rx = 6; }
 message GatewayStats { uint32 active_sessions = 1; uint64 packets_per_sec = 2; }
 message PolicySnapshot { uint64 version = 1; bytes encoded = 2; }
+message DeviceUpdate { Uuid tenant_id = 1; Uuid device_id = 2; string attrs_json = 3; }
+message Decisions { repeated DecisionRecord records = 1; }
