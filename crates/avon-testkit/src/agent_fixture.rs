@@ -59,6 +59,31 @@ impl PostureProvider for TestPosture {
     }
 }
 
+#[derive(Clone)]
+struct MutablePosture {
+    inner: Arc<Mutex<DevicePosture>>,
+}
+
+impl PostureProvider for MutablePosture {
+    fn collect(&self) -> DevicePosture {
+        // Try to block on the async mutex; for tests we can use try_lock.
+        self.inner
+            .try_lock()
+            .map(|p| p.clone())
+            .unwrap_or_else(|_| DevicePosture {
+                os_name: "test".into(),
+                os_version: "1.0".into(),
+                agent_version: "0.2.0".into(),
+                firewall_enabled: None,
+                disk_encrypted: None,
+                screen_lock_enabled: None,
+                last_update_unix: None,
+                key_provider: "software".into(),
+                collected_at_unix: Utc::now().timestamp(),
+            })
+    }
+}
+
 /// A `TunProvider` backed by an in-memory channel. `configure` and `set_routes`
 /// just remember the values for assertions.
 pub struct TestTun {
@@ -135,6 +160,7 @@ pub struct TestAgentCore {
     control_url: String,
     // Keep the agent's device id for assertions.
     _agent: Option<Agent>,
+    posture: Option<Arc<Mutex<DevicePosture>>>,
 }
 
 impl TestAgentCore {
@@ -231,6 +257,7 @@ impl TestAgentCore {
             peer_handle,
             control_url: control_url_clone,
             _agent: None,
+            posture: None,
         }
     }
 
@@ -356,6 +383,110 @@ impl TestAgentCore {
             }]);
         }
         this
+    }
+
+    pub async fn enroll_and_connect_with_posture(
+        f: &crate::services::ControlFixture,
+        token: &str,
+        firewall: bool,
+    ) -> Self {
+        insert_token(f, token, 1).await;
+        let data_dir = tempfile::tempdir().expect("data dir");
+        let ca_pem = std::fs::read(f.trust_bundle()).expect("ca");
+        let control_url = format!("https://localhost:{}", f.control.addr.port());
+        let _id = enroll(
+            &control_url,
+            token,
+            data_dir.path(),
+            &ca_pem,
+            "localhost",
+            &TestFingerprint,
+            "test",
+        )
+        .await
+        .expect("enroll");
+
+        let identity = load(data_dir.path()).await.expect("load");
+
+        let memtun = MemoryTun::new();
+        let test_tun = TestTun::new(memtun.clone());
+        let tun_provider: Arc<dyn TunProvider> = test_tun.clone();
+
+        let cfg = AgentCoreConfig {
+            control: control_url.clone(),
+            pulse_interval: Duration::from_secs(1),
+            timers: TimerConfig::default(),
+            overlay_mtu: 1280,
+            bind: "127.0.0.1:0".parse().unwrap(),
+            suites: vec![
+                avon_crypto::aead::Suite::Aes256Gcm,
+                avon_crypto::aead::Suite::ChaCha20Poly1305,
+            ],
+        };
+
+        let posture = Arc::new(Mutex::new(DevicePosture {
+            os_name: "test".into(),
+            os_version: "1.0".into(),
+            agent_version: "0.2.0".into(),
+            firewall_enabled: Some(firewall),
+            disk_encrypted: None,
+            screen_lock_enabled: None,
+            last_update_unix: None,
+            key_provider: "software".into(),
+            collected_at_unix: Utc::now().timestamp(),
+        }));
+        let provider = MutablePosture {
+            inner: posture.clone(),
+        };
+
+        let agent = Agent::new(cfg, identity, tun_provider, Arc::new(provider));
+        let status = agent.status_handle();
+        let peer_handle = agent.peer_handle();
+        let control_url_clone = control_url.clone();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+        let agent_task = tokio::spawn(async move {
+            let _ = agent
+                .run(async {
+                    let _ = shutdown_rx.await;
+                })
+                .await;
+        });
+
+        for _ in 0..200 {
+            if status.snapshot().state == "connected" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        for _ in 0..50 {
+            if peer_handle.read().await.is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        std::mem::forget(shutdown_tx);
+
+        Self {
+            tun: memtun,
+            test_tun,
+            data_dir,
+            agent_task,
+            status_handle: status,
+            peer_handle,
+            control_url: control_url_clone,
+            _agent: None,
+            posture: Some(posture),
+        }
+    }
+
+    pub async fn set_posture_firewall(&self, enabled: bool) {
+        if let Some(p) = &self.posture {
+            let mut guard = p.lock().await;
+            guard.firewall_enabled = Some(enabled);
+            guard.collected_at_unix = Utc::now().timestamp();
+        }
     }
 }
 
