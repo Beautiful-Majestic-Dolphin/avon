@@ -195,10 +195,16 @@ jobs:
         with:
           toolchain: nightly-2025-06-01
       - run: cargo install cargo-fuzz --locked
-      - name: Run each target for 60 seconds
+      - name: Run each crypto target for 60 seconds
         working-directory: crates/avon-crypto
         run: |
           for t in cert_decode hybrid_pk_decode hybrid_sig_decode tbs_roundtrip; do
+            cargo +nightly-2025-06-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
+          done
+      - name: Run each tunnel target for 60 seconds
+        working-directory: crates/avon-tunnel
+        run: |
+          for t in header_decode inner_decode; do
             cargo +nightly-2025-06-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
           done
 

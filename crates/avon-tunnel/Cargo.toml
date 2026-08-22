@@ -1,0 +1,26 @@
+[package]
+name = "avon-tunnel"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "ATP/2: AVON's UDP data-plane protocol"
+
+[dependencies]
+avon-common.workspace = true
+avon-crypto.workspace = true
+avon-protocol.workspace = true
+tokio.workspace = true
+prost.workspace = true
+dashmap.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+metrics.workspace = true
+bytes.workspace = true
+parking_lot = "0.12"
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
