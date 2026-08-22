@@ -407,6 +407,7 @@ dependencies = [
 name = "avon-testkit"
 version = "0.2.0"
 dependencies = [
+ "async-trait",
  "avon-ca",
  "avon-config",
  "avon-control",
@@ -414,6 +415,7 @@ dependencies = [
  "avon-db",
  "avon-protocol",
  "avon-tls",
+ "avon-tunnel",
  "base64ct",
  "pem",
  "rcgen",
@@ -453,9 +455,11 @@ dependencies = [
 name = "avon-tunnel"
 version = "0.2.0"
 dependencies = [
+ "async-trait",
  "avon-common",
  "avon-crypto",
  "avon-protocol",
+ "avon-testkit",
  "bytes",
  "dashmap",
  "metrics",

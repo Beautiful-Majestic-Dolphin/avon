@@ -5,6 +5,7 @@
 pub mod db;
 pub mod device;
 pub mod gateway;
+pub mod memtun;
 pub mod net;
 pub mod pki;
 pub mod redis;
