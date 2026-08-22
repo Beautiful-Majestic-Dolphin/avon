@@ -575,6 +575,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "avon-common",
+ "avon-db",
  "avon-testkit",
  "cedar-policy",
  "chrono",
