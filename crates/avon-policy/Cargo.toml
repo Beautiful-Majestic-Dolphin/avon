@@ -32,6 +32,7 @@ metrics.workspace = true
 criterion = "0.5"
 proptest.workspace = true
 avon-testkit.workspace = true
+avon-db.workspace = true
 tokio.workspace = true
 
 [[bench]]
