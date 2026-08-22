@@ -48,16 +48,26 @@ impl GatewayService for GatewayServiceImpl {
     ) -> Result<Response<GatewayConfig>, Status> {
         let id = gateway_id(&req)?;
         let r = req.into_inner();
+        let protected: Vec<sqlx::types::ipnetwork::IpNetwork> = r
+            .protected_cidrs
+            .iter()
+            .filter_map(|c| c.parse().ok())
+            .collect();
+        if protected.len() != r.protected_cidrs.len() {
+            return Err(Status::invalid_argument("protected_cidrs must be CIDRs"));
+        }
         sqlx::query(
-            "INSERT INTO gateways (id, public_endpoint, region, capacity, last_seen_at) \
-             VALUES ($1, $2, $3, $4, now()) \
+            "INSERT INTO gateways (id, public_endpoint, region, capacity, protected_cidrs, last_seen_at) \
+             VALUES ($1, $2, $3, $4, $5, now()) \
              ON CONFLICT (id) DO UPDATE SET public_endpoint = EXCLUDED.public_endpoint, \
-             region = EXCLUDED.region, capacity = EXCLUDED.capacity, last_seen_at = now()",
+             region = EXCLUDED.region, capacity = EXCLUDED.capacity, \
+             protected_cidrs = EXCLUDED.protected_cidrs, last_seen_at = now()",
         )
         .bind(id.as_uuid())
         .bind(&r.public_endpoint)
         .bind(&r.region)
         .bind(r.capacity as i32)
+        .bind(&protected)
         .execute(&self.state.pool)
         .await
         .map_err(|e| {
@@ -131,8 +141,12 @@ impl GatewayService for GatewayServiceImpl {
                     Some(gateway_up::Msg::Stats(s)) => {
                         record_stats(&state, id, &s).await;
                     }
-                    // Session answers are consumed by phase 3's OpenSession.
-                    Some(gateway_up::Msg::SessionAnswer(_)) | None => {}
+                    Some(gateway_up::Msg::SessionAnswer(answer)) => {
+                        if !state.pending_answers.resolve(answer) {
+                            tracing::debug!(gateway = %id, "answer for an unknown or expired offer");
+                        }
+                    }
+                    None => {}
                 }
             }
             state.gateways.remove(id);

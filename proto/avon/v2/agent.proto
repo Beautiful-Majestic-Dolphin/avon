@@ -77,7 +77,12 @@ message PulseDown {
 message PulseAck { int64 server_time_unix = 1; uint32 next_interval_secs = 2; }
 message AttestationChallenge { bytes nonce = 1; }
 
-message OpenSessionRequest { bytes eph_kem_pk = 1; repeated Suite suites = 2; bool wants_overlay_ip = 3; }
+message OpenSessionRequest {
+  bytes eph_kem_pk = 1;
+  repeated Suite suites = 2;
+  bool wants_overlay_ip = 3;
+  uint32 initiator_index = 4;             // allocated before the offer so the gateway can send immediately
+}
 message OpenSessionResponse {
   bytes session_id = 1;
   SessionAnswer answer = 2;

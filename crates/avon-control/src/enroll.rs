@@ -119,6 +119,14 @@ pub async fn enroll(
             tracing::error!(error = %e, "add device pods");
             Status::unavailable("database")
         })?;
+    // Overlay addresses are allocated once, in the same transaction, so a
+    // device's address is fixed from the moment it exists.
+    crate::ipam::allocate(&mut tx, token.tenant_id, device_id.into())
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "overlay address allocation");
+            Status::unavailable("database")
+        })?;
     store::record_enrollment(&mut tx, token.id, device_id, client_ip)
         .await
         .map_err(|e| {
