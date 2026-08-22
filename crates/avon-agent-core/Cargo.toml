@@ -1,0 +1,49 @@
+[package]
+name = "avon-agent-core"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Platform-independent agent core: identity, control client, session manager and run loop"
+
+[dependencies]
+avon-common.workspace = true
+avon-crypto.workspace = true
+avon-protocol.workspace = true
+avon-tls.workspace = true
+avon-tunnel.workspace = true
+tokio.workspace = true
+prost.workspace = true
+dashmap.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+metrics.workspace = true
+bytes.workspace = true
+parking_lot = "0.12"
+async-trait = "0.1"
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+rcgen = { version = "0.13", features = ["pem"] }
+pem = "3.0"
+sha2 = "0.10"
+base64ct = { workspace = true, features = ["alloc"] }
+hex = "0.4"
+ipnet = "2.10"
+chrono = { version = "0.4", features = ["serde"] }
+uuid.workspace = true
+tonic = { workspace = true, features = ["tls-aws-lc"] }
+tokio-stream = { version = "0.1", features = ["net", "sync"] }
+zeroize = { workspace = true }
+url = "2.5"
+# for fingerprint/posture
+sysinfo = "0.30"
+
+[dev-dependencies]
+avon-testkit.workspace = true
+tempfile.workspace = true
+tokio-stream.workspace = true
+
+[lints]
+workspace = true

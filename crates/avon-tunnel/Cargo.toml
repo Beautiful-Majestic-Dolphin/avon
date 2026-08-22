@@ -19,6 +19,9 @@ tracing.workspace = true
 metrics.workspace = true
 bytes.workspace = true
 parking_lot = "0.12"
+ipnet = "2.10"
+ip_network = "0.4"
+ip_network_table = "0.2"
 
 [dev-dependencies]
 proptest.workspace = true

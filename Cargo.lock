@@ -216,6 +216,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "avon-agent-core"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "avon-common",
+ "avon-crypto",
+ "avon-protocol",
+ "avon-testkit",
+ "avon-tls",
+ "avon-tunnel",
+ "base64ct",
+ "bytes",
+ "chrono",
+ "clap",
+ "dashmap",
+ "hex",
+ "ipnet",
+ "metrics",
+ "parking_lot",
+ "pem",
+ "prost",
+ "rcgen",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+ "url",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "avon-bootstrap"
 version = "0.2.0"
 dependencies = [
@@ -445,6 +484,7 @@ name = "avon-testkit"
 version = "0.2.0"
 dependencies = [
  "async-trait",
+ "avon-agent-core",
  "avon-ca",
  "avon-config",
  "avon-control",
@@ -455,6 +495,7 @@ dependencies = [
  "avon-tls",
  "avon-tunnel",
  "base64ct",
+ "chrono",
  "ipnet",
  "metrics",
  "metrics-util",
@@ -503,6 +544,9 @@ dependencies = [
  "avon-testkit",
  "bytes",
  "dashmap",
+ "ip_network",
+ "ip_network_table",
+ "ipnet",
  "metrics",
  "parking_lot",
  "proptest",
@@ -1658,7 +1702,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -2104,6 +2148,15 @@ checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2143d8af2adc66980ae"
+dependencies = [
+ "winapi",
 ]
 
 [[package]]
@@ -3525,6 +3578,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.30.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a5b4ddaee55fb2bea2bf0e5000747e5f5c0de765e5a5ff87f4cd106439f4bb3"
+dependencies = [
+ "cfg-if",
+ "core-foundation-sys",
+ "libc",
+ "ntapi",
+ "once_cell",
+ "rayon",
+ "windows",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4202,6 +4270,25 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "windows"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48a53791691ab099e5e2ad123536d0fff50652600abaf43bbf952894110d0be"
+dependencies = [
+ "windows-core 0.52.0",
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-core"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33ab640c8d7e35bf8ba19b884ba838ceb4fba93a4e8c65a9059d08afcfc683d9"
+dependencies = [
+ "windows-targets 0.52.6",
+]
 
 [[package]]
 name = "windows-core"

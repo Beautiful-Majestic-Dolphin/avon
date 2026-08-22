@@ -44,6 +44,21 @@ impl GatewayFixture {
         }
         false
     }
+
+    pub async fn close_all(&self, reason: &str) {
+        use avon_protocol::v2::{tunnel_frame, Close, TunnelFrame};
+        let sessions = self.state.table.iter();
+        for s in sessions {
+            let frame = TunnelFrame {
+                msg: Some(tunnel_frame::Msg::Close(Close {
+                    reason: reason.to_string(),
+                })),
+            };
+            // Try to send close over the tunnel before removing.
+            let _ = self.state.endpoint.send_frame(&s, &frame).await;
+            self.state.close_session(&s.id(), reason).await;
+        }
+    }
 }
 
 /// Enrol a gateway identity, wire it to `f`, and run its control link and data

@@ -2,6 +2,7 @@
 //! is never a dependency of a shipped binary.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+pub mod agent_fixture;
 pub mod db;
 pub mod device;
 pub mod gateway;
