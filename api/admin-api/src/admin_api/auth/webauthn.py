@@ -51,7 +51,7 @@ class WebAuthnManager:
             authenticator_selection=AuthenticatorSelectionCriteria(
                 authenticator_attachment=AuthenticatorAttachment.CROSS_PLATFORM,
                 resident_key=ResidentKeyRequirement.DISCOURAGED,
-                user_verification=UserVerificationRequirement.DISCOURAGED,
+                user_verification=UserVerificationRequirement.PREFERRED,
             ),
         )
         return json.loads(options_to_json(options)), options.challenge
@@ -83,7 +83,7 @@ class WebAuthnManager:
         options = generate_authentication_options(
             rp_id=settings.webauthn_rp_id,
             allow_credentials=credential_descriptors,
-            user_verification=UserVerificationRequirement.DISCOURAGED,
+            user_verification=UserVerificationRequirement.PREFERRED,
         )
         return json.loads(options_to_json(options)), options.challenge
 
