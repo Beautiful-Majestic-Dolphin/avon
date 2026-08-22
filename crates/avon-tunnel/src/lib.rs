@@ -1,0 +1,35 @@
+//! ATP/2 — the AVON tunnel protocol (spec §6).
+//!
+//! Wire: 16-byte header (type, flags, receiver index, counter) followed by
+//! an AEAD ciphertext of `inner_type || payload`. Keys come from the control
+//! channel; this crate never performs an unauthenticated handshake on UDP.
+
+mod header;
+mod inner;
+
+pub use header::{max_udp_payload, Header, FLAG_EPOCH_OVERLAP, HEADER_LEN, TYPE_DATA};
+pub use inner::Inner;
+
+#[derive(Debug, thiserror::Error)]
+pub enum TunnelError {
+    #[error("packet too short")]
+    Short,
+    #[error("bad packet type {0:#x}")]
+    BadType(u8),
+    #[error("bad inner type {0}")]
+    BadInner(u8),
+    #[error("crypto: {0}")]
+    Crypto(#[from] avon_crypto::CryptoError),
+    #[error("unknown receiver index {0}")]
+    UnknownIndex(u32),
+    #[error("replayed packet")]
+    Replay,
+    #[error("session closed")]
+    Closed,
+    #[error("protocol: {0}")]
+    Protocol(String),
+    #[error("io: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("frame: {0}")]
+    Frame(#[from] prost::DecodeError),
+}

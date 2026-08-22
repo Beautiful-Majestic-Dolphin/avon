@@ -450,6 +450,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "avon-tunnel"
+version = "0.2.0"
+dependencies = [
+ "avon-common",
+ "avon-crypto",
+ "avon-protocol",
+ "bytes",
+ "dashmap",
+ "metrics",
+ "parking_lot",
+ "proptest",
+ "prost",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aws-lc-rs"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

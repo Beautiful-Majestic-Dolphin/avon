@@ -1,0 +1,24 @@
+[package]
+name = "avon-tunnel-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+avon-tunnel = { path = ".." }
+
+[[bin]]
+name = "header_decode"
+path = "fuzz_targets/header_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "inner_decode"
+path = "fuzz_targets/inner_decode.rs"
+test = false
+doc = false
