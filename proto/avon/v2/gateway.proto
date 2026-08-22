@@ -9,7 +9,13 @@ service GatewayService {
   rpc Events(stream GatewayUp) returns (stream GatewayDown);
 }
 
-message GatewayRegistration { string public_endpoint = 1; string region = 2; uint32 capacity = 3; string version = 4; }
+message GatewayRegistration {
+  string public_endpoint = 1;
+  string region = 2;
+  uint32 capacity = 3;
+  string version = 4;
+  repeated string protected_cidrs = 5;   // networks this gateway routes into
+}
 message GatewayConfig { Chain chain = 1; Crl crl = 2; uint32 keepalive_secs = 3; uint32 rekey_secs = 4; }
 
 message GatewayUp {
@@ -37,6 +43,7 @@ message SessionOffer {
   string overlay_ipv4 = 5;
   string overlay_ipv6 = 6;
   repeated string advertised_routes = 7;
+  uint32 initiator_index = 8;             // the device's receiver index, copied through by control
 }
 message SessionEvent { bytes session_id = 1; string event = 2; string reason = 3; string endpoint = 4; uint64 bytes_tx = 5; uint64 bytes_rx = 6; }
 message GatewayStats { uint32 active_sessions = 1; uint64 packets_per_sec = 2; }

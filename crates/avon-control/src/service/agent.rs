@@ -259,9 +259,12 @@ impl AgentService for AgentServiceImpl {
 
     async fn open_session(
         &self,
-        _req: Request<OpenSessionRequest>,
+        req: Request<OpenSessionRequest>,
     ) -> Result<Response<OpenSessionResponse>, Status> {
-        Err(Status::unimplemented("open_session"))
+        let info = authenticated_device(&self.state, &req).await?;
+        crate::sessions::open_session(&self.state, &info, req.into_inner())
+            .await
+            .map(Response::new)
     }
 
     async fn request_peer_session(
@@ -278,8 +281,13 @@ impl AgentService for AgentServiceImpl {
         Err(Status::unimplemented("answer_peer_session"))
     }
 
-    async fn report_session(&self, _req: Request<SessionReport>) -> Result<Response<Ack>, Status> {
-        Err(Status::unimplemented("report_session"))
+    async fn report_session(&self, req: Request<SessionReport>) -> Result<Response<Ack>, Status> {
+        let info = authenticated_device(&self.state, &req).await?;
+        crate::sessions::report_session(&self.state, &info, req.into_inner()).await?;
+        Ok(Response::new(Ack {
+            ok: true,
+            message: String::new(),
+        }))
     }
 
     async fn who_am_i(&self, req: Request<Empty>) -> Result<Response<WhoAmIResponse>, Status> {

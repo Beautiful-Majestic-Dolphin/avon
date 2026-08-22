@@ -76,4 +76,10 @@ impl TestGateway {
     pub async fn client(&self, f: &ControlFixture) -> GatewayServiceClient<Channel> {
         GatewayServiceClient::new(self.channel(f).await)
     }
+
+    /// The gateway's composite signing key, for signing session answers.
+    pub fn signing_keypair(&self) -> HybridSigningKeyPair {
+        HybridSigningKeyPair::from_secret_bytes(&self.signing.to_secret_bytes())
+            .expect("re-import signing key")
+    }
 }

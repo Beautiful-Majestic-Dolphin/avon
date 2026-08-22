@@ -51,6 +51,8 @@ tempfile.workspace = true
 tracing-test = "0.2"
 tracing-subscriber.workspace = true
 futures = "0.3"
+# Only the session-brokering test needs the tunnel: control brokers keys, never holds them.
+avon-tunnel.workspace = true
 
 [lints]
 workspace = true

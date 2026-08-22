@@ -34,6 +34,7 @@ pub struct AppState {
     pub server_cert_sha256: [u8; 32],
     pub gateways: crate::gateway_stream::GatewayRegistry,
     pub devices: crate::pulse::DeviceStreams,
+    pub pending_answers: crate::sessions::PendingAnswers,
 }
 
 impl AppState {
@@ -81,6 +82,7 @@ impl AppState {
             server_cert_sha256,
             gateways: Default::default(),
             devices: Default::default(),
+            pending_answers: Default::default(),
         }))
     }
 }

@@ -28,6 +28,7 @@ async fn gateway_registers_receives_chain_and_crl_updates_on_revocation() {
             region: "default".into(),
             capacity: 100,
             version: "test".into(),
+            protected_cidrs: Vec::new(),
         })
         .await
         .unwrap()
