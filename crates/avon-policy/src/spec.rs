@@ -218,6 +218,18 @@ pub struct PolicySpec {
     pub conditions: Conditions,
 }
 
+pub(crate) fn parse_hhmm(s: &str) -> Result<(u32, u32), SpecError> {
+    let (h, m) = s
+        .split_once(':')
+        .ok_or_else(|| SpecError::Time(s.to_string()))?;
+    let h: u32 = h.parse().map_err(|_| SpecError::Time(s.to_string()))?;
+    let m: u32 = m.parse().map_err(|_| SpecError::Time(s.to_string()))?;
+    if h > 23 || m > 59 {
+        return Err(SpecError::Time(s.to_string()));
+    }
+    Ok((h, m))
+}
+
 impl PolicySpec {
     pub fn validate(&self) -> Result<(), SpecError> {
         if self.version != 2 {
@@ -244,22 +256,11 @@ impl PolicySpec {
             if tw.days.is_empty() {
                 return Err(SpecError::NoDays);
             }
-            // Validate timezone
-            if tw.timezone.parse::<chrono_tz::Tz>().is_err() {
-                return Err(SpecError::Timezone(tw.timezone.clone()));
-            }
-            // Validate times HH:MM
-            for t in [&tw.start, &tw.end] {
-                let parts: Vec<&str> = t.split(':').collect();
-                if parts.len() != 2 {
-                    return Err(SpecError::Time(t.clone()));
-                }
-                let h: u32 = parts[0].parse().map_err(|_| SpecError::Time(t.clone()))?;
-                let m: u32 = parts[1].parse().map_err(|_| SpecError::Time(t.clone()))?;
-                if h > 23 || m > 59 {
-                    return Err(SpecError::Time(t.clone()));
-                }
-            }
+            tw.timezone
+                .parse::<chrono_tz::Tz>()
+                .map_err(|_| SpecError::Timezone(tw.timezone.clone()))?;
+            parse_hhmm(&tw.start)?;
+            parse_hhmm(&tw.end)?;
         }
         Ok(())
     }

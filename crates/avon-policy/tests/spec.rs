@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::panic)]
 use avon_policy::spec::{Effect, PolicySpec, Protocol, SpecError};
 
 fn fixture(name: &str) -> String {
