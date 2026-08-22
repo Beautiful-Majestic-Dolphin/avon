@@ -1,0 +1,45 @@
+{
+  "ietf-mud:mud": {
+    "mud-version": 1,
+    "mud-url": "https://vendor.example.com/cameras/model-x.json",
+    "last-update": "2026-01-01T00:00:00+00:00",
+    "cache-validity": 48,
+    "is-supported": true,
+    "systeminfo": "Model X security camera",
+    "from-device-policy": { "access-lists": { "access-list": [{ "name": "from-cam" }] } },
+    "to-device-policy": { "access-lists": { "access-list": [{ "name": "to-cam" }] } }
+  },
+  "ietf-access-control-list:acls": {
+    "acl": [
+      {
+        "name": "from-cam",
+        "type": "ipv4-acl-type",
+        "aces": {
+          "ace": [
+            {
+              "name": "ntp",
+              "matches": {
+                "ipv4": { "protocol": 17, "ietf-acldns:dst-dnsname": "pool.ntp.org" },
+                "udp": { "destination-port": { "operator": "eq", "port": 123 } }
+              },
+              "actions": { "forwarding": "accept" }
+            },
+            {
+              "name": "vendor-https",
+              "matches": {
+                "ipv4": { "protocol": 6, "ietf-acldns:dst-dnsname": "vendor.example.com" },
+                "tcp": { "destination-port": { "operator": "eq", "port": 443 } }
+              },
+              "actions": { "forwarding": "accept" }
+            }
+          ]
+        }
+      },
+      {
+        "name": "to-cam",
+        "type": "ipv4-acl-type",
+        "aces": { "ace": [ { "name": "inbound-https", "matches": { "ipv4": { "protocol": 6 } }, "actions": { "forwarding": "accept" } } ] }
+      }
+    ]
+  }
+}
