@@ -293,6 +293,30 @@ impl ControlClient {
         Ok(resp.into_inner())
     }
 
+    pub async fn request_peer_session(
+        &self,
+        req: avon_protocol::v2::PeerSessionRequest,
+    ) -> Result<avon_protocol::v2::PeerSessionResponse, AgentError> {
+        let mut client = self.authenticated_client().await?;
+        let resp = client
+            .request_peer_session(req)
+            .await
+            .map_err(AgentError::from)?;
+        Ok(resp.into_inner())
+    }
+
+    pub async fn answer_peer_session(
+        &self,
+        req: avon_protocol::v2::PeerAnswer,
+    ) -> Result<(), AgentError> {
+        let mut client = self.authenticated_client().await?;
+        client
+            .answer_peer_session(req)
+            .await
+            .map_err(AgentError::from)?;
+        Ok(())
+    }
+
     pub async fn gateway_certificates(&self) -> Vec<Certificate> {
         self.gateway_certs.read().await.clone()
     }

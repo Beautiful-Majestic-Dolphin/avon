@@ -77,6 +77,15 @@ impl UdpEndpoint {
         let peer = session
             .peer_endpoint()
             .ok_or_else(|| TunnelError::Protocol("peer endpoint unknown".into()))?;
+        self.send_inner_to(session, peer, inner).await
+    }
+
+    pub async fn send_inner_to(
+        &self,
+        session: &Session,
+        peer: SocketAddr,
+        inner: &Inner<'_>,
+    ) -> Result<(), TunnelError> {
         let mut dgram = Vec::with_capacity(max_udp_payload(self.cfg.overlay_mtu));
         session.seal(inner, &mut dgram)?;
         self.socket.send_to(&dgram, peer).await?;

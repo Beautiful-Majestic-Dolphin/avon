@@ -14,6 +14,7 @@ pub mod enroll;
 pub mod gateway_stream;
 pub mod ipam;
 pub mod liveness;
+pub mod peer;
 pub mod pulse;
 pub mod renew;
 pub mod service;

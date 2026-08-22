@@ -35,6 +35,7 @@ pub struct AppState {
     pub gateways: crate::gateway_stream::GatewayRegistry,
     pub devices: crate::pulse::DeviceStreams,
     pub pending_answers: crate::sessions::PendingAnswers,
+    pub peer_pending: crate::peer::PendingPeerAnswers,
 }
 
 impl AppState {
@@ -83,6 +84,7 @@ impl AppState {
             gateways: Default::default(),
             devices: Default::default(),
             pending_answers: Default::default(),
+            peer_pending: Default::default(),
         }))
     }
 }

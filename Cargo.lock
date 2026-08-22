@@ -563,6 +563,7 @@ dependencies = [
  "async-trait",
  "avon-agent-core",
  "avon-ca",
+ "avon-common",
  "avon-config",
  "avon-control",
  "avon-crypto",

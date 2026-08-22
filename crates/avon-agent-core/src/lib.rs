@@ -4,6 +4,7 @@
 pub mod agent;
 pub mod control;
 pub mod identity;
+pub mod peer;
 pub mod router;
 pub mod session_manager;
 pub mod status;
