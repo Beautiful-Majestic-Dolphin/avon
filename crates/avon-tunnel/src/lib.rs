@@ -6,9 +6,13 @@
 
 mod header;
 mod inner;
+mod session;
+mod table;
 
 pub use header::{max_udp_payload, Header, FLAG_EPOCH_OVERLAP, HEADER_LEN, TYPE_DATA};
 pub use inner::Inner;
+pub use session::{Epoch, Role, Session, SessionStats};
+pub use table::SessionTable;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TunnelError {
