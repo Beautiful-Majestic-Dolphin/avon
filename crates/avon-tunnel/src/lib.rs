@@ -4,11 +4,16 @@
 //! an AEAD ciphertext of `inner_type || payload`. Keys come from the control
 //! channel; this crate never performs an unauthenticated handshake on UDP.
 
+mod establish;
 mod header;
 mod inner;
 mod session;
 mod table;
 
+pub use establish::{
+    choose_suite, rekey_answer, rekey_complete, rekey_offer, Established, Initiator, PendingOffer,
+    Responder,
+};
 pub use header::{max_udp_payload, Header, FLAG_EPOCH_OVERLAP, HEADER_LEN, TYPE_DATA};
 pub use inner::Inner;
 pub use session::{Epoch, Role, Session, SessionStats};
