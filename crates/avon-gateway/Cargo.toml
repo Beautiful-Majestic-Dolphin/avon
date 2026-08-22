@@ -4,7 +4,7 @@ edition.workspace = true
 version.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "AVON UDP Gateway Service"
+description = "AVON gateway: ATP/2 data plane, relay and egress to protected networks"
 
 [[bin]]
 name = "avon-gateway"
@@ -15,24 +15,38 @@ name = "avon_gateway"
 path = "src/lib.rs"
 
 [dependencies]
-tokio.workspace = true
-serde.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-thiserror.workspace = true
-anyhow.workspace = true
-avon-crypto.workspace = true
-avon-protocol.workspace = true
 avon-common.workspace = true
-metrics.workspace = true
-metrics-exporter-prometheus.workspace = true
-dashmap = "5.5"
-governor = "0.6"
+avon-config.workspace = true
+avon-crypto.workspace = true
+avon-observability.workspace = true
+avon-protocol.workspace = true
+avon-tls.workspace = true
+avon-tunnel.workspace = true
+tokio.workspace = true
+tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tonic.workspace = true
-config = "0.14"
-clap.workspace = true
-# clap = { version = "4.4", features = ["derive"] }
 prost.workspace = true
+redis.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+metrics.workspace = true
+dashmap.workspace = true
+async-trait = "0.1"
+ipnet = "2.10"
+ip_network = "0.4"
+ip_network_table = "0.2"
+parking_lot = "0.12"
+
+[dev-dependencies]
+avon-testkit.workspace = true
+tempfile.workspace = true
+tokio-stream = { version = "0.1", features = ["net", "sync"] }
 
 [lints]
 workspace = true

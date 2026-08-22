@@ -5,6 +5,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use avon_common::ids::SessionId;
 use avon_crypto::aead::Suite;
+use avon_crypto::hybrid::kem::{HybridKemCiphertext, HybridKemKeyPair, HybridKemPublicKey};
 pub use avon_crypto::session::Role;
 use avon_crypto::session::{SessionCipher, SessionKeys};
 use avon_crypto::CryptoError;
@@ -138,6 +139,29 @@ impl Session {
     }
     pub fn current_rekey_secret(&self) -> [u8; 32] {
         self.epochs.lock().current.keys.rekey_secret
+    }
+
+    /// Responder half of a rekey: encapsulate to the peer's fresh ephemeral key
+    /// and derive the next epoch from the current one. The returned keys are
+    /// the caller's to install with [`Session::rotate`]; the session's own key
+    /// material never leaves it.
+    pub fn answer_rekey(&self, eph_pk: &[u8]) -> Result<(Vec<u8>, SessionKeys), TunnelError> {
+        let pk = HybridKemPublicKey::from_bytes(eph_pk)?;
+        let (ct, ss) = pk.encapsulate()?;
+        let next = self.epochs.lock().current.keys.rekey(&ss)?;
+        Ok((ct.to_bytes(), next))
+    }
+
+    /// Initiator half: decapsulate the responder's answer against the
+    /// ephemeral key from [`crate::rekey_offer`] and derive the next epoch.
+    pub fn complete_rekey(
+        &self,
+        eph: &HybridKemKeyPair,
+        ct: &[u8],
+    ) -> Result<SessionKeys, TunnelError> {
+        let ct = HybridKemCiphertext::from_bytes(ct)?;
+        let ss = eph.decapsulate(&ct)?;
+        Ok(self.epochs.lock().current.keys.rekey(&ss)?)
     }
     /// Every local index this session can still be addressed by.
     pub fn indexes(&self) -> Vec<u32> {

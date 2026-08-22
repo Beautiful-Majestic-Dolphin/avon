@@ -130,7 +130,6 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-      # avon-gateway is out of the workspace until phase 3 rewrites it.
       - name: Build control image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
@@ -154,6 +153,14 @@ jobs:
           context: .
           file: deploy/docker/Dockerfile.rust
           build-args: BIN=avon-bootstrap
+          push: false
+          cache-from: type=gha
+      - name: Build gateway image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.rust
+          build-args: BIN=avon-gateway
           push: false
           cache-from: type=gha
       - name: Build admin-api image

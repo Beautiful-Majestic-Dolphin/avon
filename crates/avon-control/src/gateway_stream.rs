@@ -139,7 +139,7 @@ pub async fn revoke_device(state: &AppState, device: DeviceId, reason: &str) -> 
 pub async fn admin_event_listener(state: Arc<AppState>, redis: avon_config::RedisArgs) {
     loop {
         let result: anyhow::Result<()> = async {
-            let client = crate::config::redis_client(&redis)?;
+            let client = avon_config::redis_client(&redis)?;
             let mut pubsub = client.get_async_pubsub().await?;
             pubsub.subscribe("avon:control:revoke").await?;
             use tokio_stream::StreamExt;

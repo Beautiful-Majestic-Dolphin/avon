@@ -1,105 +1,59 @@
-//! AVON UDP Gateway Service
-//!
-//! Handles UDP traffic routing for the AVON network.
-
-use avon_gateway::{
-    config::GatewayConfig,
-    device_registry::DeviceRegistry,
-    gateway::{HealthServer, UdpGateway},
-    packet_handler::PacketHandler,
-    rate_limiter::RateLimiter,
-};
-use clap::Parser;
-use metrics_exporter_prometheus::PrometheusBuilder;
 use std::sync::Arc;
-use tracing::{error, info};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-/// AVON UDP Gateway Service
-#[derive(Parser, Debug)]
-#[command(name = "avon-gateway")]
-#[command(about = "AVON UDP Gateway - handles control plane traffic")]
-struct Args {
-    /// Path to configuration file
-    #[arg(short, long)]
-    config: Option<String>,
-
-    /// Override listen port
-    #[arg(short, long)]
-    port: Option<u16>,
-
-    /// Override log level
-    #[arg(long)]
-    log_level: Option<String>,
-}
+use avon_config::Validate;
+use avon_gateway::config::GatewayConfig;
+use avon_gateway::state::GatewayState;
+use avon_gateway::{control_link, dataplane, tun, AllowAll};
+use avon_observability::{init_tracing, install_metrics, serve_health, Readiness};
+use clap::Parser;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+    // Before anything builds a rustls config; rustls will not guess a provider.
+    avon_tls::install_default_provider();
+    let cfg = GatewayConfig::parse();
+    cfg.tls.validate()?;
+    cfg.observability.validate()?;
+    init_tracing(&cfg.observability)?;
+    install_metrics(cfg.observability.metrics_addr)?;
 
-    // Load configuration
-    let config =
-        GatewayConfig::load(args.config.as_deref())?.with_overrides(args.port, args.log_level);
+    let readiness = Readiness::new();
+    let control_ready = readiness.register("control");
+    let udp_ready = readiness.register("udp");
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let mut health_rx = shutdown_rx.clone();
+    tokio::spawn(serve_health(
+        cfg.observability.health_addr,
+        readiness.clone(),
+        async move {
+            let _ = health_rx.wait_for(|v| *v).await;
+        },
+    ));
 
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(&config.log_level))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    let (state, events) = GatewayState::bootstrap(&cfg, Arc::new(AllowAll)).await?;
+    udp_ready.set(true);
 
-    info!("AVON Gateway starting...");
-    info!(listen_addr = %config.listen_addr, "Configuration loaded");
+    let tun = tun::open(&cfg.tun_name, cfg.overlay_mtu)?;
+    if !tun.is_real {
+        tracing::warn!("relay-only: packets for protected networks will be dropped");
+    }
+    tokio::spawn(dataplane::run_dataplane(
+        state.clone(),
+        events,
+        tun.sink,
+        tun.source,
+    ));
 
-    // Initialize Prometheus metrics
-    let metrics_addr = format!("0.0.0.0:{}", config.metrics_port);
-    PrometheusBuilder::new()
-        .with_http_listener(metrics_addr.parse::<std::net::SocketAddr>()?)
-        .install()?;
-    info!(
-        metrics_port = config.metrics_port,
-        "Prometheus metrics enabled"
-    );
+    let link = tokio::spawn(control_link::run_control_link(state.clone(), cfg.clone()));
+    control_ready.set(true);
+    tracing::info!(gateway = %state.id, "avon-gateway running");
 
-    // Initialize device registry
-    let registry = Arc::new(DeviceRegistry::new(config.redis_url.clone()).await?);
-    info!("Device registry initialized");
-
-    // Initialize rate limiter
-    let rate_limiter = Arc::new(RateLimiter::new(config.rate_limit.clone()));
-    info!(
-        requests_per_second = config.rate_limit.requests_per_second,
-        burst_size = config.rate_limit.burst_size,
-        "Rate limiter initialized"
-    );
-
-    // Start rate limiter cleanup task
-    let cleanup_limiter = rate_limiter.clone();
-    tokio::spawn(async move {
-        cleanup_limiter.cleanup_expired().await;
-    });
-
-    // Start device registry sync task
-    let sync_registry = registry.clone();
-    tokio::spawn(async move {
-        sync_registry.sync_from_database(60).await;
-    });
-
-    // Initialize packet handler
-    let packet_handler = Arc::new(PacketHandler::new(registry));
-    info!("Packet handler initialized");
-
-    // Start health server
-    let health_server = HealthServer::bind(config.health_port).await?;
-    tokio::spawn(async move {
-        if let Err(e) = health_server.run().await {
-            error!(error = %e, "Health server error");
-        }
-    });
-    info!(health_port = config.health_port, "Health server started");
-
-    // Start UDP gateway
-    let gateway = UdpGateway::bind(config.listen_addr, rate_limiter, packet_handler).await?;
-    info!("UDP gateway started, entering receive loop");
-
-    gateway.run().await
+    tokio::signal::ctrl_c().await?;
+    tracing::info!("shutting down; closing sessions");
+    let _ = shutdown_tx.send(true);
+    for session in state.table.iter() {
+        state.close_session(&session.id(), "shutdown").await;
+    }
+    link.abort();
+    Ok(())
 }
