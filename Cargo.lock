@@ -524,6 +524,7 @@ dependencies = [
  "async-trait",
  "avon-common",
  "avon-config",
+ "avon-control",
  "avon-crypto",
  "avon-db",
  "avon-observability",
