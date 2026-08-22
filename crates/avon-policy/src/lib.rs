@@ -1,6 +1,8 @@
 pub mod compile;
+pub mod engine;
 pub mod entities;
 pub mod schema;
+pub mod snapshot;
 pub mod spec;
 pub mod time;
 
