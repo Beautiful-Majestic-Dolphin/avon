@@ -34,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
 
     let pool = avon_db::connect(&cfg.db).await?;
     db_ready.set(true);
-    let redis = avon_control::config::redis_client(&cfg.redis)?;
+    let redis = avon_config::redis_client(&cfg.redis)?;
     let redis_conn = redis::aio::ConnectionManager::new(redis).await?;
     redis_ready.set(true);
     let ca = avon_control::ca_client::CaClient::connect(&cfg.ca_url, &cfg.ca_server_name, &cfg.tls)

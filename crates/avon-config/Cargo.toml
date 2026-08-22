@@ -9,6 +9,7 @@ description = "Shared configuration arguments and validation for AVON services"
 [dependencies]
 clap.workspace = true
 thiserror.workspace = true
+redis.workspace = true
 url = "2.5"
 
 [dev-dependencies]

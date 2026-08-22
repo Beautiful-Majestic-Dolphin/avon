@@ -161,3 +161,33 @@ fn closed_session_refuses_io() {
         Err(TunnelError::Closed)
     ));
 }
+
+#[test]
+fn a_session_answers_and_completes_a_rekey_without_exposing_its_keys() {
+    let (init, resp, ti, tr) = pair();
+
+    // Initiator offers, responder answers from its own current epoch, both
+    // rotate. Neither side ever hands out a copy of its live key material.
+    let (eph, eph_pk) = avon_tunnel::rekey_offer().unwrap();
+    let (ct, resp_next) = resp.answer_rekey(&eph_pk).unwrap();
+    let init_next = init.complete_rekey(&eph, &ct).unwrap();
+    assert_eq!(init_next.epoch, 1);
+    assert_eq!(resp_next.epoch, 1);
+    assert_eq!(init_next.k_i2r, resp_next.k_i2r);
+
+    let new_ii = ti.allocate_index().unwrap();
+    let new_ri = tr.allocate_index().unwrap();
+    init.rotate(init_next, new_ii, new_ri);
+    resp.rotate(resp_next, new_ri, new_ii);
+    tr.rebind_index(&resp, new_ri);
+
+    let mut out = Vec::new();
+    init.seal(&Inner::Keepalive, &mut out).unwrap();
+    let (h, body) = Header::decode(&out).unwrap();
+    let mut scratch = Vec::new();
+    tr.by_index(h.receiver_index)
+        .unwrap()
+        .open(&h, body, &mut scratch)
+        .unwrap();
+    assert_eq!(init.epoch(), 1);
+}

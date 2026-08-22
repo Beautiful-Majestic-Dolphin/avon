@@ -12,6 +12,6 @@ mod validate;
 
 pub use database::DatabaseArgs;
 pub use observability::{LogFormat, ObservabilityArgs};
-pub use redis::RedisArgs;
+pub use redis::{redis_client, RedisArgs};
 pub use tls::TlsArgs;
 pub use validate::{ConfigError, Validate};

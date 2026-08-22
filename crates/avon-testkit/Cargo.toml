@@ -12,6 +12,7 @@ avon-control.workspace = true
 avon-config.workspace = true
 avon-crypto.workspace = true
 avon-db.workspace = true
+avon-gateway.workspace = true
 avon-protocol.workspace = true
 avon-tls.workspace = true
 avon-tunnel.workspace = true
@@ -24,6 +25,9 @@ base64ct = { workspace = true, features = ["alloc"] }
 pem = "3.0"
 sha2 = "0.10"
 tokio-stream = "0.1"
+ipnet = "2.10"
+metrics.workspace = true
+metrics-util = { version = "0.19", features = ["debugging"] }
 rcgen = { version = "0.13", features = ["pem"] }
 sqlx.workspace = true
 redis.workspace = true

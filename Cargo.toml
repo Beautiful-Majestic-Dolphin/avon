@@ -1,15 +1,15 @@
 [workspace]
 resolver = "2"
 exclude = ["crates/avon-crypto/fuzz", "crates/avon-tunnel/fuzz"]
-# NOTE (phase 2): avon-agent and avon-gateway import the deleted `avon.v1`
-# protobuf package and are temporarily out of the workspace; they are rewritten
-# and re-added in phase 3.
+# NOTE (phase 3): avon-agent still imports the deleted `avon.v1` protobuf
+# package and is out of the workspace until task 3.8 rewrites it.
 members = [
     "crates/avon-crypto",
     "crates/avon-protocol",
     "crates/avon-tls",
     "crates/avon-tunnel",
     "crates/avon-control",
+    "crates/avon-gateway",
     "crates/avon-ca",
     "crates/avon-bootstrap",
     "crates/avon-common",
@@ -64,6 +64,7 @@ avon-observability = { path = "crates/avon-observability" }
 avon-tls = { path = "crates/avon-tls" }
 avon-tunnel = { path = "crates/avon-tunnel" }
 avon-control = { path = "crates/avon-control" }
+avon-gateway = { path = "crates/avon-gateway" }
 avon-ca = { path = "crates/avon-ca" }
 avon-testkit = { path = "crates/avon-testkit" }
 

@@ -80,6 +80,10 @@ uuid_id!(UserId);
 pub struct SessionId([u8; 16]);
 
 impl SessionId {
+    /// Not a real session. Used where a packet has no session of origin —
+    /// notably packets a gateway or agent reads from its own TUN.
+    pub const ZERO: SessionId = SessionId([0; 16]);
+
     pub fn random() -> Result<Self, IdError> {
         let mut b = [0u8; 16];
         getrandom::getrandom(&mut b).map_err(|_| IdError::Random)?;

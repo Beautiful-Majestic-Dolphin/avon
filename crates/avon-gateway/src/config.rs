@@ -1,177 +1,110 @@
-//! Configuration for the AVON UDP Gateway.
+//! Gateway configuration. Everything is a flag with an `AVON_*` environment
+//! fallback, so a container needs no config file.
 
-use serde::{Deserialize, Serialize};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
+use std::path::PathBuf;
 
-/// Gateway configuration.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+use avon_config::{ObservabilityArgs, TlsArgs};
+use clap::Parser;
+use ipnet::IpNet;
+
+#[derive(Clone, Debug, Parser)]
 pub struct GatewayConfig {
-    /// UDP listen address.
-    #[serde(default = "default_listen_addr")]
-    pub listen_addr: SocketAddr,
-    /// Health check TCP port.
-    #[serde(default = "default_health_port")]
-    pub health_port: u16,
-    /// Prometheus metrics port.
-    #[serde(default = "default_metrics_port")]
-    pub metrics_port: u16,
-    /// Log level.
-    #[serde(default = "default_log_level")]
-    pub log_level: String,
-    /// Rate limiting configuration.
-    #[serde(default)]
-    pub rate_limit: RateLimitConfig,
-    /// Redis URL for device registry sync.
-    #[serde(default = "default_redis_url")]
-    pub redis_url: String,
-    /// Auth service gRPC address.
-    #[serde(default = "default_auth_addr")]
-    pub auth_service_addr: String,
-    /// Pulse service gRPC address.
-    #[serde(default = "default_pulse_addr")]
-    pub pulse_service_addr: String,
+    #[command(flatten)]
+    pub tls: TlsArgs,
+    #[command(flatten)]
+    pub observability: ObservabilityArgs,
+
+    /// Control plane gRPC endpoint.
+    #[arg(long, env = "AVON_CONTROL_URL", default_value = "https://control:8443")]
+    pub control_url: String,
+    /// TLS server name to verify control against.
+    #[arg(long, env = "AVON_CONTROL_SERVER_NAME", default_value = "control")]
+    pub control_server_name: String,
+
+    /// UDP address the tunnel listens on.
+    #[arg(long, env = "AVON_LISTEN_UDP", default_value = "0.0.0.0:4600")]
+    pub listen_udp: SocketAddr,
+    /// host:port devices should send to. Must be reachable from the internet.
+    #[arg(long, env = "AVON_PUBLIC_ENDPOINT")]
+    pub public_endpoint: String,
+    #[arg(long, env = "AVON_REGION", default_value = "default")]
+    pub region: String,
+    /// Sessions this gateway advertises room for.
+    #[arg(long, env = "AVON_CAPACITY", default_value_t = 1000)]
+    pub capacity: u32,
+
+    /// Networks this gateway routes into on behalf of its sessions. Control
+    /// hands these to devices as routes.
+    #[arg(long, env = "AVON_PROTECTED_CIDRS", value_delimiter = ',')]
+    pub protected_cidrs: Vec<IpNet>,
+    /// The tenant overlay pools. Must match `ipam_pools`: a destination inside
+    /// them belongs to a session, one outside goes out the TUN.
+    #[arg(
+        long,
+        env = "AVON_OVERLAY_PREFIXES",
+        value_delimiter = ',',
+        default_values_t = default_overlay_prefixes()
+    )]
+    pub overlay_prefixes: Vec<IpNet>,
+
+    #[arg(long, env = "AVON_TUN_NAME", default_value = "avon0")]
+    pub tun_name: String,
+    #[arg(long, env = "AVON_OVERLAY_MTU", default_value_t = 1380)]
+    pub overlay_mtu: u16,
+
+    /// Where `avon-bootstrap` wrote `gateway.avon.crt`, `gateway.avon.key` and
+    /// `gateway.kem.key`.
+    #[arg(long, env = "AVON_IDENTITY_DIR", default_value = "/var/lib/avon")]
+    pub identity_dir: PathBuf,
+
+    /// Optional: mirror session metadata here for admin views. The mirror is
+    /// never on the forwarding path, so a gateway runs fine without it.
+    #[arg(long = "redis-url", env = "AVON_REDIS_URL", hide_env_values = true)]
+    pub redis_url: Option<String>,
+    /// PEM CA for a `rediss://` mirror URL.
+    #[arg(long = "redis-tls-ca", env = "AVON_REDIS_TLS_CA")]
+    pub redis_tls_ca: Option<std::path::PathBuf>,
+
+    #[arg(long, env = "AVON_KEEPALIVE_SECS", default_value_t = 15)]
+    pub keepalive_secs: u64,
+    #[arg(long, env = "AVON_REKEY_SECS", default_value_t = 3600)]
+    pub rekey_secs: u64,
+    #[arg(long, env = "AVON_IDLE_TIMEOUT_SECS", default_value_t = 300)]
+    pub idle_timeout_secs: u64,
 }
 
-fn default_listen_addr() -> SocketAddr {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 4600)
+fn default_overlay_prefixes() -> Vec<IpNet> {
+    ["100.64.0.0/10", "fd00:a70::/48"]
+        .iter()
+        .filter_map(|s| s.parse().ok())
+        .collect()
 }
 
-fn default_health_port() -> u16 {
-    8080
-}
-
-fn default_metrics_port() -> u16 {
-    9090
-}
-
-fn default_log_level() -> String {
-    "info".to_string()
-}
-
-fn default_redis_url() -> String {
-    "redis://localhost:6379".to_string()
-}
-
-fn default_auth_addr() -> String {
-    "http://localhost:50051".to_string()
-}
-
-fn default_pulse_addr() -> String {
-    "http://localhost:50052".to_string()
-}
-
-impl Default for GatewayConfig {
-    fn default() -> Self {
-        Self {
-            listen_addr: default_listen_addr(),
-            health_port: default_health_port(),
-            metrics_port: default_metrics_port(),
-            log_level: default_log_level(),
-            rate_limit: RateLimitConfig::default(),
-            redis_url: default_redis_url(),
-            auth_service_addr: default_auth_addr(),
-            pulse_service_addr: default_pulse_addr(),
+impl GatewayConfig {
+    pub fn timers(&self) -> avon_tunnel::TimerConfig {
+        avon_tunnel::TimerConfig {
+            keepalive: std::time::Duration::from_secs(self.keepalive_secs),
+            rekey_after: std::time::Duration::from_secs(self.rekey_secs),
+            idle_timeout: std::time::Duration::from_secs(self.idle_timeout_secs),
+            ..Default::default()
         }
     }
 }
 
 impl GatewayConfig {
-    /// Load configuration from file and environment.
-    pub fn load(config_path: Option<&str>) -> anyhow::Result<Self> {
-        let mut builder = config::Config::builder();
-
-        // Load from file if provided
-        if let Some(path) = config_path {
-            builder = builder.add_source(config::File::with_name(path).required(false));
-        }
-
-        // Override with environment variables (AVON_GATEWAY_ prefix)
-        builder = builder.add_source(
-            config::Environment::with_prefix("AVON_GATEWAY")
-                .separator("_")
-                .try_parsing(true),
-        );
-
-        let config = builder.build()?;
-        let gateway_config: GatewayConfig = config.try_deserialize().unwrap_or_default();
-
-        Ok(gateway_config)
-    }
-
-    /// Apply CLI overrides.
-    pub fn with_overrides(mut self, port: Option<u16>, log_level: Option<String>) -> Self {
-        if let Some(p) = port {
-            self.listen_addr.set_port(p);
-        }
-        if let Some(level) = log_level {
-            self.log_level = level;
-        }
-        self
-    }
-}
-
-/// Rate limiting configuration.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RateLimitConfig {
-    /// Maximum requests per second per IP.
-    #[serde(default = "default_requests_per_second")]
-    pub requests_per_second: u32,
-    /// Burst size for rate limiting.
-    #[serde(default = "default_burst_size")]
-    pub burst_size: u32,
-    /// Cleanup interval for expired rate limiters in seconds.
-    #[serde(default = "default_cleanup_interval")]
-    pub cleanup_interval_secs: u64,
-}
-
-fn default_requests_per_second() -> u32 {
-    100
-}
-
-fn default_burst_size() -> u32 {
-    200
-}
-
-fn default_cleanup_interval() -> u64 {
-    60
-}
-
-impl Default for RateLimitConfig {
-    fn default() -> Self {
-        Self {
-            requests_per_second: default_requests_per_second(),
-            burst_size: default_burst_size(),
-            cleanup_interval_secs: default_cleanup_interval(),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-    use super::*;
-
-    #[test]
-    fn test_default_config() {
-        let config = GatewayConfig::default();
-        assert_eq!(config.listen_addr.port(), 4600);
-        assert_eq!(config.health_port, 8080);
-        assert_eq!(config.metrics_port, 9090);
-        assert_eq!(config.log_level, "info");
-    }
-
-    #[test]
-    fn test_rate_limit_defaults() {
-        let config = RateLimitConfig::default();
-        assert_eq!(config.requests_per_second, 100);
-        assert_eq!(config.burst_size, 200);
-        assert_eq!(config.cleanup_interval_secs, 60);
-    }
-
-    #[test]
-    fn test_config_with_overrides() {
-        let config = GatewayConfig::default().with_overrides(Some(5000), Some("debug".to_string()));
-        assert_eq!(config.listen_addr.port(), 5000);
-        assert_eq!(config.log_level, "debug");
+    /// The mirror client, if one is configured. Goes through
+    /// [`avon_config::redis_client`] so a privately-issued `rediss://`
+    /// certificate verifies.
+    pub fn redis_client(&self) -> Option<redis::Client> {
+        let url = self.redis_url.clone()?;
+        let args = avon_config::RedisArgs {
+            url,
+            tls_ca: self.redis_tls_ca.clone(),
+            require_tls: false,
+        };
+        avon_config::redis_client(&args)
+            .map_err(|e| tracing::warn!(error = %e, "session mirroring disabled"))
+            .ok()
     }
 }

@@ -51,3 +51,31 @@ impl Validate for RedisArgs {
         Ok(())
     }
 }
+
+/// Build a client for `args`.
+///
+/// `redis::Client::open` trusts only the system roots, so a `rediss://` URL
+/// against a privately-issued certificate never verifies and the connection
+/// manager retries forever. Every service that talks to Redis must go through
+/// here rather than calling `open` itself.
+pub fn redis_client(args: &RedisArgs) -> Result<redis::Client, ConfigError> {
+    let bad = |e: redis::RedisError| ConfigError::Invalid {
+        field: "redis-url",
+        reason: e.to_string(),
+    };
+    let Some(ca_path) = &args.tls_ca else {
+        return redis::Client::open(args.url.as_str()).map_err(bad);
+    };
+    let root_cert = std::fs::read(ca_path).map_err(|e| ConfigError::Invalid {
+        field: "redis-tls-ca",
+        reason: e.to_string(),
+    })?;
+    redis::Client::build_with_tls(
+        args.url.as_str(),
+        redis::TlsCertificates {
+            client_tls: None,
+            root_cert: Some(root_cert),
+        },
+    )
+    .map_err(bad)
+}
