@@ -14,6 +14,7 @@ use tonic::{Request, Response, Status, Streaming};
 
 use crate::authz::{require_service, Principal};
 use crate::gateway_stream::GatewayHandle;
+use crate::policy_push;
 
 use super::AppState;
 
@@ -76,6 +77,9 @@ impl GatewayService for GatewayServiceImpl {
         })?;
 
         let chain = self.state.chain.read().await;
+        let snapshots = policy_push::snapshots_for_registration(&self.state)
+            .await
+            .unwrap_or_default();
         tracing::info!(gateway = %id, endpoint = %r.public_endpoint, "gateway registered");
         Ok(Response::new(GatewayConfig {
             chain: Some(Chain {
@@ -90,6 +94,7 @@ impl GatewayService for GatewayServiceImpl {
             crl: Some(chain.crl_raw.clone()),
             keepalive_secs: 25,
             rekey_secs: 120,
+            snapshots,
         }))
     }
 
@@ -144,6 +149,11 @@ impl GatewayService for GatewayServiceImpl {
                     Some(gateway_up::Msg::SessionAnswer(answer)) => {
                         if !state.pending_answers.resolve(answer) {
                             tracing::debug!(gateway = %id, "answer for an unknown or expired offer");
+                        }
+                    }
+                    Some(gateway_up::Msg::Decisions(d)) => {
+                        if let Err(e) = policy_push::record_decisions(&state, id, d.records).await {
+                            tracing::warn!(gateway = %id, error = %e, "failed to record decisions");
                         }
                     }
                     None => {}

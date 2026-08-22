@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use avon_common::ids::{DeviceId, GatewayId};
+use avon_common::ids::{DeviceId, GatewayId, TenantId};
 use avon_protocol::v2::{gateway_down, pulse_down, GatewayDown, PulseDown, SessionClose};
 use dashmap::DashMap;
 use sqlx::PgPool;
@@ -90,6 +90,34 @@ pub async fn close_device_sessions(state: &AppState, device: DeviceId, reason: &
             },
         );
     }
+}
+
+/// Suspension is reversible, so unlike `revoke_device` it does not touch the CA
+/// or the CRL — but it must still stop traffic immediately, which means closing
+/// established sessions rather than waiting for them to idle out.
+pub async fn suspend_device(
+    state: &AppState,
+    device: DeviceId,
+    reason: &str,
+) -> Result<(), Status> {
+    sqlx::query("UPDATE devices SET status = 'suspended' WHERE id = $1")
+        .bind(device.as_uuid())
+        .execute(&state.pool)
+        .await
+        .map_err(|_| Status::unavailable("database"))?;
+    state.sessions.revoke_device(device).await?;
+    let tenant: Option<(uuid::Uuid,)> =
+        sqlx::query_as("SELECT tenant_id FROM devices WHERE id = $1")
+            .bind(device.as_uuid())
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|_| Status::unavailable("database"))?;
+    if let Some((tenant,)) = tenant {
+        crate::policy_push::patch_device_attrs(state, TenantId::new(tenant), device).await;
+    }
+    close_device_sessions(state, device, reason).await;
+    metrics::counter!("avon_control_devices_suspended_total").increment(1);
+    Ok(())
 }
 
 /// Revoke a device everywhere at once: database status, every certificate it

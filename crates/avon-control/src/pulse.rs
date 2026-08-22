@@ -79,6 +79,8 @@ pub async fn handle_heartbeat(
         .ok();
     }
     metrics::counter!("avon_control_pulses_total").increment(1);
+    // Patch device attributes into engines/gateways (debounced).
+    crate::policy_push::patch_device_attrs(state, info.tenant, info.device).await;
     Ok(PulseAck {
         server_time_unix: chrono::Utc::now().timestamp(),
         next_interval_secs: state.pulse_interval_secs,

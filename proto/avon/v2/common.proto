@@ -36,3 +36,14 @@ message Fingerprint {
   bytes hash = 2;                         // SHA-256 over stable identifiers (spec §11)
   repeated string identifier_kinds = 3;   // e.g. ["dmi-uuid","machine-id","tpm-ek"]
 }
+
+message DecisionRecord {
+  Uuid tenant_id = 1;
+  Uuid device_id = 2;
+  bytes session_id = 3;
+  string destination = 4;
+  bool allow = 5;
+  repeated string policy_ids = 6;
+  string reason = 7;
+  int64 decided_at_unix = 8;
+}

@@ -444,6 +444,7 @@ dependencies = [
  "avon-crypto",
  "avon-db",
  "avon-observability",
+ "avon-policy",
  "avon-protocol",
  "avon-testkit",
  "avon-tls",
