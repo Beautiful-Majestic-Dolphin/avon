@@ -896,6 +896,18 @@ class WebAuthnQueries:
         return [DbWebAuthnCredential(**dict(row)) for row in rows]
 
     @staticmethod
+    async def get_credential_for_user(
+        conn: asyncpg.Connection, user_id: UUID, credential_id: bytes
+    ) -> DbWebAuthnCredential | None:
+        """Get a credential by user and credential_id — prevents cross-user hijack."""
+        row = await conn.fetchrow(
+            "SELECT * FROM webauthn_credentials WHERE user_id = $1 AND credential_id = $2",
+            user_id,
+            credential_id,
+        )
+        return DbWebAuthnCredential(**dict(row)) if row else None
+
+    @staticmethod
     async def get_credential_by_credential_id(
         conn: asyncpg.Connection, credential_id: bytes
     ) -> DbWebAuthnCredential | None:
