@@ -13,6 +13,7 @@
 pub mod config;
 pub mod control_link;
 pub mod dataplane;
+pub mod decision_log;
 pub mod policy_hook;
 pub mod redis_mirror;
 pub mod routes;
@@ -20,6 +21,8 @@ pub mod state;
 pub mod tun;
 
 pub use config::GatewayConfig;
-pub use policy_hook::{parse_flow, AllowAll, Decision, Flow, FlowPolicy};
+pub use policy_hook::{
+    parse_flow, AllowAll, CedarFlowPolicy, Decision, Flow, FlowContext, FlowPolicy,
+};
 pub use routes::RouteTable;
 pub use state::{ChainCache, GatewayState, SessionMeta};

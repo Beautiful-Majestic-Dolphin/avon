@@ -10,6 +10,7 @@ pub mod gateway_fixture;
 pub mod memtun;
 pub mod metrics;
 pub mod net;
+pub mod packets;
 pub mod pki;
 pub mod redis;
 pub mod services;

@@ -89,5 +89,5 @@ async fn unreachable_candidates_fall_back_to_the_hub_path() {
         .unwrap()
         .unwrap();
     assert_eq!(&got[28..], b"relayed");
-    assert!(gw.metric("avon_gateway_packets_relayed_total", &[]) >= 1);
+    assert!(gw.metric("avon_gateway_packets_relayed_total", &[]) >= 1.0);
 }

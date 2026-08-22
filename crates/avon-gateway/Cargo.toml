@@ -19,6 +19,7 @@ avon-common.workspace = true
 avon-config.workspace = true
 avon-crypto.workspace = true
 avon-observability.workspace = true
+avon-policy.workspace = true
 avon-protocol.workspace = true
 avon-tls.workspace = true
 avon-tunnel.workspace = true
@@ -45,8 +46,13 @@ parking_lot = "0.12"
 
 [dev-dependencies]
 avon-testkit.workspace = true
+avon-db.workspace = true
 tempfile.workspace = true
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
+sqlx = { workspace = true }
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
 
 [lints]
 workspace = true

@@ -13,7 +13,8 @@ use dashmap::DashMap;
 use ipnet::IpNet;
 use tokio::sync::{mpsc, RwLock};
 
-use crate::policy_hook::FlowPolicy;
+use crate::decision_log;
+use crate::policy_hook::{CedarFlowPolicy, FlowPolicy};
 use crate::routes::RouteTable;
 
 /// The trust material the gateway validates device certificates against.
@@ -79,7 +80,7 @@ pub struct GatewayState {
     pub table: Arc<SessionTable>,
     pub endpoint: Arc<UdpEndpoint>,
     pub routes: RouteTable,
-    pub policy: Arc<dyn FlowPolicy>,
+    pub policy: RwLock<Arc<CedarFlowPolicy>>,
     pub signing: HybridSigningKeyPair,
     pub cert: Certificate,
     pub chain: RwLock<ChainCache>,
@@ -104,7 +105,7 @@ impl GatewayState {
     /// the second one costs a round trip and nothing else.
     pub async fn bootstrap(
         cfg: &crate::config::GatewayConfig,
-        policy: Arc<dyn FlowPolicy>,
+        _policy: Arc<dyn FlowPolicy>,
     ) -> anyhow::Result<(Arc<Self>, mpsc::Receiver<avon_tunnel::EndpointEvent>)> {
         let cert = Certificate::decode(&std::fs::read(cfg.identity_dir.join("gateway.avon.crt"))?)?;
         let signing = HybridSigningKeyPair::from_secret_bytes(&std::fs::read(
@@ -131,12 +132,18 @@ impl GatewayState {
         };
 
         let events = endpoint.clone().run();
+        // Create a placeholder Cedar policy; the real decision log will be wired after the state is Arc.
+        let dummy_tx = {
+            let (tx, _rx) = mpsc::channel::<avon_protocol::v2::DecisionRecord>(1);
+            tx
+        };
+        let placeholder = Arc::new(CedarFlowPolicy::new(dummy_tx));
         let state = Arc::new(Self {
             id,
             table,
             endpoint,
             routes: RouteTable::new(),
-            policy,
+            policy: RwLock::new(placeholder),
             signing,
             cert,
             chain: RwLock::new(chain),
@@ -146,6 +153,10 @@ impl GatewayState {
             up: RwLock::new(None),
             redis: RwLock::new(redis),
         });
+        // Now that the state is Arc, create the real decision log that forwards to the current `up` sender.
+        let real_tx = decision_log::spawn_for_state(state.clone());
+        let real_policy = Arc::new(CedarFlowPolicy::new(real_tx));
+        *state.policy.write().await = real_policy;
         Ok((state, events))
     }
 
