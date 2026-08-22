@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DbDevice(BaseModel):
@@ -60,15 +60,22 @@ class DbUser(BaseModel):
 
     id: UUID
     email: str
-    hashed_password: str
+    hashed_password: str = Field(validation_alias="password_hash")
     full_name: str | None = None
     is_active: bool = True
     is_admin: bool = False
+    tenant_id: UUID | None = None
+    role: str = "viewer"
     external_id: str | None = None
     managed_by: str = "local"
+    mfa_required: bool = False
+    failed_logins: int = 0
+    locked_until: datetime | None = None
     created_at: datetime
     updated_at: datetime
     last_login_at: datetime | None = None
+
+    model_config = {"populate_by_name": True, "extra": "ignore"}
 
 
 class DbWebAuthnCredential(BaseModel):
@@ -118,7 +125,7 @@ class DbTunnel(BaseModel):
 
 
 class DbScimToken(BaseModel):
-    """SCIM bearer token database model."""
+    """SCIM Bearer token database model."""
 
     id: UUID
     token_hash: str
