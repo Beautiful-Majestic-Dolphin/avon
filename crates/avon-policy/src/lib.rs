@@ -2,6 +2,7 @@ pub mod compile;
 pub mod db;
 pub mod engine;
 pub mod entities;
+pub mod mud;
 pub mod schema;
 pub mod snapshot;
 pub mod spec;
