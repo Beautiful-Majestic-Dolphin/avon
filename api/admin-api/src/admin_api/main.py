@@ -4,11 +4,12 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 
-from admin_api.config import settings
+from admin_api.config import Settings, settings
 from admin_api.db.connection import DatabasePool
 from admin_api.routers import (
     dashboard_router,
@@ -53,13 +54,25 @@ async def lifespan(app: FastAPI):
     import asyncio
 
     configure_logging()
+    # Validate settings at startup — refuse to start with short/default secret
+    try:
+        # Re-validate with current env
+        Settings()  # type: ignore[call-arg]
+    except Exception as e:
+        logger.error("invalid_settings", error=str(e))
+        raise RuntimeError(f"invalid settings: {e}") from e
+
+    if "*" in settings.cors_origins:
+        raise RuntimeError("cors_origins must not contain '*'")
+
     logger.info("avon_admin_api_starting", version="1.0.0")
 
     try:
         await DatabasePool.connect()
         logger.info("database_connected")
     except Exception as e:
-        logger.warning("database_connection_failed", error=str(e))
+        logger.error("database_connection_failed", error=str(e))
+        raise RuntimeError(f"database unreachable: {e}") from e
 
     # Start analytics collector background task
     collector_task = None
@@ -83,11 +96,12 @@ app = FastAPI(
     description="Administration API for AVON Zero Trust Network",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/docs" if settings.enable_docs else None,
+    redoc_url="/redoc" if settings.enable_docs else None,
+    openapi_url="/openapi.json" if settings.enable_docs else None,
 )
 
+# CORS from explicit allow-list only — no wildcard
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -119,7 +133,7 @@ async def root() -> dict:
     return {
         "name": "AVON Admin API",
         "version": "1.0.0",
-        "docs": "/docs",
+        "docs": "/docs" if settings.enable_docs else None,
     }
 
 
@@ -134,12 +148,23 @@ async def health() -> dict:
 
 
 @app.get("/ready")
-async def ready() -> dict:
-    """Readiness check endpoint."""
+async def ready(request: Request):
+    """Readiness check endpoint — 503 when DB is down."""
     db_ready = DatabasePool._pool is not None
+    # Try a simple query if pool exists
+    if db_ready:
+        try:
+            pool = DatabasePool.get_pool()
+            async with pool.acquire() as conn:
+                await conn.fetchval("SELECT 1")
+        except Exception:
+            db_ready = False
 
-    return {
+    body = {
         "ready": db_ready,
         "database": "connected" if db_ready else "disconnected",
         "timestamp": datetime.now(UTC).isoformat(),
     }
+    if not db_ready:
+        return JSONResponse(status_code=503, content=body)
+    return body

@@ -159,7 +159,7 @@ class InstallationPackageService:
         message = "&".join(f"{k}={v}" for k, v in sorted_params)
 
         signature = hmac.new(
-            settings.jwt_secret_key.encode(),
+            settings.jwt_secret_key.get_secret_value().encode(),
             message.encode(),
             hashlib.sha256,
         ).hexdigest()
