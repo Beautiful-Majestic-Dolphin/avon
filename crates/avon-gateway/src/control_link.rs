@@ -109,6 +109,9 @@ async fn connect_and_serve(state: &Arc<GatewayState>, cfg: &GatewayConfig) -> an
     if let Some(crl) = config.crl {
         apply_crl(state, &crl).await;
     }
+    for snap in config.snapshots {
+        apply_snapshot(state, snap).await;
+    }
     tracing::info!(endpoint = %cfg.public_endpoint, "registered with control");
 
     let (up_tx, up_rx) = mpsc::channel::<GatewayUp>(64);
@@ -133,12 +136,8 @@ async fn connect_and_serve(state: &Arc<GatewayState>, cfg: &GatewayConfig) -> an
             }
             Some(gateway_down::Msg::Crl(crl)) => apply_crl(state, &crl).await,
             Some(gateway_down::Msg::Routes(update)) => apply_routes(state, update),
-            Some(gateway_down::Msg::Policy(_)) => {
-                // Policy snapshots (Task 4.6) – ignored until CedarFlowPolicy lands.
-            }
-            Some(gateway_down::Msg::DeviceUpdate(_)) => {
-                // Device attribute patches (Task 4.7) – handled when policy engine exists.
-            }
+            Some(gateway_down::Msg::Policy(snap)) => apply_snapshot(state, snap).await,
+            Some(gateway_down::Msg::DeviceUpdate(upd)) => apply_device_update(state, upd).await,
             None => {}
         }
     }
@@ -298,5 +297,49 @@ async fn apply_crl(state: &Arc<GatewayState>, raw: &avon_protocol::v2::Crl) {
     };
     for id in revoked {
         state.close_session(&id, "certificate revoked").await;
+    }
+}
+
+async fn apply_snapshot(state: &Arc<GatewayState>, snap: avon_protocol::v2::PolicySnapshot) {
+    let data = match avon_policy::snapshot::decode(&snap.encoded) {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to decode policy snapshot");
+            return;
+        }
+    };
+    let tenant = data.tenant_id.into();
+    let policy = state.policy.read().await.clone();
+    if let Err(e) = policy.apply_snapshot(tenant, data) {
+        tracing::warn!(error = %e, "failed to apply policy snapshot");
+    } else {
+        tracing::info!(%tenant, version = snap.version, "policy snapshot applied");
+    }
+}
+
+async fn apply_device_update(state: &Arc<GatewayState>, upd: avon_protocol::v2::DeviceUpdate) {
+    let (Some(tenant), Some(device)) = (upd.tenant_id.as_ref(), upd.device_id.as_ref()) else {
+        return;
+    };
+    let Ok(tenant) = avon_protocol::bytes_to_uuid(&tenant.value).map(TenantId::new) else {
+        return;
+    };
+    let Ok(device) = avon_protocol::bytes_to_uuid(&device.value).map(DeviceId::new) else {
+        return;
+    };
+    let Ok(attrs) = serde_json::from_str::<avon_policy::entities::DeviceAttrs>(&upd.attrs_json)
+    else {
+        return;
+    };
+    let inactive = attrs.status != "active";
+    let policy = state.policy.read().await.clone();
+    policy.patch_device(tenant, device, attrs);
+    if inactive {
+        for entry in state.sessions_meta.iter() {
+            if entry.value().device_id == device {
+                let sid = *entry.key();
+                state.close_session(&sid, "device no longer active").await;
+            }
+        }
     }
 }

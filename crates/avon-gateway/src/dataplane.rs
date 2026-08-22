@@ -15,7 +15,7 @@ use avon_protocol::v2::{tunnel_frame, MtuProbeAck, RekeyAck, TunnelFrame};
 use avon_tunnel::{EndpointEvent, Inner, PacketSink, PacketSource};
 use tokio::sync::mpsc;
 
-use crate::policy_hook::parse_flow;
+use crate::policy_hook::{parse_flow, FlowContext};
 use crate::state::GatewayState;
 
 pub async fn run_dataplane(
@@ -73,7 +73,19 @@ async fn handle_ip(
         drop_packet("spoofed_source");
         return;
     }
-    let decision = state.policy.allow(&flow);
+    let destination_device = state
+        .routes
+        .lookup(flow.dst)
+        .and_then(|sid| state.sessions_meta.get(&sid).map(|m| m.device_id));
+    let ctx = FlowContext {
+        session: sid,
+        tenant: meta.tenant,
+        device: meta.device_id,
+        destination_device,
+        flow: flow.clone(),
+    };
+    let policy = state.policy.read().await.clone();
+    let decision = policy.allow(&ctx);
     if !decision.allow {
         metrics::counter!("avon_gateway_flows_denied_total", "reason" => decision.reason)
             .increment(1);

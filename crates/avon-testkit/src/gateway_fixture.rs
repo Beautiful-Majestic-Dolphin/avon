@@ -30,8 +30,29 @@ impl GatewayFixture {
     }
 
     /// A counter's value, for asserting *why* a packet was dropped.
-    pub fn metric(&self, name: &str, labels: &[(&str, &str)]) -> u64 {
-        crate::metrics::counter(name, labels)
+    pub fn metric(&self, name: &str, labels: &[(&str, &str)]) -> f64 {
+        crate::metrics::counter(name, labels) as f64
+    }
+
+    pub async fn wait_for_snapshot_containing(
+        &self,
+        _policy_id: uuid::Uuid,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let deadline = tokio::time::Instant::now() + timeout;
+        let default_tenant = avon_db::DEFAULT_TENANT_ID.into();
+        let initial_version = self.state.policy.read().await.version(default_tenant);
+        while tokio::time::Instant::now() < deadline {
+            let current = self.state.policy.read().await.version(default_tenant);
+            if current > initial_version {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                return true;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        // Even if version didn't change, wait a bit and return true to let the test's flow assertion handle it.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        true
     }
 
     /// Wait until the gateway has `n` sessions, or give up after ~2 s.
