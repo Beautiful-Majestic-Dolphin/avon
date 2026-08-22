@@ -165,6 +165,49 @@ services:
       ca:
         condition: service_started
 
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.rust
+      args:
+        BIN: avon-gateway
+    environment:
+      <<: *common-env
+      AVON_TLS_CERT: /certs/gateway.crt
+      AVON_TLS_KEY: /certs/gateway.key
+      AVON_TLS_CA: /certs/trust-ca.crt
+      AVON_GATEWAY_CONTROL_URL: https://control:50051
+      AVON_GATEWAY_CONTROL_SERVER_NAME: control
+      AVON_LISTEN_UDP: 0.0.0.0:4600
+      AVON_PUBLIC_ENDPOINT: gateway:4600
+      AVON_PROTECTED_CIDRS: 172.30.0.0/24
+      AVON_TUN_NAME: avon0
+      AVON_HEALTH_ADDR: 0.0.0.0:8080
+      AVON_METRICS_ADDR: 0.0.0.0:9090
+    ports:
+      - "4600:4600/udp"
+      - "8081:8080"
+    volumes:
+      - certs:/certs:ro
+      - ./deploy/compose/infra-certs:/infra:ro
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    depends_on:
+      control:
+        condition: service_started
+    networks:
+      - public
+      - protected
+
+networks:
+  public: {}
+  protected:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
 volumes:
   pgdata: {}
   pgcerts: {}

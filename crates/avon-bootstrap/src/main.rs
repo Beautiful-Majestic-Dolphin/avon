@@ -109,7 +109,16 @@ async fn main() -> anyhow::Result<()> {
             let provider = SealedFileProvider::from_file(&cli.master_key_file)?;
             let keys = load_or_init(&pool, &provider, true).await?;
             issue_service_certs(&pool, &keys, &out, &services, &dns).await?;
-            create_owner(&pool, &email, &password, &tenant).await?;
+            let token = create_owner(&pool, &email, &password, &tenant).await?;
+            // Write enroll token for compose e2e agents.
+            let token_path = out.join("enroll.token");
+            let _ = std::fs::write(&token_path, &token);
+            // Also ensure /certs/enroll.token if out is different but /certs exists (e2e volume).
+            if token_path != std::path::Path::new("/certs/enroll.token")
+                && std::path::Path::new("/certs").exists()
+            {
+                let _ = std::fs::write("/certs/enroll.token", &token);
+            }
         }
         Cmd::Certs { out, services, dns } => {
             let pool = avon_db::connect(&cli.db).await?;
@@ -211,7 +220,7 @@ async fn create_owner(
     email: &str,
     password: &str,
     tenant: &str,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
     use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
     use argon2::Argon2;
     let salt = SaltString::generate(&mut OsRng);
@@ -244,7 +253,7 @@ async fn create_owner(
     .execute(pool)
     .await?;
     println!("owner {email} created; enrollment token (7 days, 100 uses): {token}");
-    Ok(())
+    Ok(token)
 }
 
 fn service_csr(
