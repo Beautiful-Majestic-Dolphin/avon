@@ -488,15 +488,33 @@ class UserQueries:
 
     @staticmethod
     async def get_user_by_email(conn: asyncpg.Connection, email: str) -> DbUser | None:
-        """Get a user by email."""
-        row = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email)
-        return DbUser(**dict(row)) if row else None
+        """Get a user by email (case-insensitive)."""
+        row = await conn.fetchrow(
+            "SELECT * FROM users WHERE lower(email) = lower($1) LIMIT 1", email
+        )
+        if row is None:
+            return None
+        d = dict(row)
+        # Map role -> is_admin for compat
+        if "role" in d and "is_admin" not in d:
+            d["is_admin"] = d["role"] in ("owner", "admin")
+        # Map password_hash -> hashed_password
+        if "password_hash" in d and "hashed_password" not in d:
+            d["hashed_password"] = d["password_hash"]
+        return DbUser(**d)
 
     @staticmethod
     async def get_user(conn: asyncpg.Connection, user_id: UUID) -> DbUser | None:
         """Get a user by ID."""
         row = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
-        return DbUser(**dict(row)) if row else None
+        if row is None:
+            return None
+        d = dict(row)
+        if "role" in d and "is_admin" not in d:
+            d["is_admin"] = d["role"] in ("owner", "admin")
+        if "password_hash" in d and "hashed_password" not in d:
+            d["hashed_password"] = d["password_hash"]
+        return DbUser(**d)
 
     @staticmethod
     async def create_user(
@@ -505,20 +523,34 @@ class UserQueries:
         hashed_password: str,
         full_name: str | None = None,
         is_admin: bool = False,
+        tenant_id: UUID | None = None,
+        role: str | None = None,
     ) -> DbUser:
         """Create a new user."""
+        if tenant_id is None:
+            # default tenant
+            tenant_id = await conn.fetchval("SELECT id FROM tenants LIMIT 1")
+        if role is None:
+            role = "owner" if is_admin else "viewer"
         row = await conn.fetchrow(
             """
-            INSERT INTO users (email, hashed_password, full_name, is_admin, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            INSERT INTO users (tenant_id, email, password_hash, full_name, role, is_admin, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5::user_role, $6, NOW(), NOW())
             RETURNING *
             """,
+            tenant_id,
             email,
             hashed_password,
             full_name,
+            role,
             is_admin,
         )
-        return DbUser(**dict(row))
+        d = dict(row)
+        if "role" in d and "is_admin" not in d:
+            d["is_admin"] = d["role"] in ("owner", "admin")
+        if "password_hash" in d and "hashed_password" not in d:
+            d["hashed_password"] = d["password_hash"]
+        return DbUser(**d)
 
     @staticmethod
     async def update_last_login(conn: asyncpg.Connection, user_id: UUID) -> None:

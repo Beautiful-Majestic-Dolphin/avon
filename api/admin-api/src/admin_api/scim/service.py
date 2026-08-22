@@ -9,8 +9,8 @@ from uuid import UUID
 
 import asyncpg
 import structlog
-from passlib.context import CryptContext
 
+from admin_api.auth.passwords import hash_password
 from admin_api.db.models import DbPod, DbUser
 from admin_api.db.queries import (
     ActivityQueries,
@@ -28,7 +28,6 @@ from admin_api.scim.schemas import (
 )
 
 logger = structlog.get_logger()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _user_to_scim(
@@ -102,7 +101,7 @@ class ScimService:
 
         # Generate a random password (SCIM users authenticate via IdP, not password)
         random_password = secrets.token_urlsafe(32)
-        hashed_password = pwd_context.hash(random_password)
+        hashed_password = hash_password(random_password)
 
         user = await UserQueries.create_user(
             self.db,
