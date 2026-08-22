@@ -10,8 +10,11 @@ COPY rust-toolchain.toml Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY proto ./proto
 COPY migrations ./migrations
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/build/target \
+# sharing=locked: compose builds several of these stages at once and they share
+# these caches. Cargo cannot unpack the same crate from two processes at the
+# same time — it races on `.cargo-ok` and the build fails with "File exists".
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/build/target,sharing=locked \
     cargo build --release --locked --bin "${BIN}" \
  && cp "target/release/${BIN}" "/${BIN}"
 
