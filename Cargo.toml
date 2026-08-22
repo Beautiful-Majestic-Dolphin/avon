@@ -20,6 +20,7 @@ members = [
     "crates/avon-agent-core",
     "crates/avon-tun",
     "crates/avon-agent",
+    "crates/avon-policy",
 ]
 
 [workspace.package]
@@ -74,6 +75,7 @@ avon-testkit = { path = "crates/avon-testkit" }
 avon-agent-core = { path = "crates/avon-agent-core" }
 avon-tun = { path = "crates/avon-tun" }
 avon-agent = { path = "crates/avon-agent" }
+avon-policy = { path = "crates/avon-policy" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

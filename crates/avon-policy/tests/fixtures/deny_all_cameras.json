@@ -1,0 +1,1 @@
+{ "version": 2, "effect": "deny", "source": { "device_classes": ["22222222-2222-2222-2222-222222222222"] }, "destination": { "any": true } }

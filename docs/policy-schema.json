@@ -1,0 +1,261 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PolicySpec",
+  "type": "object",
+  "required": [
+    "destination",
+    "effect",
+    "source",
+    "version"
+  ],
+  "properties": {
+    "conditions": {
+      "default": {
+        "time_window": null,
+        "posture": null,
+        "attestation": null,
+        "max_risk_score": null
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/Conditions"
+        }
+      ]
+    },
+    "destination": {
+      "$ref": "#/definitions/Selector"
+    },
+    "effect": {
+      "$ref": "#/definitions/Effect"
+    },
+    "l4": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/L4Rule"
+      }
+    },
+    "priority": {
+      "default": 100,
+      "type": "integer",
+      "format": "int32"
+    },
+    "source": {
+      "$ref": "#/definitions/Selector"
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint8",
+      "minimum": 0.0
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "AttestationRequirement": {
+      "type": "string",
+      "enum": [
+        "any",
+        "verified"
+      ]
+    },
+    "Conditions": {
+      "type": "object",
+      "properties": {
+        "attestation": {
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AttestationRequirement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_risk_score": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "posture": {
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PostureRequirements"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time_window": {
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TimeWindow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Effect": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "deny"
+      ]
+    },
+    "L4Rule": {
+      "type": "object",
+      "required": [
+        "protocol"
+      ],
+      "properties": {
+        "ports": {
+          "default": "",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PortSet"
+            }
+          ]
+        },
+        "protocol": {
+          "$ref": "#/definitions/Protocol"
+        }
+      }
+    },
+    "PortSet": {
+      "description": "Comma-separated ports and ranges, e.g. \"22,443,8000-8100\"; empty = all",
+      "type": "string",
+      "pattern": "^\\s*$|^\\d{1,5}(-\\d{1,5})?(\\s*,\\s*\\d{1,5}(-\\d{1,5})?)*$"
+    },
+    "PostureRequirements": {
+      "type": "object",
+      "properties": {
+        "disk_encrypted": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "firewall_enabled": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max_hours_since_update": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "min_os_version": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "screen_lock_enabled": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Protocol": {
+      "type": "string",
+      "enum": [
+        "tcp",
+        "udp",
+        "icmp",
+        "any"
+      ]
+    },
+    "Selector": {
+      "type": "object",
+      "properties": {
+        "any": {
+          "default": false,
+          "type": "boolean"
+        },
+        "cidrs": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "device_classes": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "devices": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "pods": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "TimeWindow": {
+      "type": "object",
+      "required": [
+        "days",
+        "end",
+        "start",
+        "timezone"
+      ],
+      "properties": {
+        "days": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "end": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

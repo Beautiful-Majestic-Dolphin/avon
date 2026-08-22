@@ -1,0 +1,42 @@
+[package]
+name = "avon-policy"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "AVON policy spec v2, Cedar compilation and decision engine"
+
+[[bin]]
+name = "avon-policy"
+path = "src/bin/avon-policy.rs"
+
+[dependencies]
+avon-common.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars = { version = "0.8", features = ["uuid1"] }
+uuid.workspace = true
+ipnet = { version = "2.10", features = ["serde"] }
+chrono.workspace = true
+chrono-tz = "0.10"
+cedar-policy = "4"
+arc-swap = "1.7"
+thiserror.workspace = true
+tracing.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+sqlx.workspace = true
+metrics.workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+proptest.workspace = true
+avon-testkit.workspace = true
+tokio.workspace = true
+
+[[bench]]
+name = "decide"
+harness = false
+
+[lints]
+workspace = true
