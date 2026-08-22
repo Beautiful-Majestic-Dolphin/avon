@@ -52,12 +52,25 @@ impl SessionCipher {
     }
 
     pub fn seal(&self, aad: &[u8], plaintext: &mut Vec<u8>) -> Result<u64, CryptoError> {
+        self.seal_with(|_| aad, plaintext)
+    }
+
+    /// Seal where the AAD depends on the counter — a data-plane header carries
+    /// the counter it was sealed under. Allocating the counter and building the
+    /// AAD in one call means the two can never disagree, which a
+    /// peek-then-seal pair could not guarantee without external locking.
+    pub fn seal_with<A: AsRef<[u8]>>(
+        &self,
+        aad_for: impl FnOnce(u64) -> A,
+        plaintext: &mut Vec<u8>,
+    ) -> Result<u64, CryptoError> {
         let counter = self
             .counter
             .next()
             .map_err(|_| CryptoError::CounterExhausted)?;
+        let aad = aad_for(counter);
         self.send
-            .seal_in_place(&nonce_for(counter), aad, plaintext)?;
+            .seal_in_place(&nonce_for(counter), aad.as_ref(), plaintext)?;
         Ok(counter)
     }
 
