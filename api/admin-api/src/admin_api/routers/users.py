@@ -11,9 +11,10 @@ import asyncpg
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from admin_api.auth.dependencies import CurrentUser, get_current_admin, get_current_user
+from admin_api.auth.dependencies import CurrentUser, get_current_user
 from admin_api.auth.jwt import create_mfa_token, create_token_pair, decode
 from admin_api.auth.passwords import hash_password, verify_password
+from admin_api.auth.rbac import require_role
 from admin_api.config import settings
 from admin_api.db.connection import get_db
 from admin_api.db.queries import ActivityQueries, UserQueries, WebAuthnQueries
@@ -332,7 +333,7 @@ async def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: asyncpg.Connection = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_admin),
+    current_user: CurrentUser = Depends(require_role("owner")),
 ) -> list[UserResponse]:
     """List all users. Requires admin privileges."""
     users = await UserQueries.list_users(db, skip=skip, limit=limit)
@@ -354,7 +355,7 @@ async def list_users(
 async def create_user(
     user_request: UserCreateRequest,
     db: asyncpg.Connection = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_admin),
+    current_user: CurrentUser = Depends(require_role("owner")),
 ) -> UserResponse:
     """Create a new user. Requires admin privileges."""
     existing = await UserQueries.get_user_by_email(db, user_request.email)
@@ -402,7 +403,7 @@ async def create_user(
 async def get_user(
     user_id: UUID,
     db: asyncpg.Connection = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_admin),
+    current_user: CurrentUser = Depends(require_role("owner")),
 ) -> UserResponse:
     """Get user by ID. Requires admin privileges."""
     user = await UserQueries.get_user(db, user_id)
@@ -424,7 +425,7 @@ async def update_user(
     user_id: UUID,
     user_request: UserUpdateRequest,
     db: asyncpg.Connection = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_admin),
+    current_user: CurrentUser = Depends(require_role("owner")),
 ) -> UserResponse:
     """Update a user. Requires admin privileges."""
     user = await UserQueries.get_user(db, user_id)
