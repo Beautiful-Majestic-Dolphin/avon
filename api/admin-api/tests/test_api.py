@@ -196,7 +196,7 @@ class TestConfig:
         """Test that settings use correct env prefix."""
         from admin_api.config import Settings
 
-        assert Settings.model_config.get("env_prefix") == "ADMIN_API_"
+        assert Settings.model_config.get("env_prefix") == "AVON_ADMIN_"
 
 
 class TestInstallationPackageService:
