@@ -17,6 +17,7 @@ members = [
     "crates/avon-db",
     "crates/avon-observability",
     "crates/avon-testkit",
+    "crates/avon-agent-core",
 ]
 
 [workspace.package]
@@ -53,6 +54,7 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 redis = { version = "0.27", default-features = false, features = ["tokio-comp", "tokio-rustls-comp", "connection-manager"] }
 proptest = "1.5"
 tempfile = "3.12"
+tokio-stream = { version = "0.1", features = ["net", "sync"] }
 
 # Internal crates
 avon-crypto = { path = "crates/avon-crypto" }
@@ -67,6 +69,7 @@ avon-control = { path = "crates/avon-control" }
 avon-gateway = { path = "crates/avon-gateway" }
 avon-ca = { path = "crates/avon-ca" }
 avon-testkit = { path = "crates/avon-testkit" }
+avon-agent-core = { path = "crates/avon-agent-core" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

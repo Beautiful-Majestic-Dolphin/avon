@@ -8,6 +8,7 @@ mod endpoint;
 mod establish;
 mod header;
 mod inner;
+mod routes;
 mod session;
 mod sink;
 mod table;
@@ -20,6 +21,7 @@ pub use establish::{
 };
 pub use header::{max_udp_payload, Header, FLAG_EPOCH_OVERLAP, HEADER_LEN, TYPE_DATA};
 pub use inner::Inner;
+pub use routes::RouteTable;
 pub use session::{Epoch, Role, Session, SessionStats};
 pub use sink::{PacketSink, PacketSource};
 pub use table::SessionTable;

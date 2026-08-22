@@ -84,13 +84,21 @@ pub async fn ca_client(
 }
 
 pub async fn wait_for_port(addr: SocketAddr) {
-    for _ in 0..100 {
+    assert!(
+        wait_for_port_with_timeout(addr, std::time::Duration::from_secs(2)).await,
+        "service at {addr} did not start"
+    );
+}
+
+pub async fn wait_for_port_with_timeout(addr: SocketAddr, timeout: std::time::Duration) -> bool {
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
         if tokio::net::TcpStream::connect(addr).await.is_ok() {
-            return;
+            return true;
         }
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
-    panic!("service at {addr} did not start");
+    false
 }
 
 // ---------------------------------------------------------------- control
@@ -130,6 +138,7 @@ pub struct ControlFixture {
     pub redis: crate::redis::TestRedis,
     state: std::sync::Arc<avon_control::service::AppState>,
     logs: std::sync::Arc<LogCapture>,
+    control_tls: avon_config::TlsArgs,
 }
 
 impl ControlFixture {
@@ -149,6 +158,81 @@ impl ControlFixture {
     /// The PEM bundle a client should trust to reach control.
     pub fn trust_bundle(&self) -> std::path::PathBuf {
         self.dir.path().join("client-trust.crt")
+    }
+
+    pub async fn restart_control(&mut self) {
+        let addr = self.control.addr;
+        // Shut down old server.
+        if let Some(tx) = self.control.shutdown.take() {
+            let _ = tx.send(());
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // Reuse same redis URL but create new connection manager.
+        let redis_client = self.redis.client().await;
+        let ca_client = avon_control::ca_client::CaClient::connect(
+            &format!("https://localhost:{}", self.ca.addr.port()),
+            "localhost",
+            &self.control_tls,
+        )
+        .await
+        .expect("ca client on restart");
+
+        let state = avon_control::service::AppState::new(
+            self.db.pool().clone(),
+            redis_client,
+            ca_client,
+            self.control_tls.clone(),
+            86_400,
+            30,
+        )
+        .await
+        .expect("state on restart");
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let server_tls =
+            avon_tls::server_tls_config_optional_client(&self.control_tls).expect("tls on restart");
+        let agent_state = state.clone();
+        let gateway_state = state.clone();
+        tokio::spawn(async move {
+            let res = tonic::transport::Server::builder()
+                .tls_config(server_tls)
+                .expect("tls cfg")
+                .add_service(
+                    avon_protocol::v2::agent_service_server::AgentServiceServer::new(
+                        avon_control::service::agent::AgentServiceImpl::new(agent_state),
+                    ),
+                )
+                .add_service(
+                    avon_protocol::v2::gateway_service_server::GatewayServiceServer::new(
+                        avon_control::service::gateway::GatewayServiceImpl::new(gateway_state),
+                    ),
+                )
+                .serve_with_shutdown(addr, async {
+                    let _ = rx.await;
+                })
+                .await;
+            if let Err(e) = res {
+                tracing::warn!(error = %e, "control server restart failed");
+            }
+        });
+        // Wait for the new server to be ready, with a short retry if the port is still in use.
+        for attempt in 0..5 {
+            if crate::services::wait_for_port_with_timeout(addr, std::time::Duration::from_secs(1))
+                .await
+            {
+                break;
+            }
+            if attempt == 4 {
+                panic!("control server restart: port not ready after retries");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+        self.control = SpawnedService {
+            addr,
+            shutdown: Some(tx),
+        };
+        self.state = state;
     }
 }
 
@@ -255,6 +339,7 @@ pub async fn spawn_control(
         redis,
         state,
         logs,
+        control_tls: server_tls_args,
     }
 }
 
