@@ -33,14 +33,28 @@ class DeviceQueries:
         limit: int = 100,
     ) -> list[DbDevice]:
         """List devices with optional filtering."""
-        query = """
+        # Tenant isolation via RLS + explicit filter for superuser
+        tenant_id = await conn.fetchval(
+            "SELECT current_setting('avon.tenant_id', true)"
+        )
+        if tenant_id:
+            query = """
+            SELECT DISTINCT d.*
+            FROM devices d
+            LEFT JOIN device_pods dp ON d.id = dp.device_id
+            WHERE d.tenant_id = $1::uuid
+        """
+            params = [tenant_id]
+            param_idx = 2
+        else:
+            query = """
             SELECT DISTINCT d.*
             FROM devices d
             LEFT JOIN device_pods dp ON d.id = dp.device_id
             WHERE 1=1
         """
-        params: list = []
-        param_idx = 1
+            params: list = []
+            param_idx = 1
 
         if status:
             query += f" AND d.status = ${param_idx}"
@@ -62,11 +76,19 @@ class DeviceQueries:
 
     @staticmethod
     async def get_device(conn: asyncpg.Connection, device_id: UUID) -> DbDevice | None:
-        """Get a device by ID."""
-        row = await conn.fetchrow(
-            "SELECT * FROM devices WHERE id = $1",
-            device_id,
+        """Get a device by ID — tenant-scoped, returns None (404) if other tenant."""
+        # Try tenant-scoped first via RLS setting
+        tenant_id = await conn.fetchval(
+            "SELECT current_setting('avon.tenant_id', true)"
         )
+        if tenant_id:
+            row = await conn.fetchrow(
+                "SELECT * FROM devices WHERE id = $1 AND tenant_id = $2::uuid",
+                device_id,
+                tenant_id,
+            )
+        else:
+            row = await conn.fetchrow("SELECT * FROM devices WHERE id = $1", device_id)
         return DbDevice(**dict(row)) if row else None
 
     @staticmethod
