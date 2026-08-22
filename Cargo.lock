@@ -560,6 +560,7 @@ dependencies = [
 name = "avon-testkit"
 version = "0.2.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "avon-agent-core",
  "avon-ca",
@@ -574,12 +575,16 @@ dependencies = [
  "avon-tunnel",
  "base64ct",
  "chrono",
+ "clap",
  "ipnet",
+ "libc",
  "metrics",
  "metrics-util",
  "pem",
+ "rand 0.8.7",
  "rcgen",
  "redis",
+ "serde_json",
  "sha2",
  "sqlx",
  "tempfile",
