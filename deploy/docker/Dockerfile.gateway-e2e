@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1.7
+# Gateway e2e variant: adds iproute2 + nftables for forwarding/NAT.
+ARG RUST_VERSION=1.93.0
+FROM rust:${RUST_VERSION}-bookworm AS builder
+ARG BIN=avon-gateway
+RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler=3.21.12-3+deb12u1 && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY rust-toolchain.toml Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY proto ./proto
+COPY migrations ./migrations
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/build/target,sharing=locked \
+    cargo build --release --locked --bin "${BIN}" \
+ && cp "target/release/${BIN}" "/${BIN}"
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    iproute2 nftables ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /avon-gateway /usr/local/bin/avon-gateway
+COPY deploy/compose/gateway-entrypoint.sh /usr/local/bin/gateway-entrypoint.sh
+RUN chmod +x /usr/local/bin/gateway-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/gateway-entrypoint.sh"]
