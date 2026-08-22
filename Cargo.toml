@@ -18,6 +18,8 @@ members = [
     "crates/avon-observability",
     "crates/avon-testkit",
     "crates/avon-agent-core",
+    "crates/avon-tun",
+    "crates/avon-agent",
 ]
 
 [workspace.package]
@@ -28,7 +30,7 @@ license = "MIT"
 rust-version = "1.85"
 
 [workspace.dependencies]
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util", "fs"] }
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util", "fs", "process"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = "0.1"
@@ -70,6 +72,8 @@ avon-gateway = { path = "crates/avon-gateway" }
 avon-ca = { path = "crates/avon-ca" }
 avon-testkit = { path = "crates/avon-testkit" }
 avon-agent-core = { path = "crates/avon-agent-core" }
+avon-tun = { path = "crates/avon-tun" }
+avon-agent = { path = "crates/avon-agent" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
