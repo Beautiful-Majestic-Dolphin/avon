@@ -1,0 +1,42 @@
+syntax = "proto3";
+package avon.v2;
+
+import "avon/v2/common.proto";
+
+service AdminService {
+  rpc Explain(ExplainRequest) returns (ExplainResponse);
+  rpc RevokeDevice(RevokeDeviceRequest) returns (Ack);
+  rpc SuspendDevice(SuspendDeviceRequest) returns (Ack);
+  rpc ApproveDevice(ApproveDeviceRequest) returns (Ack);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc ImportMud(ImportMudRequest) returns (ImportMudResponse);
+  rpc ListIkev2Devices(ListIkev2Request) returns (ListIkev2Response);
+  rpc CreateIkev2Device(CreateIkev2Request) returns (CreateIkev2Response);
+}
+
+message ExplainRequest {
+  string tenant_id = 1;
+  string device_id = 2;
+  string destination = 3;
+  string protocol = 4;
+  uint32 port = 5;
+}
+message ExplainResponse {
+  bool allow = 1;
+  string reason = 2;
+  repeated string matched_policies = 3;
+  repeated string matched = 4;
+  string cedar = 5;
+}
+message RevokeDeviceRequest { string tenant_id = 1; string device_id = 2; string reason = 3; }
+message SuspendDeviceRequest { string tenant_id = 1; string device_id = 2; string reason = 3; }
+message ApproveDeviceRequest { string tenant_id = 1; string device_id = 2; }
+message ListSessionsRequest { string tenant_id = 1; }
+message ListSessionsResponse { repeated SessionInfo sessions = 1; }
+message SessionInfo { string session_id = 1; string device_id = 2; }
+message ImportMudRequest { string tenant_id = 1; string device_class_id = 2; string document = 3; }
+message ImportMudResponse { repeated string created = 1; repeated string skipped = 2; }
+message ListIkev2Request { string tenant_id = 1; }
+message ListIkev2Response { repeated string devices = 1; }
+message CreateIkev2Request { string tenant_id = 1; string name = 2; }
+message CreateIkev2Response { string device_id = 1; }

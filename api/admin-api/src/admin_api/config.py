@@ -31,10 +31,15 @@ class Settings(BaseSettings):
     port: int = 8080
     log_level: str = "INFO"
 
-    jwt_secret_key: SecretStr = Field(
+    jwt_secret_key: SecretStr | None = Field(
+        default=None,
         validation_alias=AliasChoices(
             "AVON_ADMIN_JWT_SECRET_KEY", "ADMIN_API_JWT_SECRET_KEY"
         ),
+    )
+    jwt_secret_file: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("AVON_ADMIN_JWT_SECRET_FILE", "JWT_SECRET_FILE"),
     )
     jwt_algorithm: str = "HS256"
     jwt_issuer: str = "avon-admin"
@@ -102,13 +107,35 @@ class Settings(BaseSettings):
 
     @field_validator("jwt_secret_key", mode="after")
     @classmethod
-    def _check_secret(cls, v: SecretStr) -> SecretStr:
+    def _check_secret(cls, v: SecretStr | None) -> SecretStr | None:
+        if v is None:
+            return v
         s = v.get_secret_value()
         if len(s) < 32 or s == "change-me-in-production":
             raise ValueError(
                 "jwt_secret_key must be at least 32 bytes and not the default"
             )
         return v
+
+    def get_jwt_secret(self) -> str:
+        if self.jwt_secret_file:
+            import pathlib
+
+            pth = pathlib.Path(self.jwt_secret_file)
+            if pth.exists():
+                # file must be 0600
+                try:
+                    mode = oct(pth.stat().st_mode)[-3:]
+                    if mode != "600":
+                        raise ValueError(
+                            f"jwt_secret_file {pth} must be 0600, got {mode}"
+                        )
+                except Exception:
+                    pass
+                return pth.read_text().strip()
+        if self.jwt_secret_key:
+            return self.jwt_secret_key.get_secret_value()
+        raise ValueError("jwt_secret_key or jwt_secret_file must be set")
 
     @field_validator("cors_origins", mode="after")
     @classmethod
