@@ -22,7 +22,21 @@ enum Commands {
         /// Path to configuration file
         #[arg(short, long)]
         config: Option<PathBuf>,
+        /// Create the TUN directly instead of asking the privileged helper.
+        /// Requires root; the e2e containers run this way.
+        #[arg(long)]
+        no_helper: bool,
+        /// Leave protected prefixes reachable off-tunnel when the session drops.
+        #[arg(long)]
+        fail_open: bool,
+        /// Run under the Windows service control manager.
+        #[arg(long)]
+        service: bool,
     },
+    /// Register the Windows services (Windows only; elevation required)
+    InstallService,
+    /// Remove the Windows services (Windows only; elevation required)
+    UninstallService,
     /// Enroll this device with the AVON network
     Enroll {
         /// Control plane address (e.g., https://control:8443)
@@ -78,46 +92,51 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     match cli.command {
-        Commands::Run { config } => {
-            let cfg = AgentConfig::load(config.as_deref())?;
-            // Build AgentCoreConfig from AgentConfig
-            let control = if cfg.control_plane.starts_with("https://") {
-                cfg.control_plane.clone()
-            } else {
-                format!("https://{}", cfg.control_plane)
+        Commands::Run {
+            config,
+            no_helper,
+            fail_open,
+            service,
+        } => {
+            if service {
+                #[cfg(target_os = "windows")]
+                {
+                    avon_agent::platform::service::windows::run_as_service()?;
+                    return Ok(());
+                }
+                #[cfg(not(target_os = "windows"))]
+                anyhow::bail!("--service is only meaningful on Windows");
+            }
+            let opts = avon_agent::run::RunOptions {
+                config,
+                no_helper,
+                fail_open,
             };
-            let data_dir = cfg.data_dir.clone();
-            let identity = avon_agent_core::identity::load(&data_dir).await?;
-            let tun = avon_tun::Tun::create(&cfg.tun_name, cfg.overlay_mtu).await?;
-            let tun: std::sync::Arc<dyn avon_agent_core::traits::TunProvider> =
-                std::sync::Arc::new(tun);
-            let posture = std::sync::Arc::new(platform::posture::PostureCollector::new(
-                std::time::Duration::from_secs(60),
-            ));
-            let agent_cfg = avon_agent_core::AgentCoreConfig {
-                control,
-                pulse_interval: std::time::Duration::from_secs(cfg.pulse_interval_secs),
-                timers: avon_tunnel::TimerConfig::default(),
-                overlay_mtu: cfg.overlay_mtu,
-                bind: std::net::SocketAddr::from(([0, 0, 0, 0], 0)),
-                suites: vec![
-                    avon_crypto::aead::Suite::Aes256Gcm,
-                    avon_crypto::aead::Suite::ChaCha20Poly1305,
-                ],
-            };
-            let agent = avon_agent_core::Agent::new(agent_cfg, identity, tun, posture);
-            let status_handle = agent.status_handle();
-            // Serve status socket.
-            let status_dir = data_dir.clone();
-            tokio::spawn(async move {
-                let _ = avon_agent_core::status::serve_status(status_handle, status_dir).await;
-            });
             // Graceful shutdown on SIGTERM/SIGINT.
             let shutdown = async {
                 let _ = tokio::signal::ctrl_c().await;
                 tracing::info!("shutdown signal received");
             };
-            agent.run(shutdown).await?;
+            avon_agent::run::run_agent(opts, shutdown).await?;
+        }
+        Commands::InstallService => {
+            #[cfg(target_os = "windows")]
+            {
+                let exe = std::env::current_exe()?;
+                avon_agent::platform::service::windows::install(&exe)?;
+                println!("registered avon-agent (not started: enrol first)");
+            }
+            #[cfg(not(target_os = "windows"))]
+            anyhow::bail!("install-service is Windows only; use the systemd or launchd units");
+        }
+        Commands::UninstallService => {
+            #[cfg(target_os = "windows")]
+            {
+                avon_agent::platform::service::windows::uninstall()?;
+                println!("removed avon-agent");
+            }
+            #[cfg(not(target_os = "windows"))]
+            anyhow::bail!("uninstall-service is Windows only; use the systemd or launchd units");
         }
         Commands::Enroll {
             control,

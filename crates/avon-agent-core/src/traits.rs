@@ -17,6 +17,24 @@ pub trait TunProvider: PacketSink + PacketSource {
     }
 }
 
+/// Local enforcement that follows the tunnel's state.
+///
+/// The agent core knows when a session comes up and what it carries; what to do
+/// about it — install nftables rules, pf anchors, Windows filters — is the
+/// platform's business, so it lives behind this trait.
+#[async_trait]
+pub trait Enforcement: Send + Sync {
+    /// A session is up and carrying `protected`.
+    async fn on_session_up(
+        &self,
+        tun_name: &str,
+        protected: &[IpNet],
+    ) -> Result<(), crate::AgentError>;
+    /// The session is gone. A fail-closed implementation leaves its rules in
+    /// place; that is the point of it.
+    async fn on_session_down(&self) -> Result<(), crate::AgentError>;
+}
+
 /// Snapshot of the device's health, sent on every pulse.
 pub trait PostureProvider: Send + Sync {
     fn collect(&self) -> DevicePosture;

@@ -54,6 +54,9 @@ libc = "0.2"
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 tss-esapi = { version = "7.5", optional = true }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-service = "0.7"
+
 [dependencies.ctap-hid-fido2]
 version = "3.5"
 optional = true
@@ -78,16 +81,38 @@ workspace = true
 name = "avon-agent"
 maintainer = "AVON Team <support@avon.example>"
 copyright = "2026, AVON"
-license-file = ["LICENSE", "0"]
-extended-description = "AVON Endpoint Agent with hardware-backed identity"
-depends = "systemd, libssl3"
+license-file = ["../../LICENSE", "0"]
+extended-description = "Post-quantum zero-trust network access agent with hardware-backed identity."
+depends = "$auto, systemd"
 section = "net"
 priority = "optional"
 assets = [
-    ["target/release/avon-agent", "usr/bin/", "755"],
-    ["target/release/avon-agent-helper", "usr/bin/", "755"],
-    ["deploy/linux/avon-agent.service", "lib/systemd/system/", "644"],
+    ["../../target/release/avon-agent", "usr/bin/", "755"],
+    ["../../target/release/avon-agent-helper", "usr/bin/", "755"],
+    ["../../deploy/linux/avon-agent.service", "lib/systemd/system/", "644"],
+    ["../../deploy/linux/avon-agent-helper.service", "lib/systemd/system/", "644"],
+    ["../../deploy/linux/avon-agent.sysusers", "usr/lib/sysusers.d/avon-agent.conf", "644"],
+    ["../../deploy/linux/avon-agent.tmpfiles", "usr/lib/tmpfiles.d/avon-agent.conf", "644"],
+    ["../../docs/agent-installation.md", "usr/share/doc/avon-agent/", "644"],
 ]
+maintainer-scripts = "../../deploy/linux"
+
+[package.metadata.generate-rpm]
+license = "MIT"
+summary = "AVON post-quantum zero-trust network access agent"
+assets = [
+    { source = "../../target/release/avon-agent", dest = "/usr/bin/avon-agent", mode = "755" },
+    { source = "../../target/release/avon-agent-helper", dest = "/usr/bin/avon-agent-helper", mode = "755" },
+    { source = "../../deploy/linux/avon-agent.service", dest = "/lib/systemd/system/avon-agent.service", mode = "644" },
+    { source = "../../deploy/linux/avon-agent-helper.service", dest = "/lib/systemd/system/avon-agent-helper.service", mode = "644" },
+    { source = "../../deploy/linux/avon-agent.sysusers", dest = "/usr/lib/sysusers.d/avon-agent.conf", mode = "644" },
+    { source = "../../deploy/linux/avon-agent.tmpfiles", dest = "/usr/lib/tmpfiles.d/avon-agent.conf", mode = "644" },
+]
+post_install_script = "../../deploy/linux/postinst"
+post_uninstall_script = "../../deploy/linux/postrm"
+
+[package.metadata.generate-rpm.requires]
+systemd = "*"
 
 [lib]
 name = "avon_agent"

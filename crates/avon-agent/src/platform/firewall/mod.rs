@@ -4,7 +4,9 @@
 //! boundary: rule *text* is rendered here, inside the privileged process, so a
 //! compromised agent cannot smuggle a ruleset of its own choosing.
 
-use anyhow::{Context, Result};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use anyhow::Context;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 pub mod nftables;

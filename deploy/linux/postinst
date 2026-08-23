@@ -1,9 +1,43 @@
 #!/bin/sh
+# Create the account and directories, register the units — and stop there. An
+# agent with no identity would crash-loop, so enrolment stays a deliberate step.
 set -e
-if ! id -u avon >/dev/null 2>&1; then
-  useradd --system --home /var/lib/avon --shell /usr/sbin/nologin avon
+
+if command -v systemd-sysusers >/dev/null 2>&1; then
+    systemd-sysusers /usr/lib/sysusers.d/avon-agent.conf || true
 fi
-mkdir -p /var/lib/avon /var/log/avon
-chown avon:avon /var/lib/avon /var/log/avon
-chmod 700 /var/lib/avon
+if ! id -u avon >/dev/null 2>&1; then
+    useradd --system --home-dir /var/lib/avon --shell /usr/sbin/nologin avon || true
+fi
+if command -v systemd-tmpfiles >/dev/null 2>&1; then
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/avon-agent.conf || true
+fi
+
+mkdir -p /var/lib/avon /etc/avon
+chown avon:avon /var/lib/avon
+chmod 0700 /var/lib/avon
+chmod 0755 /etc/avon
+
+if [ ! -f /etc/avon/agent.toml ]; then
+    cat > /etc/avon/agent.toml <<'TOML'
+# AVON agent configuration. Set control_plane, then enrol.
+control_plane = "https://control.example.com:8443"
+data_dir = "/var/lib/avon"
+tun_name = "avon0"
+TOML
+    chmod 0644 /etc/avon/agent.toml
+fi
+
 systemctl daemon-reload || true
+systemctl enable avon-agent-helper.service avon-agent.service || true
+
+cat <<'MSG'
+AVON agent installed.
+
+Enrol this device, then start the services:
+
+  sudo avon-agent enroll --control https://control.example.com:8443 --token <token> \
+       --data-dir /var/lib/avon
+  sudo systemctl start avon-agent-helper avon-agent
+MSG
+exit 0

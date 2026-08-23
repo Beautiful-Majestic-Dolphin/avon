@@ -1,0 +1,34 @@
+[Unit]
+Description=AVON agent privileged helper
+Documentation=https://github.com/Beautiful-Majestic-Dolphin/avon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# The helper resolves the agent's uid itself: the account is created at install
+# time, so its numeric id is not known when this file is written.
+ExecStart=/usr/bin/avon-agent-helper --socket /run/avon/helper.sock --user avon
+EnvironmentFile=-/etc/default/avon-agent
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=avon
+RuntimeDirectoryMode=0755
+# The helper is the only component that needs privilege, and only this much:
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service @network-io
+SystemCallErrorNumber=EPERM
+ReadWritePaths=/run/avon
+
+[Install]
+WantedBy=multi-user.target

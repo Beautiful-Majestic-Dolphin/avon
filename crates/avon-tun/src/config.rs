@@ -1,4 +1,6 @@
-use ipnet::{IpNet, Ipv4Net, Ipv6Net};
+use ipnet::IpNet;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use ipnet::{Ipv4Net, Ipv6Net};
 
 use crate::{Tun, TunError};
 

@@ -1,7 +1,12 @@
 #!/bin/sh
 set -e
-if [ "$1" = "purge" ]; then
-  rm -rf /var/lib/avon /var/log/avon
-  userdel avon || true
-fi
-systemctl daemon-reload || true
+
+case "${1:-}" in
+    purge|0)
+        systemctl disable avon-agent.service avon-agent-helper.service >/dev/null 2>&1 || true
+        rm -rf /var/lib/avon /etc/avon /var/log/avon
+        userdel avon >/dev/null 2>&1 || true
+        ;;
+esac
+systemctl daemon-reload >/dev/null 2>&1 || true
+exit 0
