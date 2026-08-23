@@ -4,6 +4,8 @@ Provides trend analysis, security posture, anomaly detection,
 capacity planning, enrollment velocity, and crypto health metrics.
 """
 
+from typing import Literal
+
 import asyncpg
 import structlog
 from fastapi import APIRouter, Depends, Query
@@ -24,6 +26,19 @@ from admin_api.db.connection import get_db
 logger = structlog.get_logger()
 
 router = APIRouter()
+
+
+@router.get("/metrics", response_model=TrendResponse)
+async def get_metrics(
+    period: Literal["1h", "24h", "7d"] = Query("24h", description="Time period"),
+    metric: str = Query("connected_agents", description="Metric name"),
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> TrendResponse:
+    """Metrics endpoint — validates period as Literal so bad values are 422."""
+    return await get_trends(
+        metric=metric, period=period, db=db, current_user=current_user
+    )
 
 
 @router.get("/trends", response_model=TrendResponse)
@@ -124,6 +139,21 @@ async def get_anomalies(
     return await AnalyticsQueries.get_anomalies(
         db, severity=severity, days=days, limit=limit
     )
+
+
+@router.post("/anomalies/{anomaly_id}/ack")
+async def ack_anomaly(
+    anomaly_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Acknowledge an anomaly — records acknowledged_by/at so open_anomaly can recur."""
+    await db.execute(
+        "UPDATE anomaly_events SET acknowledged_at = NOW(), acknowledged_by = $2 WHERE id = $1::uuid",
+        anomaly_id,
+        current_user.id,
+    )
+    return {"success": True}
 
 
 @router.get("/capacity", response_model=CapacityResponse)

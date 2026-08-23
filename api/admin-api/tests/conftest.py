@@ -401,6 +401,11 @@ async def pending_device(db_pool):
             await db.execute("DELETE FROM devices WHERE id = $1", device_id)
 
 
+@pytest_asyncio.fixture
+async def tenant_id(db_pool, admin_user):
+    return admin_user.tenant_id
+
+
 @pytest.fixture
 def fake_control(monkeypatch):
     class Fake:
