@@ -1,22 +1,100 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="AVON Agent" Language="1033" Version="0.2.0" Manufacturer="AVON" UpgradeCode="12345678-1234-1234-1234-123456789ABC">
-    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+<!--
+  AVON agent installer.
+
+  One service is registered and it is not started: the agent has no identity
+  until it is enrolled, and a service that crash-loops from the moment the MSI
+  lands is a worse first impression than one deliberate command.
+
+  Unlike Linux and macOS there is no privileged helper here. The helper exists
+  to hand a kernel TUN descriptor to an unprivileged process, and WinTun has no
+  equivalent: a session cannot be adopted by another process. So the Windows
+  service runs as LocalSystem and owns the adapter, the routes and the filters
+  itself.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  <Product Id="*" Name="AVON Agent" Language="1033" Version="$(var.Version)"
+           Manufacturer="AVON" UpgradeCode="6F3C1E52-9B4A-4E77-9C1D-5A0E6B2D8F31">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
+             Description="AVON post-quantum zero-trust agent" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of the AVON agent is already installed." />
     <MediaTemplate EmbedCab="yes" />
+
+    <!-- Set on the command line: msiexec /i avon.msi AVON_CONTROL=https://control.example.com:8443 -->
+    <Property Id="AVON_CONTROL" Secure="yes" />
+
     <Feature Id="ProductFeature" Title="AVON Agent" Level="1">
       <ComponentGroupRef Id="AvonFiles" />
+      <ComponentGroupRef Id="AvonData" />
     </Feature>
+
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFilesFolder">
-        <Directory Id="INSTALLFOLDER" Name="AVON">
-          <Component Id="AvonAgent" Guid="*">
-            <File Id="AvonAgentExe" Source="avon-agent.exe" KeyPath="yes" />
-            <ServiceInstall Id="AvonAgentService" Name="avon-agent" DisplayName="AVON Agent" Type="ownProcess" Start="auto" ErrorControl="normal" Account="NT AUTHORITY\LocalSystem" />
-            <ServiceControl Id="AvonAgentServiceControl" Name="avon-agent" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
-          </Component>
-        </Directory>
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="AVON" />
+      </Directory>
+      <Directory Id="CommonAppDataFolder">
+        <Directory Id="DATAFOLDER" Name="AVON" />
       </Directory>
     </Directory>
+
+    <ComponentGroup Id="AvonFiles" Directory="INSTALLFOLDER">
+      <Component Id="AvonAgent" Guid="*" Win64="yes">
+        <File Id="AvonAgentExe" Name="avon-agent.exe" Source="$(var.BinDir)\avon-agent.exe" KeyPath="yes" />
+        <ServiceInstall Id="AvonAgentService"
+                        Name="avon-agent"
+                        DisplayName="AVON Agent"
+                        Description="AVON post-quantum zero-trust network access agent."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="NT AUTHORITY\LocalSystem"
+                        Arguments="run --service"
+                        Vital="yes">
+          <util:ServiceConfig FirstFailureActionType="restart"
+                              SecondFailureActionType="restart"
+                              ThirdFailureActionType="restart"
+                              RestartServiceDelayInSeconds="5" />
+        </ServiceInstall>
+        <ServiceControl Id="AvonAgentControl" Name="avon-agent" Stop="both" Remove="uninstall" Wait="yes" />
+      </Component>
+
+      <Component Id="WintunDll" Guid="*" Win64="yes">
+        <File Id="WintunDllFile" Name="wintun.dll" Source="$(var.BinDir)\wintun.dll" KeyPath="yes" />
+      </Component>
+
+      <Component Id="LicenseFile" Guid="*" Win64="yes">
+        <File Id="LicenseTxt" Name="LICENSE" Source="$(var.BinDir)\LICENSE" KeyPath="yes" />
+      </Component>
+
+      <Component Id="ConfigureScript" Guid="*" Win64="yes">
+        <File Id="ConfigurePs1" Name="configure.ps1" Source="$(var.ScriptDir)\configure.ps1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="AvonData" Directory="DATAFOLDER">
+      <Component Id="DataFolderPerms" Guid="*" Win64="yes">
+        <CreateFolder>
+          <!-- Only the service identity and administrators; the device's
+               private key lives here. -->
+          <util:PermissionEx User="SYSTEM" GenericAll="yes" />
+          <util:PermissionEx User="Administrators" GenericAll="yes" />
+        </CreateFolder>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\AVON" Name="DataDir" Type="string" Value="[DATAFOLDER]" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Write %ProgramData%\AVON\agent.toml from AVON_CONTROL without starting
+         anything. The script is idempotent and never overwrites an existing
+         configuration. -->
+    <CustomAction Id="SetWriteConfig" Property="WriteConfig" Execute="immediate"
+                  Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]configure.ps1&quot; -Control &quot;[AVON_CONTROL]&quot; -DataDir &quot;[DATAFOLDER]&quot;" />
+    <CustomAction Id="WriteConfig" BinaryKey="WixCA" DllEntry="WixQuietExec64"
+                  Execute="deferred" Return="check" Impersonate="no" />
+
+    <InstallExecuteSequence>
+      <Custom Action="SetWriteConfig" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="WriteConfig" After="SetWriteConfig">NOT Installed</Custom>
+    </InstallExecuteSequence>
   </Product>
 </Wix>

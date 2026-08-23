@@ -44,6 +44,7 @@ pub struct Agent {
     posture: Arc<dyn PostureProvider>,
     status: StatusHandle,
     peer_handle: Arc<tokio::sync::RwLock<Option<Arc<crate::peer::PeerManager>>>>,
+    enforcement: Option<Arc<dyn crate::traits::Enforcement>>,
 }
 
 impl Agent {
@@ -62,7 +63,15 @@ impl Agent {
             posture,
             status,
             peer_handle: Arc::new(tokio::sync::RwLock::new(None)),
+            enforcement: None,
         }
+    }
+
+    /// Attach local enforcement. Without it the agent still routes, it just does
+    /// not police what leaves the machine when the tunnel is down.
+    pub fn with_enforcement(mut self, enforcement: Arc<dyn crate::traits::Enforcement>) -> Self {
+        self.enforcement = Some(enforcement);
+        self
     }
 
     pub fn status_handle(&self) -> StatusHandle {
@@ -110,6 +119,8 @@ impl Agent {
 
         let mut shutdown = Box::pin(shutdown);
         let mut hub_need_open = true;
+        // Enforcement fires on transitions, not on every pass of the loop.
+        let mut session_was_up = false;
         let mut control: Option<Arc<ControlClient>> = None;
         let mut pulse_tx: Option<tokio::sync::mpsc::Sender<PulseUp>> = None;
         let mut pulse_rx: Option<tonic::Streaming<PulseDown>> = None;
@@ -122,6 +133,7 @@ impl Agent {
         let status = self.status.clone();
         let cfg_control = self.cfg.control.clone();
         let identity = self.identity.clone();
+        let enforcement = self.enforcement.clone();
 
         // Spawn tun -> tunnel forwarder as independent task that watches hub session via router.
         // Instead we will handle tun packets in the main loop via a channel.
@@ -171,6 +183,14 @@ impl Agent {
                                         if let Err(e) = tun.set_routes(&info.routes).await {
                                             tracing::warn!(error = %e, "set routes failed");
                                         }
+                                        if let Some(enf) = enforcement.as_ref() {
+                                            if let Err(e) =
+                                                enf.on_session_up(tun.name(), &info.routes).await
+                                            {
+                                                tracing::warn!(error = %e, "enforcement on session up failed");
+                                            }
+                                        }
+                                        session_was_up = true;
                                         status.set_connected(
                                             Some(info.overlay_v4.to_string()),
                                             Some(info.overlay_v6.to_string()),
@@ -244,6 +264,14 @@ impl Agent {
                                 if let Err(e) = tun.set_routes(&info.routes).await {
                                     tracing::warn!(error = %e, "set routes failed");
                                 }
+                                if let Some(enf) = enforcement.as_ref() {
+                                    if let Err(e) =
+                                        enf.on_session_up(tun.name(), &info.routes).await
+                                    {
+                                        tracing::warn!(error = %e, "enforcement on session up failed");
+                                    }
+                                }
+                                session_was_up = true;
                                 status.set_connected(
                                     Some(info.overlay_v4.to_string()),
                                     Some(info.overlay_v6.to_string()),
@@ -471,6 +499,18 @@ impl Agent {
             // But we also handle the case where hub was cleared via pulse close etc.
             if control.is_some() && session_mgr.hub.read().await.is_none() {
                 hub_need_open = true;
+            }
+
+            // The tunnel just went away: tell enforcement once, not on every
+            // pass. Fail-closed implementations keep their rules here, which is
+            // exactly the window they exist for.
+            if session_was_up && session_mgr.hub.read().await.is_none() {
+                session_was_up = false;
+                if let Some(enf) = enforcement.as_ref() {
+                    if let Err(e) = enf.on_session_down().await {
+                        tracing::warn!(error = %e, "enforcement on session down failed");
+                    }
+                }
             }
         }
 

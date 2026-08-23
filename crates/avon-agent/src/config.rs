@@ -41,6 +41,29 @@ pub struct AgentConfig {
     pub overlay_mtu: u16,
     /// CIDRs this device routes for (subnet-router mode).
     pub advertise_routes: Vec<String>,
+    /// The prefixes the privileged helper will accept routes inside. Anything
+    /// the control plane pushes outside this set is refused before it reaches
+    /// the kernel, which is what stops a compromised agent from asking for a
+    /// default route. The default covers private space only.
+    #[serde(default = "default_allowed_routes")]
+    pub allowed_routes: Vec<String>,
+    /// Leave protected prefixes reachable off-tunnel when a session drops.
+    /// Fail-closed is the default.
+    #[serde(default)]
+    pub fail_open: bool,
+}
+
+fn default_allowed_routes() -> Vec<String> {
+    [
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "100.64.0.0/10",
+        "fd00::/8",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
 }
 
 impl Default for AgentConfig {
@@ -53,6 +76,8 @@ impl Default for AgentConfig {
             tun_name: "avon0".to_string(),
             overlay_mtu: 1280,
             advertise_routes: Vec::new(),
+            allowed_routes: default_allowed_routes(),
+            fail_open: false,
         }
     }
 }

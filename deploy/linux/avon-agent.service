@@ -1,22 +1,38 @@
 [Unit]
-Description=AVON Endpoint Agent
-After=network.target
-Wants=network-online.target
+Description=AVON agent
+Documentation=https://github.com/Beautiful-Majestic-Dolphin/avon
+After=network-online.target avon-agent-helper.service
+Requires=avon-agent-helper.service
 
 [Service]
 Type=simple
 User=avon
 Group=avon
-ExecStart=/usr/bin/avon-agent run
-ExecStartPre=/usr/bin/avon-agent-helper --data-dir /var/lib/avon
+ExecStart=/usr/bin/avon-agent run --config /etc/avon/agent.toml
+EnvironmentFile=-/etc/default/avon-agent
+Environment=AVON_HELPER_SOCKET=/run/avon/helper.sock
 Restart=on-failure
 RestartSec=5
-AmbientCapabilities=CAP_NET_ADMIN
+# The agent holds no capabilities at all: the helper owns the network.
+CapabilityBoundingSet=
+AmbientCapabilities=
 NoNewPrivileges=yes
 PrivateTmp=yes
+PrivateDevices=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/lib/avon /var/log/avon
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+ReadWritePaths=/var/lib/avon
+StateDirectory=avon
+StateDirectoryMode=0700
 
 [Install]
 WantedBy=multi-user.target

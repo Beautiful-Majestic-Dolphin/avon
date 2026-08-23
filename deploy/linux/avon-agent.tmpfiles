@@ -1,0 +1,2 @@
+d /var/lib/avon 0700 avon avon -
+d /etc/avon 0755 root root -
