@@ -55,19 +55,6 @@ spec:
 apiVersion: policy.linkerd.io/v1beta2
 kind: Server
 metadata:
-  name: {{ include "avon.policyEngine.fullname" . }}-http
-  labels:
-    {{- include "avon.policyEngine.labels" . | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/component: policy-engine
-  port: {{ .Values.policyEngine.service.port }}
-  proxyProtocol: HTTP/1
----
-apiVersion: policy.linkerd.io/v1beta2
-kind: Server
-metadata:
   name: {{ include "avon.adminApi.fullname" . }}-http
   labels:
     {{- include "avon.adminApi.labels" . | nindent 4 }}

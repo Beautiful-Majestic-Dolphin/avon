@@ -39,18 +39,6 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "avon.policyEngine.fullname" . }}-pdb
-  labels:
-    {{- include "avon.policyEngine.labels" . | nindent 4 }}
-spec:
-  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
-  selector:
-    matchLabels:
-      {{- include "avon.policyEngine.selectorLabels" . | nindent 6 }}
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
   name: {{ include "avon.adminApi.fullname" . }}-pdb
   labels:
     {{- include "avon.adminApi.labels" . | nindent 4 }}

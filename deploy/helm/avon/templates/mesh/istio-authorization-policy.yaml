@@ -43,26 +43,6 @@ spec:
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
-  name: {{ include "avon.policyEngine.fullname" . }}
-  labels:
-    {{- include "avon.policyEngine.labels" . | nindent 4 }}
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/component: policy-engine
-  action: ALLOW
-  rules:
-    - from:
-        - source:
-            principals:
-              - "cluster.local/ns/{{ .Release.Namespace }}/sa/{{ include "avon.serviceAccountName" . }}"
-    - to:
-        - operation:
-            ports: ["8081"]
----
-apiVersion: security.istio.io/v1beta1
-kind: AuthorizationPolicy
-metadata:
   name: {{ include "avon.adminApi.fullname" . }}
   labels:
     {{- include "avon.adminApi.labels" . | nindent 4 }}

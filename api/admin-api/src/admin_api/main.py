@@ -13,6 +13,7 @@ from admin_api.config import Settings, settings
 from admin_api.db.connection import DatabasePool
 from admin_api.routers import (
     dashboard_router,
+    device_classes_router,
     devices_router,
     pods_router,
     policies_router,
@@ -113,6 +114,9 @@ app.add_middleware(
 app.include_router(devices_router, prefix="/api/v1/devices", tags=["devices"])
 app.include_router(pods_router, prefix="/api/v1/pods", tags=["pods"])
 app.include_router(policies_router, prefix="/api/v1/policies", tags=["policies"])
+app.include_router(
+    device_classes_router, prefix="/api/v1/device-classes", tags=["device-classes"]
+)
 app.include_router(tunnels_router, prefix="/api/v1/tunnels", tags=["tunnels"])
 app.include_router(users_router, prefix="/api/v1/users", tags=["users"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["dashboard"])

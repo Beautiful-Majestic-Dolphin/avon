@@ -33,18 +33,6 @@ spec:
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
-  name: {{ include "avon.policyEngine.fullname" . }}
-  labels:
-    {{- include "avon.policyEngine.labels" . | nindent 4 }}
-spec:
-  host: {{ include "avon.policyEngine.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
-  trafficPolicy:
-    tls:
-      mode: ISTIO_MUTUAL
----
-apiVersion: networking.istio.io/v1beta1
-kind: DestinationRule
-metadata:
   name: {{ include "avon.adminApi.fullname" . }}
   labels:
     {{- include "avon.adminApi.labels" . | nindent 4 }}

@@ -1,26 +1,77 @@
-"""Policy management endpoints for AVON Admin API."""
+"""Policy management endpoints for AVON Admin API — v2 spec with JSON Schema contract."""
 
+from __future__ import annotations
+
+import json
+import pathlib
 from uuid import UUID
 
 import asyncpg
+import jsonschema
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from admin_api.auth.dependencies import CurrentUser, get_current_admin, get_current_user
 from admin_api.db.connection import get_db
-from admin_api.db.queries import ActivityQueries, PodQueries, PolicyQueries
+from admin_api.db.queries import ActivityQueries, PolicyQueries
 from admin_api.schemas.policy import (
-    PolicyConditionsSchema,
+    CedarResponse,
+    ExplainRequest,
+    ExplainResponse,
     PolicyCreateRequest,
     PolicyDetailResponse,
     PolicyListResponse,
     PolicyResponse,
     PolicyUpdateRequest,
 )
+from admin_api.services.control_client import ControlClient
 
 logger = structlog.get_logger()
-
 router = APIRouter()
+
+_SCHEMA_PATH = (
+    pathlib.Path(__file__).parents[3].parent.parent.parent
+    / "docs"
+    / "policy-schema.json"
+)
+# Fallback for installed layout
+if not _SCHEMA_PATH.exists():
+    _SCHEMA_PATH = pathlib.Path(__file__).parents[4] / "docs" / "policy-schema.json"
+try:
+    _SCHEMA = json.loads(_SCHEMA_PATH.read_text()) if _SCHEMA_PATH.exists() else None
+except Exception:
+    _SCHEMA = None
+
+
+def _validate_spec(spec: dict) -> None:
+    if _SCHEMA is None:
+        return
+    try:
+        jsonschema.validate(instance=spec, schema=_SCHEMA)
+    except jsonschema.ValidationError as e:
+        # Include schema path for debuggability — matches expected 422 shape
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "msg": e.message,
+                "path": list(e.path),
+                "schema_path": list(e.schema_path),
+            },
+        ) from e
+
+
+def _row_to_response(row) -> PolicyResponse:
+    return PolicyResponse(
+        id=row.id,
+        name=row.name,
+        description=row.description,
+        enabled=row.enabled,
+        priority=row.priority,
+        spec=row.spec,
+        version=row.version,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
 
 
 @router.get("/", response_model=PolicyListResponse)
@@ -31,27 +82,11 @@ async def list_policies(
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> PolicyListResponse:
-    """List all policies with optional filtering."""
     policies = await PolicyQueries.list_policies(
         db, enabled=enabled, skip=skip, limit=limit
     )
     total = await PolicyQueries.count_policies(db, enabled=enabled)
-
-    items = [
-        PolicyResponse(
-            id=policy.id,
-            name=policy.name,
-            description=policy.description,
-            source_pod_id=policy.source_pod_id,
-            destination_pod_id=policy.destination_pod_id,
-            action=policy.action,
-            priority=policy.priority,
-            enabled=policy.enabled,
-            created_at=policy.created_at,
-        )
-        for policy in policies
-    ]
-
+    items = [_row_to_response(p) for p in policies]
     return PolicyListResponse(
         items=items,
         total=total,
@@ -61,39 +96,87 @@ async def list_policies(
     )
 
 
+@router.post("/explain", response_model=ExplainResponse)
+async def explain_policy(
+    req: ExplainRequest,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ExplainResponse:
+    tenant_id = getattr(current_user.user, "tenant_id", None) or current_user.id
+    client = ControlClient()
+    try:
+        result = await client.explain(
+            tenant_id, req.device_id, req.destination, req.protocol, req.port
+        )
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"control unavailable: {e}") from e
+    # result may be dict or object with allow/reason/matched_policies/cedar
+    if isinstance(result, dict):
+        return ExplainResponse(
+            allow=bool(result.get("allow", False)),
+            reason=str(result.get("reason", "")),
+            matched_policies=list(
+                result.get("matched_policies", []) or result.get("matched", [])
+            ),
+            cedar=str(result.get("cedar", "")),
+        )
+    return ExplainResponse(
+        allow=bool(getattr(result, "allow", False)),
+        reason=str(getattr(result, "reason", "")),
+        matched_policies=list(
+            getattr(result, "matched_policies", []) or getattr(result, "matched", [])
+        ),
+        cedar=str(getattr(result, "cedar", "")),
+    )
+
+
+@router.get("/{policy_id}/cedar", response_model=CedarResponse)
+async def get_policy_cedar(
+    policy_id: UUID,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_admin),
+) -> CedarResponse:
+    policy = await PolicyQueries.get_policy(db, policy_id)
+    if policy is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found"
+        )
+    tenant_id = getattr(current_user.user, "tenant_id", None) or current_user.id
+    client = ControlClient()
+    try:
+        result = await client.explain(tenant_id, policy_id, "0.0.0.0", "tcp", 80)
+        cedar = ""
+        if isinstance(result, dict):
+            cedar = str(result.get("cedar", ""))
+        else:
+            cedar = str(getattr(result, "cedar", ""))
+        if not cedar:
+            # Fallback: render spec as pseudo-cedar for debug
+            cedar = json.dumps(policy.spec, indent=2)
+    except Exception:
+        cedar = json.dumps(policy.spec, indent=2)
+    return CedarResponse(cedar=cedar, policy_id=policy_id)
+
+
 @router.get("/{policy_id}", response_model=PolicyDetailResponse)
 async def get_policy(
     policy_id: UUID,
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> PolicyDetailResponse:
-    """Get detailed information about a specific policy."""
     policy = await PolicyQueries.get_policy(db, policy_id)
     if policy is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Policy not found",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found"
         )
-
-    source_pod = await PodQueries.get_pod(db, policy.source_pod_id)
-    dest_pod = await PodQueries.get_pod(db, policy.destination_pod_id)
-
-    conditions = None
-    if policy.conditions:
-        conditions = PolicyConditionsSchema(**policy.conditions)
-
     return PolicyDetailResponse(
         id=policy.id,
         name=policy.name,
         description=policy.description,
-        source_pod_id=policy.source_pod_id,
-        source_pod_name=source_pod.name if source_pod else None,
-        destination_pod_id=policy.destination_pod_id,
-        destination_pod_name=dest_pod.name if dest_pod else None,
-        action=policy.action,
-        priority=policy.priority,
         enabled=policy.enabled,
-        conditions=conditions,
+        priority=policy.priority,
+        spec=policy.spec,
+        version=policy.version,
         created_at=policy.created_at,
         updated_at=policy.updated_at,
         created_by=policy.created_by,
@@ -106,40 +189,17 @@ async def create_policy(
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> PolicyResponse:
-    """Create a new policy.
-
-    Requires admin privileges.
-    """
-    source_pod = await PodQueries.get_pod(db, policy_request.source_pod_id)
-    if source_pod is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Source pod not found",
-        )
-
-    dest_pod = await PodQueries.get_pod(db, policy_request.destination_pod_id)
-    if dest_pod is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Destination pod not found",
-        )
-
-    conditions_dict = None
-    if policy_request.conditions:
-        conditions_dict = policy_request.conditions.model_dump()
-
+    _validate_spec(policy_request.spec)
+    tenant_id = getattr(current_user.user, "tenant_id", None)
     policy = await PolicyQueries.create_policy(
         db,
         name=policy_request.name,
-        source_pod_id=policy_request.source_pod_id,
-        destination_pod_id=policy_request.destination_pod_id,
-        action=policy_request.action,
-        priority=policy_request.priority,
+        spec=policy_request.spec,
+        tenant_id=tenant_id,
         description=policy_request.description,
-        conditions=conditions_dict,
+        enabled=policy_request.enabled,
         created_by=current_user.id,
     )
-
     await ActivityQueries.log_activity(
         db,
         event_type="policy.created",
@@ -147,32 +207,15 @@ async def create_policy(
         actor_type="user",
         target_id=policy.id,
         target_type="policy",
-        details={
-            "policy_name": policy.name,
-            "action": policy.action,
-            "source_pod": str(policy.source_pod_id),
-            "destination_pod": str(policy.destination_pod_id),
-        },
+        details={"policy_name": policy.name, "spec": policy.spec},
     )
-
     logger.info(
         "policy_created",
         policy_id=str(policy.id),
         name=policy.name,
         by_user=str(current_user.id),
     )
-
-    return PolicyResponse(
-        id=policy.id,
-        name=policy.name,
-        description=policy.description,
-        source_pod_id=policy.source_pod_id,
-        destination_pod_id=policy.destination_pod_id,
-        action=policy.action,
-        priority=policy.priority,
-        enabled=policy.enabled,
-        created_at=policy.created_at,
-    )
+    return _row_to_response(policy)
 
 
 @router.patch("/{policy_id}", response_model=PolicyResponse)
@@ -182,38 +225,27 @@ async def update_policy(
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> PolicyResponse:
-    """Update a policy.
-
-    Requires admin privileges.
-    """
     existing = await PolicyQueries.get_policy(db, policy_id)
     if existing is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Policy not found",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found"
         )
-
-    conditions_dict = None
-    if policy_request.conditions:
-        conditions_dict = policy_request.conditions.model_dump()
-
+    if policy_request.spec is not None:
+        _validate_spec(policy_request.spec)
     policy = await PolicyQueries.update_policy(
         db,
         policy_id=policy_id,
         name=policy_request.name,
         description=policy_request.description,
-        action=policy_request.action,
-        priority=policy_request.priority,
         enabled=policy_request.enabled,
-        conditions=conditions_dict,
+        spec=policy_request.spec,
+        priority=policy_request.priority,
     )
-
     if policy is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update policy",
         )
-
     await ActivityQueries.log_activity(
         db,
         event_type="policy.updated",
@@ -223,18 +255,7 @@ async def update_policy(
         target_type="policy",
         details={"changes": policy_request.model_dump(exclude_unset=True)},
     )
-
-    return PolicyResponse(
-        id=policy.id,
-        name=policy.name,
-        description=policy.description,
-        source_pod_id=policy.source_pod_id,
-        destination_pod_id=policy.destination_pod_id,
-        action=policy.action,
-        priority=policy.priority,
-        enabled=policy.enabled,
-        created_at=policy.created_at,
-    )
+    return _row_to_response(policy)
 
 
 @router.delete("/{policy_id}")
@@ -243,24 +264,17 @@ async def delete_policy(
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
-    """Delete a policy.
-
-    Requires admin privileges.
-    """
     policy = await PolicyQueries.get_policy(db, policy_id)
     if policy is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Policy not found",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found"
         )
-
     success = await PolicyQueries.delete_policy(db, policy_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete policy",
         )
-
     await ActivityQueries.log_activity(
         db,
         event_type="policy.deleted",
@@ -270,11 +284,9 @@ async def delete_policy(
         target_type="policy",
         details={"policy_name": policy.name},
     )
-
     logger.info(
         "policy_deleted", policy_id=str(policy_id), by_user=str(current_user.id)
     )
-
     return {"success": True, "message": f"Policy {policy.name} has been deleted"}
 
 
@@ -284,25 +296,16 @@ async def enable_policy(
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
-    """Enable a policy.
-
-    Requires admin privileges.
-    """
     policy = await PolicyQueries.get_policy(db, policy_id)
     if policy is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Policy not found",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found"
         )
-
     if policy.enabled:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Policy is already enabled",
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Policy is already enabled"
         )
-
     await PolicyQueries.update_policy(db, policy_id, enabled=True)
-
     await ActivityQueries.log_activity(
         db,
         event_type="policy.enabled",
@@ -311,7 +314,6 @@ async def enable_policy(
         target_id=policy_id,
         target_type="policy",
     )
-
     return {"success": True, "message": f"Policy {policy.name} has been enabled"}
 
 
@@ -321,25 +323,16 @@ async def disable_policy(
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_admin),
 ) -> dict:
-    """Disable a policy.
-
-    Requires admin privileges.
-    """
     policy = await PolicyQueries.get_policy(db, policy_id)
     if policy is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Policy not found",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found"
         )
-
     if not policy.enabled:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Policy is already disabled",
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Policy is already disabled"
         )
-
     await PolicyQueries.update_policy(db, policy_id, enabled=False)
-
     await ActivityQueries.log_activity(
         db,
         event_type="policy.disabled",
@@ -348,5 +341,4 @@ async def disable_policy(
         target_id=policy_id,
         target_type="policy",
     )
-
     return {"success": True, "message": f"Policy {policy.name} has been disabled"}

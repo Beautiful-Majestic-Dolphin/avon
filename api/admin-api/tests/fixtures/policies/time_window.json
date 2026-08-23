@@ -1,0 +1,1 @@
+{ "version": 2, "effect": "allow", "source": { "any": true }, "destination": { "pods": ["33333333-3333-3333-3333-333333333333"] }, "conditions": { "time_window": { "start": "08:00", "end": "20:00", "days": ["mon","tue","wed","thu","fri"], "timezone": "America/New_York" } } }

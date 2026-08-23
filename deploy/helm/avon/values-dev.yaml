@@ -54,20 +54,6 @@ ca:
       cpu: 200m
       memory: 256Mi
 
-policyEngine:
-  replicaCount: 1
-  logLevel: debug
-  image:
-    tag: dev
-    pullPolicy: Always
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      cpu: 200m
-      memory: 256Mi
-
 adminApi:
   replicaCount: 1
   logLevel: debug

@@ -1,0 +1,1 @@
+{ "version": 2, "effect": "allow", "source": { "any": true }, "destination": { "any": true }, "l4": [ { "protocol": "tcp", "ports": "70000" } ] }

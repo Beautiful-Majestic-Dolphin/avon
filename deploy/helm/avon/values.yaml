@@ -136,32 +136,6 @@ migrateJob:
       cpu: 500m
       memory: 256Mi
 
-policyEngine:
-  replicaCount: 3
-  image:
-    repository: avon/policy-engine
-    tag: latest
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    port: 8081
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  podAnnotations: {}
-  podSecurityContext:
-    runAsNonRoot: true
-    runAsUser: 1000
-  securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
 
 adminApi:
   replicaCount: 2

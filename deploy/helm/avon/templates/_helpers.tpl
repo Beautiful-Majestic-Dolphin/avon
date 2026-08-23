@@ -130,28 +130,8 @@ CA selector labels
 app.kubernetes.io/component: ca
 {{- end }}
 
-{{/*
-Policy Engine fullname
-*/}}
-{{- define "avon.policyEngine.fullname" -}}
-{{- printf "%s-policy-engine" (include "avon.fullname" .) | trunc 63 | trimSuffix "-" }}
-{{- end }}
 
-{{/*
-Policy Engine labels
-*/}}
-{{- define "avon.policyEngine.labels" -}}
-{{ include "avon.labels" . }}
-app.kubernetes.io/component: policy-engine
-{{- end }}
 
-{{/*
-Policy Engine selector labels
-*/}}
-{{- define "avon.policyEngine.selectorLabels" -}}
-{{ include "avon.selectorLabels" . }}
-app.kubernetes.io/component: policy-engine
-{{- end }}
 
 {{/*
 Admin API fullname
