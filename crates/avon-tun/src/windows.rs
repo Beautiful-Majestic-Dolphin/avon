@@ -3,19 +3,55 @@ use avon_tunnel::{PacketSink, PacketSource, TunnelError};
 
 use crate::TunError;
 
-pub struct Tun;
+pub struct Tun {
+    #[cfg(target_os = "windows")]
+    _adapter: Option<wintun::Adapter>,
+    _name: String,
+    _mtu: u16,
+}
 
 impl Tun {
-    pub async fn create(_name: &str, _mtu: u16) -> Result<Self, TunError> {
-        Err(TunError::Unsupported("windows support arrives in phase 5"))
+    pub async fn create(name: &str, mtu: u16) -> Result<Self, TunError> {
+        if name.is_empty() || name.len() > 15 {
+            return Err(TunError::InvalidName);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let adapter = wintun::Adapter::create(
+                &wintun::load().map_err(|e| TunError::Io(std::io::Error::other(e.to_string())))?,
+                "AVON",
+                name,
+                None,
+            )
+            .map_err(|e| TunError::Io(std::io::Error::other(e.to_string())))?;
+            return Ok(Self {
+                _adapter: Some(adapter),
+                _name: name.to_string(),
+                _mtu: mtu,
+            });
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (name, mtu);
+            Err(TunError::Unsupported("WinTun only on Windows"))
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn from_adapter(adapter: wintun::Adapter, name: &str, mtu: u16) -> Self {
+        Self {
+            _adapter: Some(adapter),
+            _name: name.to_string(),
+            _mtu: mtu,
+        }
     }
 
     pub fn name(&self) -> &str {
-        "unsupported"
+        &self._name
     }
 
     pub fn mtu(&self) -> u16 {
-        0
+        self._mtu
     }
 }
 
@@ -60,6 +96,6 @@ impl avon_agent_core::traits::TunProvider for Tun {
     }
 
     fn name(&self) -> &str {
-        "unsupported"
+        self.name()
     }
 }
