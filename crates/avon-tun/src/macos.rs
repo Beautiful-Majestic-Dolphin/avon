@@ -47,6 +47,19 @@ impl Tun {
     pub fn raw_fd(&self) -> RawFd {
         self.fd.get_ref().as_raw_fd()
     }
+
+    pub fn from_owned_fd(fd: OwnedFd, name: &str, mtu: u16) -> Result<Self, TunError> {
+        let raw = fd.as_raw_fd();
+        let flags = unsafe { libc::fcntl(raw, libc::F_GETFL) };
+        if flags < 0 || unsafe { libc::fcntl(raw, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+            return Err(TunError::Io(std::io::Error::last_os_error()));
+        }
+        Ok(Self {
+            fd: AsyncFd::with_interest(fd, Interest::READABLE | Interest::WRITABLE)?,
+            name: name.to_string(),
+            mtu,
+        })
+    }
 }
 
 fn open_utun(_name: &str) -> Result<RawFd, TunError> {
