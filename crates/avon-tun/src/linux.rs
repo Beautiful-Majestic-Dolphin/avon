@@ -1,4 +1,4 @@
-use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::unix::io::{AsRawFd, OwnedFd, RawFd};
 
 use async_trait::async_trait;
 use avon_tunnel::{PacketSink, PacketSource, TunnelError};
@@ -23,6 +23,15 @@ pub struct Tun {
     fd: AsyncFd<OwnedFd>,
     name: String,
     mtu: u16,
+}
+
+impl std::fmt::Debug for Tun {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tun")
+            .field("name", &self.name)
+            .field("mtu", &self.mtu)
+            .finish()
+    }
 }
 
 impl Tun {

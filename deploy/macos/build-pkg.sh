@@ -1,211 +1,94 @@
-#!/bin/bash
-# Build macOS .pkg installer for AVON Agent
+#!/usr/bin/env bash
+# Builds a universal, optionally signed and notarized AVON agent package.
 #
-# Usage:
-#   ./build-pkg.sh [--sign IDENTITY] [--notarize]
-#
-# Prerequisites:
-#   - avon-agent binary built (release mode)
-#   - Apple Developer ID certificates (for signing)
-#
-# The script expects the binary at one of:
-#   - ../../target/release/avon-agent
-#   - ../../target/aarch64-apple-darwin/release/avon-agent (ARM)
-#   - ../../target/x86_64-apple-darwin/release/avon-agent (Intel)
-#   - ../../target/universal/avon-agent (Universal binary)
-
+# Signing uses two different identities on purpose: `codesign` needs a
+# "Developer ID Application" certificate and `productsign` needs a
+# "Developer ID Installer" one. Using the application identity for both — as an
+# earlier version of this script did — produces a package Gatekeeper rejects.
 set -euo pipefail
+cd "$(dirname "$0")/../.."
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-BUILD_DIR="$SCRIPT_DIR/build"
-PKG_VERSION="${VERSION:-0.1.0}"
-PKG_IDENTIFIER="ai.avon.agent"
-SIGN_IDENTITY=""
-DO_NOTARIZE=false
+VERSION=""; OUT="dist"; SKIP_SIGN=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --version) VERSION="$2"; shift 2 ;;
+    --out) OUT="$2"; shift 2 ;;
+    --skip-sign) SKIP_SIGN=1; shift ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+[ -n "$VERSION" ] || { echo "--version is required" >&2; exit 2; }
+mkdir -p "$OUT"
+OUT=$(cd "$OUT" && pwd)
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --sign)
-            SIGN_IDENTITY="$2"
-            shift 2
-            ;;
-        --notarize)
-            DO_NOTARIZE=true
-            shift
-            ;;
-        --version)
-            PKG_VERSION="$2"
-            shift 2
-            ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
-    esac
+ROOT=$(mktemp -d); trap 'rm -rf "$ROOT"' EXIT
+mkdir -p "$ROOT/payload/usr/local/bin" "$ROOT/payload/Library/LaunchDaemons" "$ROOT/payload/usr/local/share/avon"
+
+# Both architectures are mandatory: a "universal" package that silently ships
+# one arch strands half the fleet.
+for target in x86_64-apple-darwin aarch64-apple-darwin; do
+  rustup target add "$target" >/dev/null 2>&1 || true
+  cargo build --release --locked --target "$target" -p avon-agent --bin avon-agent --bin avon-agent-helper
+done
+for bin in avon-agent avon-agent-helper; do
+  x="target/x86_64-apple-darwin/release/$bin"
+  a="target/aarch64-apple-darwin/release/$bin"
+  [ -f "$x" ] && [ -f "$a" ] || { echo "missing build output for $bin" >&2; exit 1; }
+  lipo -create -output "$ROOT/payload/usr/local/bin/$bin" "$x" "$a"
+  chmod 0755 "$ROOT/payload/usr/local/bin/$bin"
 done
 
-echo "=== AVON Agent macOS Package Builder ==="
-echo "Version: $PKG_VERSION"
+cp deploy/macos/ai.avon.agent.plist deploy/macos/ai.avon.helper.plist "$ROOT/payload/Library/LaunchDaemons/"
+chmod 0644 "$ROOT"/payload/Library/LaunchDaemons/*.plist
+cp deploy/macos/enable.sh "$ROOT/payload/usr/local/share/avon/enable.sh"
+chmod 0755 "$ROOT/payload/usr/local/share/avon/enable.sh"
 
-# Find the agent binary
-BINARY=""
-for candidate in \
-    "$PROJECT_ROOT/target/universal/avon-agent" \
-    "$PROJECT_ROOT/target/release/avon-agent" \
-    "$PROJECT_ROOT/target/aarch64-apple-darwin/release/avon-agent" \
-    "$PROJECT_ROOT/target/x86_64-apple-darwin/release/avon-agent"; do
-    if [ -f "$candidate" ]; then
-        BINARY="$candidate"
-        break
-    fi
-done
-
-if [ -z "$BINARY" ]; then
-    echo "Error: avon-agent binary not found. Build with 'cargo build --release -p avon-agent' first."
-    exit 1
+if [ "$SKIP_SIGN" -eq 0 ] && [ -n "${MACOS_CERTIFICATE:-}" ]; then
+  APP_ID="${MACOS_APP_IDENTITY:-Developer ID Application}"
+  for bin in avon-agent avon-agent-helper; do
+    codesign --force --options runtime --timestamp --sign "$APP_ID" "$ROOT/payload/usr/local/bin/$bin"
+    codesign --verify --strict --verbose=2 "$ROOT/payload/usr/local/bin/$bin"
+  done
 fi
 
-echo "Using binary: $BINARY"
-echo "Architecture: $(file "$BINARY" | grep -o 'arm64\|x86_64' | tr '\n' '+' | sed 's/+$//')"
+STAGE="$ROOT/stage"; mkdir -p "$STAGE"
+COMPONENT="$STAGE/avon-component.pkg"
+pkgbuild --root "$ROOT/payload" \
+  --identifier ai.avon.agent \
+  --version "$VERSION" \
+  --scripts deploy/macos/scripts \
+  --install-location / \
+  "$COMPONENT"
 
-# Clean and create build directory
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR/payload/usr/local/bin"
-mkdir -p "$BUILD_DIR/payload/usr/local/share/avon"
-mkdir -p "$BUILD_DIR/scripts"
-mkdir -p "$BUILD_DIR/output"
-
-# Copy binary
-cp "$BINARY" "$BUILD_DIR/payload/usr/local/bin/avon-agent"
-chmod 755 "$BUILD_DIR/payload/usr/local/bin/avon-agent"
-
-# Copy LaunchDaemon plist (installed by postinstall to /Library/LaunchDaemons/)
-cp "$SCRIPT_DIR/ai.avon.agent.plist" "$BUILD_DIR/payload/usr/local/share/avon/"
-
-# Copy installer scripts
-cp "$SCRIPT_DIR/scripts/preinstall" "$BUILD_DIR/scripts/"
-cp "$SCRIPT_DIR/scripts/postinstall" "$BUILD_DIR/scripts/"
-chmod 755 "$BUILD_DIR/scripts/preinstall"
-chmod 755 "$BUILD_DIR/scripts/postinstall"
-
-# Sign the binary if identity provided
-if [ -n "$SIGN_IDENTITY" ]; then
-    echo "Signing binary with: $SIGN_IDENTITY"
-    codesign --sign "$SIGN_IDENTITY" \
-        --options runtime \
-        --timestamp \
-        --force \
-        "$BUILD_DIR/payload/usr/local/bin/avon-agent"
-fi
-
-# Build the component package
-echo "Building component package..."
-COMPONENT_PKG="$BUILD_DIR/output/avon-agent-component.pkg"
-pkgbuild \
-    --identifier "$PKG_IDENTIFIER" \
-    --version "$PKG_VERSION" \
-    --root "$BUILD_DIR/payload" \
-    --scripts "$BUILD_DIR/scripts" \
-    --install-location "/" \
-    "$COMPONENT_PKG"
-
-# Build the distribution package (with installer GUI)
-echo "Building distribution package..."
-DIST_PKG="$BUILD_DIR/output/avon-agent-${PKG_VERSION}.pkg"
-
-# Create distribution XML
-cat > "$BUILD_DIR/distribution.xml" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
+DIST="$ROOT/distribution.xml"
+cat > "$DIST" <<XML
+<?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-    <title>AVON Agent</title>
-    <welcome file="welcome.html" />
-    <organization>ai.avon</organization>
-    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true" />
-    <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64" />
-    <volume-check>
-        <allowed-os-versions>
-            <os-version min="11.0" />
-        </allowed-os-versions>
-    </volume-check>
-    <choices-outline>
-        <line choice="default">
-            <line choice="ai.avon.agent" />
-        </line>
-    </choices-outline>
-    <choice id="default" />
-    <choice id="ai.avon.agent" visible="false">
-        <pkg-ref id="ai.avon.agent" />
-    </choice>
-    <pkg-ref id="ai.avon.agent" version="$PKG_VERSION" onConclusion="none">avon-agent-component.pkg</pkg-ref>
+  <title>AVON Agent</title>
+  <organization>ai.avon</organization>
+  <options customize="never" require-scripts="true" hostArchitectures="x86_64,arm64"/>
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+  <volume-check><allowed-os-versions><os-version min="11.0"/></allowed-os-versions></volume-check>
+  <pkg-ref id="ai.avon.agent" version="$VERSION">avon-component.pkg</pkg-ref>
+  <choices-outline><line choice="default"/></choices-outline>
+  <choice id="default" visible="false"><pkg-ref id="ai.avon.agent"/></choice>
 </installer-gui-script>
-EOF
+XML
 
-# Create welcome page
-mkdir -p "$BUILD_DIR/resources"
-cat > "$BUILD_DIR/resources/welcome.html" <<EOF
-<html>
-<body>
-<h1>AVON Agent Installer</h1>
-<p>This will install the AVON post-quantum zero-trust agent on your Mac.</p>
-<p>Version: $PKG_VERSION</p>
-<p>The agent will be installed as a system service and start automatically.</p>
-<h2>What will be installed:</h2>
-<ul>
-    <li><code>/usr/local/bin/avon-agent</code> - Agent binary</li>
-    <li><code>/Library/Application Support/AVON/</code> - Configuration and data</li>
-    <li><code>/Library/Logs/AVON/</code> - Log files</li>
-    <li>LaunchDaemon service (auto-start on boot)</li>
-</ul>
-<p><strong>Note:</strong> Administrator privileges are required.</p>
-</body>
-</html>
-EOF
+UNSIGNED="$STAGE/avon-agent-$VERSION-unsigned.pkg"
+productbuild --distribution "$DIST" --package-path "$STAGE" "$UNSIGNED"
+FINAL="$OUT/avon-agent-$VERSION.pkg"
 
-productbuild \
-    --distribution "$BUILD_DIR/distribution.xml" \
-    --resources "$BUILD_DIR/resources" \
-    --package-path "$BUILD_DIR/output" \
-    "$DIST_PKG"
-
-# Sign the distribution package if identity provided
-if [ -n "$SIGN_IDENTITY" ]; then
-    echo "Signing distribution package..."
-    SIGNED_PKG="$BUILD_DIR/output/avon-agent-${PKG_VERSION}-signed.pkg"
-    productsign \
-        --sign "$SIGN_IDENTITY" \
-        --timestamp \
-        "$DIST_PKG" \
-        "$SIGNED_PKG"
-    mv "$SIGNED_PKG" "$DIST_PKG"
+if [ "$SKIP_SIGN" -eq 0 ] && [ -n "${MACOS_INSTALLER_CERTIFICATE:-}" ]; then
+  INSTALLER_ID="${MACOS_INSTALLER_IDENTITY:-Developer ID Installer}"
+  productsign --sign "$INSTALLER_ID" "$UNSIGNED" "$FINAL"
+  if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ]; then
+    xcrun notarytool submit "$FINAL" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+    xcrun stapler staple "$FINAL"
+    xcrun stapler validate "$FINAL"
+  fi
+else
+  mv "$UNSIGNED" "$FINAL"
 fi
 
-# Notarize if requested
-if [ "$DO_NOTARIZE" = true ]; then
-    if [ -z "${APPLE_ID:-}" ] || [ -z "${TEAM_ID:-}" ] || [ -z "${APP_PASSWORD:-}" ]; then
-        echo "Error: Notarization requires APPLE_ID, TEAM_ID, and APP_PASSWORD environment variables."
-        exit 1
-    fi
-
-    echo "Submitting for notarization..."
-    xcrun notarytool submit "$DIST_PKG" \
-        --apple-id "$APPLE_ID" \
-        --team-id "$TEAM_ID" \
-        --password "$APP_PASSWORD" \
-        --wait
-
-    echo "Stapling notarization ticket..."
-    xcrun stapler staple "$DIST_PKG"
-fi
-
-echo ""
-echo "=== Build Complete ==="
-echo "Package: $DIST_PKG"
-echo "Size: $(du -h "$DIST_PKG" | cut -f1)"
-
-# Clean up intermediate files
-rm -f "$COMPONENT_PKG"
-rm -rf "$BUILD_DIR/payload" "$BUILD_DIR/scripts" "$BUILD_DIR/resources" "$BUILD_DIR/distribution.xml"
-
-echo "Done."
+echo "built $FINAL"
