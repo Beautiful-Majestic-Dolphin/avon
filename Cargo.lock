@@ -283,6 +283,7 @@ name = "avon-agent"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "avon-agent-core",
  "avon-common",
  "avon-config",
