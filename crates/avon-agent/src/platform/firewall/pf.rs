@@ -1,5 +1,6 @@
 use super::FirewallRules;
 
+#[allow(dead_code)]
 pub fn render(rules: &FirewallRules) -> String {
     let mut out = String::new();
     for cidr in &rules.allow_cidrs {

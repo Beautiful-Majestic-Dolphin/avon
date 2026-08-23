@@ -1,6 +1,5 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::panic)]
 use avon_agent::helper::{HelperRequest, HelperResponse};
-use std::path::PathBuf;
 
 #[tokio::test]
 async fn helper_protocol_roundtrips_and_validates_routes() {
@@ -28,7 +27,7 @@ async fn helper_protocol_roundtrips_and_validates_routes() {
             assert_eq!(name, "tun0");
             assert_eq!(mtu, 1280);
         }
-        _ => panic!("expected TunReady"),
+        other => panic!("expected TunReady got {other:?}"),
     }
 
     let resp = client
