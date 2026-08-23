@@ -213,6 +213,32 @@ impl AgentService for AgentServiceImpl {
             }
         });
 
+        // Attestation is driven from here: the device is challenged as soon as
+        // its stream is up and again on a slow interval, so a machine that was
+        // rebooted into something else stops being `verified` on its own.
+        {
+            let state = state.clone();
+            let device = info.device;
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                let mut ticker = tokio::time::interval(crate::attest::REATTEST_INTERVAL);
+                loop {
+                    ticker.tick().await;
+                    let challenge = state.challenges.issue(device);
+                    if tx
+                        .send(Ok(PulseDown {
+                            msg: Some(pulse_down::Msg::Attest(challenge)),
+                        }))
+                        .await
+                        .is_err()
+                    {
+                        break; // the device is gone
+                    }
+                }
+                state.challenges.forget(device);
+            });
+        }
+
         let device = info.device;
         tokio::spawn(async move {
             loop {
@@ -242,6 +268,7 @@ impl AgentService for AgentServiceImpl {
                                 msg: Some(pulse_down::Msg::Ack(PulseAck {
                                     server_time_unix: chrono::Utc::now().timestamp(),
                                     next_interval_secs: state.pulse_interval_secs,
+                                    attestation_state: String::new(),
                                 })),
                             }),
                             Err(e) => {
@@ -250,11 +277,31 @@ impl AgentService for AgentServiceImpl {
                             }
                         }
                     }
-                    // Attestation verification lands in phase 5; session reports in phase 3.
+                    Some(pulse_up::Msg::Attestation(ev)) => {
+                        match crate::attest::handle_evidence(&state, info.device, info.tenant, ev)
+                            .await
+                        {
+                            // The device learns the verdict, not just that its
+                            // answer arrived.
+                            Ok(result) => Some(PulseDown {
+                                msg: Some(pulse_down::Msg::Ack(PulseAck {
+                                    server_time_unix: chrono::Utc::now().timestamp(),
+                                    next_interval_secs: state.pulse_interval_secs,
+                                    attestation_state: result.as_str().to_string(),
+                                })),
+                            }),
+                            Err(e) => {
+                                let _ = tx.send(Err(e)).await;
+                                break;
+                            }
+                        }
+                    }
+                    // Session reports are handled by the gateway path.
                     Some(_) => Some(PulseDown {
                         msg: Some(pulse_down::Msg::Ack(PulseAck {
                             server_time_unix: chrono::Utc::now().timestamp(),
                             next_interval_secs: state.pulse_interval_secs,
+                            attestation_state: String::new(),
                         })),
                     }),
                     None => None,

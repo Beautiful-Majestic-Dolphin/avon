@@ -6,6 +6,7 @@
 //! trait signatures fix that type, so the lint cannot be satisfied here.
 #![allow(clippy::result_large_err)]
 
+pub mod attest;
 pub mod auth;
 pub mod authz;
 pub mod ca_client;

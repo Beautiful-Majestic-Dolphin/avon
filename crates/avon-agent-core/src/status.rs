@@ -17,6 +17,12 @@ pub struct Status {
     pub bytes_tx: u64,
     pub bytes_rx: u64,
     pub cert_not_after: i64,
+    /// Which key provider holds this device's identity — the operator's first
+    /// question when a device will not attest.
+    pub key_provider: String,
+    /// What the agent last did about attestation. The authoritative state lives
+    /// in the control plane; this is what the device knows about it.
+    pub attestation_state: String,
 }
 
 impl Default for Status {
@@ -33,6 +39,8 @@ impl Default for Status {
             bytes_tx: 0,
             bytes_rx: 0,
             cert_not_after: 0,
+            key_provider: "unknown".into(),
+            attestation_state: "none".into(),
         }
     }
 }
@@ -55,6 +63,14 @@ impl StatusHandle {
 
     pub fn set_state(&self, state: &str) {
         self.0.write().state = state.to_string();
+    }
+
+    pub fn set_key_provider(&self, provider: &str) {
+        self.0.write().key_provider = provider.to_string();
+    }
+
+    pub fn set_attestation_state(&self, state: &str) {
+        self.0.write().attestation_state = state.to_string();
     }
 
     pub fn set_connected(

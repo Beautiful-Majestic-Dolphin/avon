@@ -28,6 +28,8 @@ pub mod keychain;
 pub mod tpm2;
 
 pub use binding::{binding_message, verify_binding, BindingError};
-pub use provider::{HardwareBinding, KeyError, KeyProvider, ProviderKind, MAX_BINDING_BYTES};
+pub use provider::{
+    HardwareBinding, KeyError, KeyProvider, ProviderKind, Quote, MAX_BINDING_BYTES,
+};
 pub use select::{open_existing, open_or_create, ProviderChoice};
 pub use software::SoftwareKeyProvider;

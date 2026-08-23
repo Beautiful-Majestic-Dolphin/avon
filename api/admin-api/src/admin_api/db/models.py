@@ -1,9 +1,23 @@
 """Database models for AVON Admin API."""
 
+import json
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _as_dict(value: Any) -> Any:
+    """asyncpg hands JSONB back as text unless a codec is registered, and the
+    codec would change how every existing insert is encoded. Decoding on the way
+    into the model keeps that blast radius at zero."""
+    if isinstance(value, (str, bytes)):
+        try:
+            return json.loads(value)
+        except (ValueError, TypeError):
+            return None
+    return value
 
 
 class DbDevice(BaseModel):
@@ -21,8 +35,19 @@ class DbDevice(BaseModel):
     enrolled_at: datetime
     enrolled_by: UUID | None = None
     status: str = "active"
+    # Device trust: what the control plane made of this device's last quote,
+    # and the evidence it recorded.
+    attestation_state: str = "none"
+    attestation: dict | None = None
+    posture: dict | None = None
+    risk_score: int | None = None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("attestation", "posture", mode="before")
+    @classmethod
+    def _decode_json(cls, value: Any) -> Any:
+        return _as_dict(value)
 
 
 class DbPod(BaseModel):

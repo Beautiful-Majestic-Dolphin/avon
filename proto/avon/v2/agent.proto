@@ -74,7 +74,13 @@ message PulseDown {
     Crl crl = 6;
   }
 }
-message PulseAck { int64 server_time_unix = 1; uint32 next_interval_secs = 2; }
+message PulseAck {
+  int64 server_time_unix = 1;
+  uint32 next_interval_secs = 2;
+  // What the control plane made of this device's attestation, so an operator
+  // reading `avon-agent status` sees the verdict rather than the attempt.
+  string attestation_state = 3;
+}
 message AttestationChallenge { bytes nonce = 1; }
 
 message OpenSessionRequest {

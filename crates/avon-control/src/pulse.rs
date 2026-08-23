@@ -84,5 +84,8 @@ pub async fn handle_heartbeat(
     Ok(PulseAck {
         server_time_unix: chrono::Utc::now().timestamp(),
         next_interval_secs: state.pulse_interval_secs,
+        // A heartbeat says nothing about attestation; an empty string means
+        // "unchanged" rather than "none".
+        attestation_state: String::new(),
     })
 }

@@ -301,6 +301,15 @@ impl KeyProvider for Tpm2KeyProvider {
         Ok(self.tls_key_pem.clone())
     }
 
+    /// The simulation cannot quote. A quote's value is that the TPM, not the
+    /// software asking it, vouches for the PCR values; a simulated one would be
+    /// a statement this process made about itself, and the control plane would
+    /// mark the device `verified` on the strength of it. So it returns nothing
+    /// until this provider talks to a real TPM through `tss-esapi`.
+    fn attestation_quote(&self, _nonce: &[u8]) -> Result<Option<crate::provider::Quote>, KeyError> {
+        Ok(None)
+    }
+
     fn hardware_binding(&self, device_hint: &[u8]) -> Result<Option<HardwareBinding>, KeyError> {
         let msg = binding_message(
             &self.signing.verifying_key(),

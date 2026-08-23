@@ -182,6 +182,9 @@ async def get_device(
         created_at=device.created_at,
         updated_at=device.updated_at,
         pod_ids=pod_ids,
+        attestation_state=device.attestation_state,
+        attestation=device.attestation,
+        key_provider=(device.posture or {}).get("key_provider"),
     )
 
 
