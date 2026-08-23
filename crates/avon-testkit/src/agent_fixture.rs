@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use avon_agent_core::identity::{enroll, load};
 use avon_agent_core::traits::{FingerprintProvider, PostureProvider, TunProvider};
 use avon_agent_core::{Agent, AgentCoreConfig, Status};
+use avon_keystore::ProviderChoice;
 use avon_protocol::v2::{DevicePosture, Fingerprint};
 use avon_tunnel::TimerConfig;
 use avon_tunnel::{PacketSink, PacketSource, TunnelError};
@@ -191,6 +192,7 @@ impl TestAgentCore {
             data_dir.path(),
             &ca_pem,
             "localhost",
+            ProviderChoice::Software,
             &TestFingerprint,
             "test",
         )
@@ -400,6 +402,7 @@ impl TestAgentCore {
             data_dir.path(),
             &ca_pem,
             "localhost",
+            ProviderChoice::Software,
             &TestFingerprint,
             "test",
         )

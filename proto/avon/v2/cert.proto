@@ -22,6 +22,7 @@ message Csr {
   bytes tbs_template = 1;                 // TbsCertificate encoded with zero serial, zero issuer_key_id, zero validity
   bytes proof = 2;                        // HybridSignature over tbs_template, domain AVON-CSR-V2
   string tls_csr_pem = 3;                 // PKCS#10 for the Ed25519 TLS key
+  bytes hardware_binding = 4;
 }
 
 message Credential {

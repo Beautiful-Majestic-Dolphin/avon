@@ -1,10 +1,12 @@
 //! AVON certificate format (spec §5.2): a deterministic, length-prefixed TBS
 //! structure signed with the composite signature in domain `Cert`.
 
+pub mod binding;
 pub mod crl;
 mod encode;
 mod verify;
 
+pub use binding::{HardwareBinding, ProviderKind, MAX_BINDING_BYTES};
 pub use encode::{Certificate, SubjectKind, TbsCertificate};
 pub use verify::{ChainVerifier, VerifiedCertificate};
 

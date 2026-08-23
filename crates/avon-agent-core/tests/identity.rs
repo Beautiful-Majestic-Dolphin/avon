@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use avon_agent_core::identity::{enroll, load};
+use avon_keystore::ProviderChoice;
 use avon_testkit::{
     agent_fixture::{insert_token, TestFingerprint},
     db::TestDb,
@@ -23,6 +24,7 @@ async fn enroll_writes_0600_files_and_reloads() {
         data.path(),
         &ca_pem,
         "localhost",
+        ProviderChoice::Software,
         &TestFingerprint,
         "test",
     )
@@ -48,8 +50,8 @@ async fn enroll_writes_0600_files_and_reloads() {
     assert_eq!(reloaded.device_id, id.device_id);
     assert_eq!(reloaded.certificate.id(), id.certificate.id());
     assert_eq!(
-        reloaded.provider.signing().verifying_key().to_bytes(),
-        id.provider.signing().verifying_key().to_bytes()
+        reloaded.provider.signing_public().to_bytes(),
+        id.provider.signing_public().to_bytes()
     );
 }
 
@@ -70,6 +72,7 @@ async fn enroll_refuses_to_overwrite_an_existing_identity() {
         data.path(),
         &ca_pem,
         "localhost",
+        ProviderChoice::Software,
         &TestFingerprint,
         "test",
     )
@@ -81,6 +84,7 @@ async fn enroll_refuses_to_overwrite_an_existing_identity() {
         data.path(),
         &ca_pem,
         "localhost",
+        ProviderChoice::Software,
         &TestFingerprint,
         "test"
     )

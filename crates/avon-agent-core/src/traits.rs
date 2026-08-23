@@ -1,22 +1,9 @@
 use async_trait::async_trait;
-use avon_crypto::hybrid::kem::HybridKemKeyPair;
-use avon_crypto::hybrid::signature::HybridSigningKeyPair;
 use avon_protocol::v2::{DevicePosture, Fingerprint};
 use avon_tunnel::{PacketSink, PacketSource};
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
 
-use crate::identity::IdentityError;
-
-/// Custody for the agent's long-term keys. The software provider keeps them
-/// encrypted at rest; hardware providers (phase 5) seal them in the TPM or
-/// secure enclave.
-pub trait KeyProvider: Send + Sync {
-    fn name(&self) -> &'static str;
-    fn signing(&self) -> &HybridSigningKeyPair;
-    fn kem(&self) -> &HybridKemKeyPair;
-    fn tls_key_pem(&self) -> &str;
-    fn rotate_tls_key(&mut self) -> Result<String, IdentityError>;
-}
+pub use avon_keystore::{HardwareBinding, KeyError, KeyProvider, ProviderKind};
 
 /// The tunnel's interface to the local stack. The real TUN implements this with
 /// kernel ioctls/netlink; tests use an in-memory channel pair.

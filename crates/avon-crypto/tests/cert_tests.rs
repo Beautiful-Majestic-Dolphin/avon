@@ -35,6 +35,7 @@ fn tbs(
         issuer_key_id: issuer.verifying_key().key_id(),
         sans: vec!["spiffe://avon/t/device/x".into()],
         tls_cert_sha256: Some([0x22; 32]),
+        hardware_binding: None,
     }
 }
 

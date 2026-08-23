@@ -5,6 +5,7 @@ exclude = ["crates/avon-crypto/fuzz", "crates/avon-tunnel/fuzz"]
 # package and is out of the workspace until task 3.8 rewrites it.
 members = [
     "crates/avon-crypto",
+    "crates/avon-keystore",
     "crates/avon-protocol",
     "crates/avon-tls",
     "crates/avon-tunnel",
@@ -76,6 +77,7 @@ avon-agent-core = { path = "crates/avon-agent-core" }
 avon-tun = { path = "crates/avon-tun" }
 avon-agent = { path = "crates/avon-agent" }
 avon-policy = { path = "crates/avon-policy" }
+avon-keystore = { path = "crates/avon-keystore" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

@@ -1,0 +1,43 @@
+[package]
+name = "avon-keystore"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Key providers for AVON devices: software, TPM 2.0, Keychain/Secure Enclave, Windows CNG"
+
+[dependencies]
+avon-crypto.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+zeroize.workspace = true
+rcgen = { version = "0.13", features = ["pem"] }
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+rsa = { version = "0.9", features = ["sha2"] }
+sha2 = "0.10"
+spki = "0.7"
+
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+tss-esapi = { version = "7.5", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "3.0", optional = true }
+core-foundation = { version = "0.10", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = ["Win32_Security_Cryptography", "Win32_Foundation"], optional = true }
+
+[features]
+default = []
+tpm2 = ["dep:tss-esapi"]
+keychain = ["dep:security-framework", "dep:core-foundation"]
+cng = ["dep:windows"]
+
+[dev-dependencies]
+tempfile.workspace = true
+rand = "0.8"
+
+[lints]
+workspace = true

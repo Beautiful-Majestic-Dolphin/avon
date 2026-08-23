@@ -17,6 +17,7 @@ path = "src/lib.rs"
 avon-common.workspace = true
 avon-config.workspace = true
 avon-crypto.workspace = true
+avon-keystore.workspace = true
 avon-db.workspace = true
 avon-observability.workspace = true
 avon-protocol.workspace = true

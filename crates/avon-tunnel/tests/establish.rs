@@ -30,6 +30,7 @@ fn party(kind: SubjectKind) -> Party {
             issuer_key_id: issuer.verifying_key().key_id(),
             sans: vec![],
             tls_cert_sha256: None,
+            hardware_binding: None,
         },
         &issuer,
     )

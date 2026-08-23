@@ -25,6 +25,7 @@ avon-config.workspace = true
 avon-tls.workspace = true
 avon-tunnel.workspace = true
 avon-agent-core.workspace = true
+avon-keystore.workspace = true
 avon-tun.workspace = true
 prost.workspace = true
 clap.workspace = true
