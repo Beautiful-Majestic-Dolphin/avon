@@ -96,16 +96,23 @@ class DbWebAuthnCredential(BaseModel):
 class DbEnrollmentToken(BaseModel):
     """Enrollment token database model."""
 
-    token: str
-    device_id: UUID | None = None
-    device_name: str
-    device_type: str
-    assigned_pods: list[UUID]
+    id: UUID
+    tenant_id: UUID
+    token_hash: bytes
+    device_name: str | None = None
+    device_type: str | None = None
+    device_kind: str | None = None
+    assigned_pods: list[UUID] | None = None
+    pod_ids: list[UUID] | None = None
     require_fido2: bool = False
+    require_approval: bool = False
+    max_uses: int = 1
+    use_count: int = 0
     expires_at: datetime
-    created_by: UUID
+    created_by: UUID | None = None
     consumed_at: datetime | None = None
     created_at: datetime
+    last_used_at: datetime | None = None
 
 
 class DbTunnel(BaseModel):

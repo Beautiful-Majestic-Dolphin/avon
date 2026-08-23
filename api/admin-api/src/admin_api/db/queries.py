@@ -709,27 +709,42 @@ class EnrollmentQueries:
         conn: asyncpg.Connection,
         token: str,
         device_name: str,
-        device_type: str,
-        assigned_pods: list[UUID],
-        expires_at: datetime,
-        created_by: UUID,
+        device_type: str = "linux",
+        assigned_pods: list[UUID] | None = None,
+        expires_at: datetime | None = None,
+        created_by: UUID | None = None,
+        max_uses: int = 1,
+        require_approval: bool = False,
+        tenant_id: UUID | None = None,
     ) -> DbEnrollmentToken:
-        """Create a new enrollment token."""
-        import json
+        """Create a new enrollment token — stores only sha256 hash."""
+        import hashlib
 
+        if assigned_pods is None:
+            assigned_pods = []
+        if expires_at is None:
+            from datetime import UTC, datetime, timedelta
+
+            expires_at = datetime.now(UTC) + timedelta(hours=24)
+        if tenant_id is None:
+            tenant_id = await conn.fetchval("SELECT id FROM tenants LIMIT 1")
+        token_hash = hashlib.sha256(token.encode()).digest()
         row = await conn.fetchrow(
             """
             INSERT INTO enrollment_tokens (
-                token, device_name, device_type, assigned_pods,
-                expires_at, created_by, created_at
+                tenant_id, token_hash, device_name, device_kind, pod_ids,
+                max_uses, require_approval, expires_at, created_by, created_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
             RETURNING *
             """,
-            token,
+            tenant_id,
+            token_hash,
             device_name,
             device_type,
-            json.dumps([str(p) for p in assigned_pods]),
+            assigned_pods,
+            max_uses,
+            require_approval,
             expires_at,
             created_by,
         )
@@ -740,10 +755,13 @@ class EnrollmentQueries:
         conn: asyncpg.Connection,
         token: str,
     ) -> DbEnrollmentToken | None:
-        """Get an enrollment token."""
+        """Get an enrollment token by plaintext (hash lookup)."""
+        import hashlib
+
+        h = hashlib.sha256(token.encode()).digest()
         row = await conn.fetchrow(
-            "SELECT * FROM enrollment_tokens WHERE token = $1",
-            token,
+            "SELECT * FROM enrollment_tokens WHERE token_hash = $1",
+            h,
         )
         return DbEnrollmentToken(**dict(row)) if row else None
 

@@ -59,6 +59,25 @@ class DeviceEnrollmentRequest(BaseModel):
     require_fido2: bool = False
 
 
+class EnrollTokenRequest(BaseModel):
+    """Enroll token request for 4.12 — handles device_name, max_uses, etc."""
+
+    device_name: str = Field(..., min_length=1, max_length=255, alias="device_name")
+    device_type: str = Field(
+        default="linux",
+        pattern="^(linux|windows|macos|ios|android|agent|gateway|router|ikev2|agentless)$",
+    )
+    max_uses: int = Field(default=1, ge=1)
+    expires_in_hours: int = Field(default=24, ge=1, alias="expires_in_hours")
+    require_approval: bool = False
+    assigned_pods: list[UUID] = Field(default_factory=list)
+    # Compat with old name fields
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    require_fido2: bool = False
+
+    model_config = {"populate_by_name": True}
+
+
 class EnrollmentTokenResponse(BaseModel):
     """Enrollment token response."""
 

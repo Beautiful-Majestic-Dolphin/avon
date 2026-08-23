@@ -25,11 +25,14 @@ class EnrollmentService:
     async def create_enrollment(
         self,
         name: str,
-        device_type: str,
-        assigned_pods: list[UUID],
-        created_by: UUID,
+        device_type: str = "linux",
+        assigned_pods: list[UUID] | None = None,
+        created_by: UUID | None = None,
         expires_hours: int | None = None,
         require_fido2: bool = False,
+        max_uses: int = 1,
+        require_approval: bool = False,
+        tenant_id: UUID | None = None,
     ) -> EnrollmentTokenResponse:
         """Create a new device enrollment.
 
@@ -50,6 +53,8 @@ class EnrollmentService:
 
         expires_at = datetime.now(UTC) + timedelta(hours=expires_hours)
 
+        if assigned_pods is None:
+            assigned_pods = []
         await EnrollmentQueries.create_enrollment_token(
             self.db,
             token=token,
@@ -58,7 +63,9 @@ class EnrollmentService:
             assigned_pods=assigned_pods,
             expires_at=expires_at,
             created_by=created_by,
-            require_fido2=require_fido2,
+            max_uses=max_uses,
+            require_approval=require_approval,
+            tenant_id=tenant_id,
         )
 
         installation_url = self.installation_service.get_installation_url(

@@ -369,3 +369,92 @@ async def read_only_scim_token(db_pool, scim_token):
 
         yield Tok(plain)
         await db.execute("DELETE FROM scim_tokens WHERE token_hash = $1", h)
+
+
+@pytest_asyncio.fixture
+async def pending_device(db_pool):
+    async with db_pool.acquire() as db:
+        tenant_id = await db.fetchval("SELECT id FROM tenants LIMIT 1")
+        device_id = uuid.uuid4()
+        await db.execute(
+            "INSERT INTO devices (id, tenant_id, name, status, created_at, updated_at) VALUES ($1, $2, 'pending-device', 'pending'::device_status, NOW(), NOW())",
+            device_id,
+            tenant_id,
+        )
+
+        class Pending:
+            def __init__(self, did, tid):
+                self.id = did
+                self.tenant_id = tid
+
+            async def status(self):
+                async with db_pool.acquire() as c:
+                    row = await c.fetchrow(
+                        "SELECT status::text as s FROM devices WHERE id = $1", self.id
+                    )
+                    return row["s"] if row else None
+
+        yield Pending(device_id, tenant_id)
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            await db.execute("DELETE FROM devices WHERE id = $1", device_id)
+
+
+@pytest.fixture
+def fake_control(monkeypatch):
+    class Fake:
+        def __init__(self):
+            self.approved: list = []
+            self.revoked: list[tuple] = []
+            self.fail_next = False
+            self._real = None
+
+        async def approve_device(self, tenant_id, device_id):
+            if self.fail_next:
+                self.fail_next = False
+                raise RuntimeError("control unavailable (fake)")
+            self.approved.append(device_id)
+            return None
+
+        async def revoke_device(self, tenant_id, device_id, reason):
+            if self.fail_next:
+                self.fail_next = False
+                raise RuntimeError("control unavailable (fake)")
+            self.revoked.append((device_id, reason))
+            return None
+
+        async def explain(self, *a, **kw):
+            return {"allow": False, "reason": "fake"}
+
+        async def list_sessions(self, tenant_id):
+            return []
+
+        async def import_mud(self, tenant_id, device_class_id, document):
+            return {"created": [], "skipped": []}
+
+    fake = Fake()
+    # Patch the ControlClient used in routers/devices
+    import admin_api.services.control_client as mod
+
+    class PatchedControlClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def approve_device(self, tenant_id, device_id):
+            return await fake.approve_device(tenant_id, device_id)
+
+        async def revoke_device(self, tenant_id, device_id, reason):
+            return await fake.revoke_device(tenant_id, device_id, reason)
+
+        async def explain(self, *a, **kw):
+            return await fake.explain(*a, **kw)
+
+        async def list_sessions(self, tenant_id):
+            return await fake.list_sessions(tenant_id)
+
+        async def import_mud(self, *a, **kw):
+            return await fake.import_mud(*a, **kw)
+
+    monkeypatch.setattr(mod, "ControlClient", PatchedControlClient)
+    return fake
