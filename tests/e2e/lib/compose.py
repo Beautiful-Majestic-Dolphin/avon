@@ -26,6 +26,17 @@ class Compose:
     def exec(self, service: str, *cmd: str, timeout: int = 60) -> str:
         return self._run("exec", "-T", service, *cmd, timeout=timeout)
 
+    def exec_capture(self, service: str, *cmd: str, timeout: int = 60) -> tuple[int, str]:
+        """Run a command and return (exit code, output) instead of raising.
+
+        Some checks are about a command *failing* — a cloned identity that must
+        not open, a port that must not connect — and an exception loses the
+        output that says why.
+        """
+        full = self.base + ["exec", "-T", service, *cmd]
+        result = subprocess.run(full, capture_output=True, text=True, timeout=timeout)
+        return result.returncode, (result.stdout or "") + (result.stderr or "")
+
     def stop(self, service: str):
         self._run("stop", service)
 

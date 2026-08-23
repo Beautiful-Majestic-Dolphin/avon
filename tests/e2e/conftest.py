@@ -23,6 +23,7 @@ def admin(compose):
 @pytest.fixture(scope="session")
 def agents(compose):
     # Wait for agents to be defined in compose; compose fixture already up.
-    a = Agent(compose, "agent-a")
-    b = Agent(compose, "agent-b")
-    return {"agent-a": a, "agent-b": b}
+    return {
+        name: Agent(compose, name)
+        for name in ("agent-a", "agent-b", "agent-tpm", "agent-clone")
+    }

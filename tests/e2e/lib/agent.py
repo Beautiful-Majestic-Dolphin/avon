@@ -45,6 +45,25 @@ class Agent:
     def device_id(self) -> str:
         return self.status().get("device_id") or ""
 
+    def key_provider(self) -> str:
+        """Which keystore holds this device's identity: software, tpm2, ..."""
+        return self.status().get("key_provider", "unknown")
+
+    def attestation_state(self) -> str:
+        """The control plane's verdict, as the agent last heard it."""
+        return self.status().get("attestation_state", "none")
+
+    def protected_route_leaks(self, host: str) -> bool:
+        """True if a packet to `host` would leave by a non-tunnel interface.
+
+        `ip route get` reports the interface the kernel would choose; the
+        firewall's job is to make sure that is either the tunnel or nothing.
+        """
+        rc, out = self.compose.exec_capture(self.service, "ip", "route", "get", host)
+        if rc != 0:
+            return False  # unroutable is exactly what fail-closed looks like
+        return "dev avon" not in out
+
 
     def tcp_open(self, ip: str, port: int, timeout: int = 2) -> bool:
         try:
