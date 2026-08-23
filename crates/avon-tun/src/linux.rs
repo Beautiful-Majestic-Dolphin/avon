@@ -70,6 +70,21 @@ impl Tun {
     pub fn raw_fd(&self) -> RawFd {
         self.fd.get_ref().as_raw_fd()
     }
+
+    /// Adopt an fd received over IPC (SCM_RIGHTS). Sets O_NONBLOCK and wraps in AsyncFd.
+    pub fn from_owned_fd(fd: OwnedFd, name: &str, mtu: u16) -> Result<Self, TunError> {
+        let raw = fd.as_raw_fd();
+        // SAFETY: setting O_NONBLOCK on an fd we own.
+        let flags = unsafe { libc::fcntl(raw, libc::F_GETFL) };
+        if flags < 0 || unsafe { libc::fcntl(raw, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+            return Err(TunError::Io(std::io::Error::last_os_error()));
+        }
+        Ok(Self {
+            fd: AsyncFd::with_interest(fd, Interest::READABLE | Interest::WRITABLE)?,
+            name: name.to_string(),
+            mtu,
+        })
+    }
 }
 
 #[async_trait]
