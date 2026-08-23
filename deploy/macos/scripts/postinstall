@@ -1,56 +1,63 @@
 #!/bin/bash
-# AVON Agent macOS post-install script
-# Creates directories, installs the LaunchDaemon, and starts the service
-
+# Create the service account and the data directory, then stop. The daemons are
+# deliberately left unloaded: a fresh install has no identity yet, and a
+# crash-looping daemon is a worse first impression than an explicit enrolment
+# step.
 set -e
 
-INSTALL_DIR="/usr/local/bin"
 DATA_DIR="/Library/Application Support/AVON"
 LOG_DIR="/Library/Logs/AVON"
-PLIST_SRC="/usr/local/share/avon/ai.avon.agent.plist"
-PLIST_DST="/Library/LaunchDaemons/ai.avon.agent.plist"
-SERVICE_LABEL="ai.avon.agent"
+RUN_DIR="/var/run/avon"
+SVC_USER="_avon"
 
-echo "AVON Agent: Running post-install..."
-
-# Create data directory
-if [ ! -d "$DATA_DIR" ]; then
-    echo "Creating data directory: $DATA_DIR"
-    mkdir -p "$DATA_DIR"
-    chmod 755 "$DATA_DIR"
+# The service account: hidden, no shell, no home, uid in the system range.
+if ! /usr/bin/dscl . -read "/Users/$SVC_USER" >/dev/null 2>&1; then
+    uid=400
+    while /usr/bin/dscl . -list /Users UniqueID | /usr/bin/awk '{print $2}' | /usr/bin/grep -qx "$uid"; do
+        uid=$((uid + 1))
+        if [ "$uid" -ge 500 ]; then
+            echo "no free system uid below 500 for $SVC_USER" >&2
+            exit 1
+        fi
+    done
+    /usr/bin/dscl . -create "/Users/$SVC_USER"
+    /usr/bin/dscl . -create "/Users/$SVC_USER" UserShell /usr/bin/false
+    /usr/bin/dscl . -create "/Users/$SVC_USER" RealName "AVON Agent"
+    /usr/bin/dscl . -create "/Users/$SVC_USER" UniqueID "$uid"
+    /usr/bin/dscl . -create "/Users/$SVC_USER" PrimaryGroupID 0
+    /usr/bin/dscl . -create "/Users/$SVC_USER" NFSHomeDirectory /var/empty
+    /usr/bin/dscl . -create "/Users/$SVC_USER" IsHidden 1
 fi
 
-# Create log directory
-if [ ! -d "$LOG_DIR" ]; then
-    echo "Creating log directory: $LOG_DIR"
-    mkdir -p "$LOG_DIR"
-    chmod 755 "$LOG_DIR"
+mkdir -p "$DATA_DIR" "$LOG_DIR" "$RUN_DIR"
+chown "$SVC_USER":wheel "$DATA_DIR"
+chmod 0750 "$DATA_DIR"
+chown "$SVC_USER":wheel "$LOG_DIR"
+chmod 0750 "$LOG_DIR"
+chown root:wheel "$RUN_DIR"
+chmod 0755 "$RUN_DIR"
+
+if [ ! -f "$DATA_DIR/agent.toml" ]; then
+    cat > "$DATA_DIR/agent.toml" <<TOML
+# AVON agent configuration. Set control_plane, then enroll.
+control_plane = "https://control.example.com:8443"
+data_dir = "/Library/Application Support/AVON"
+tun_name = "avon0"
+TOML
+    chown "$SVC_USER":wheel "$DATA_DIR/agent.toml"
+    chmod 0640 "$DATA_DIR/agent.toml"
 fi
 
-# Install LaunchDaemon plist
-echo "Installing LaunchDaemon plist..."
-cp "$PLIST_SRC" "$PLIST_DST"
-chown root:wheel "$PLIST_DST"
-chmod 644 "$PLIST_DST"
+chmod 0755 /usr/local/bin/avon-agent /usr/local/bin/avon-agent-helper
 
-# Ensure binary is executable
-chmod 755 "$INSTALL_DIR/avon-agent"
+cat <<'MSG'
+AVON agent installed.
 
-# Load and start the service
-echo "Starting AVON agent service..."
-launchctl bootstrap system "$PLIST_DST"
+Next, enrol this device and then enable the daemons:
 
-# Verify service is running
-sleep 2
-if launchctl list "$SERVICE_LABEL" &>/dev/null; then
-    echo "AVON Agent: Service started successfully."
-else
-    echo "AVON Agent: Warning - service may not have started. Check logs at $LOG_DIR"
-fi
+  sudo /usr/local/bin/avon-agent enroll --control https://control.example.com:8443 \
+       --token <token> --data-dir "/Library/Application Support/AVON"
+  sudo /bin/sh /usr/local/share/avon/enable.sh
 
-echo "AVON Agent: Post-install complete."
-echo "  Binary:  $INSTALL_DIR/avon-agent"
-echo "  Data:    $DATA_DIR"
-echo "  Logs:    $LOG_DIR"
-echo "  Service: $SERVICE_LABEL"
+MSG
 exit 0

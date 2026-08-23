@@ -1,5 +1,9 @@
 use super::FirewallRules;
 
+/// Removing a table that was never created is an error in nft, so the table is
+/// declared before it is deleted — the pair is idempotent.
+pub const CLEAR: &str = "table inet avon\ndelete table inet avon\n";
+
 #[allow(dead_code)]
 pub fn render(rules: &FirewallRules) -> String {
     let mut out = String::new();

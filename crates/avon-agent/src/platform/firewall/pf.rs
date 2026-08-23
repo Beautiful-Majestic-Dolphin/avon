@@ -1,5 +1,9 @@
 use super::FirewallRules;
 
+/// AVON's rules live in their own pf anchor so flushing them never touches
+/// whatever else the machine's administrator has configured.
+pub const ANCHOR: &str = "avon";
+
 #[allow(dead_code)]
 pub fn render(rules: &FirewallRules) -> String {
     let mut out = String::new();

@@ -1,19 +1,49 @@
+//! The privileged helper process. It is deliberately tiny: everything it can be
+//! asked to do is in `helper::protocol`, and it does nothing else.
+
 use std::path::PathBuf;
 
 use clap::Parser;
 
 #[derive(Parser)]
+#[command(name = "avon-agent-helper", version)]
 struct Cli {
-    #[arg(long)]
-    data_dir: PathBuf,
+    /// Unix socket to serve (0600, owned by the agent's uid).
+    #[arg(
+        long,
+        env = "AVON_HELPER_SOCKET",
+        default_value = "/run/avon/helper.sock"
+    )]
+    socket: PathBuf,
+    /// uid permitted to connect (the unprivileged agent's account).
+    #[arg(long, env = "AVON_HELPER_UID", conflicts_with = "user")]
+    uid: Option<u32>,
+    /// Account name permitted to connect, resolved to a uid at startup. The
+    /// service units use this: the uid is allocated at install time and is not
+    /// known when the unit file is written.
+    #[arg(long, env = "AVON_HELPER_USER")]
+    user: Option<String>,
+    #[arg(long, env = "AVON_LOG_LEVEL", default_value = "info")]
+    log_level: String,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let server = avon_agent::helper::HelperServer::bind(
-        &avon_agent::helper::HelperServer::socket_path(&cli.data_dir),
-    )
-    .await?;
-    server.run().await
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::new(&cli.log_level))
+        .init();
+    let uid = match (cli.uid, cli.user.as_deref()) {
+        (Some(uid), _) => uid,
+        (None, Some(name)) => nix::unistd::User::from_name(name)?
+            .ok_or_else(|| anyhow::anyhow!("no such user: {name}"))?
+            .uid
+            .as_raw(),
+        (None, None) => anyhow::bail!("one of --uid or --user is required"),
+    };
+    if let Some(dir) = cli.socket.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    avon_agent::helper::serve(&cli.socket, uid).await?;
+    Ok(())
 }

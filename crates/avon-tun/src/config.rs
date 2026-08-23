@@ -9,13 +9,64 @@ pub async fn configure(
     v6: Option<Ipv6Net>,
     mtu: u16,
 ) -> Result<(), TunError> {
+    use rtnetlink::LinkUnspec;
+
+    let (handle, index) = link_index(tun).await?;
+
+    // Set MTU and bring the link up.
+    handle
+        .link()
+        .set(
+            LinkUnspec::new_with_index(index)
+                .mtu(mtu as u32)
+                .up()
+                .build(),
+        )
+        .execute()
+        .await
+        .map_err(|e| TunError::Netlink(e.to_string()))?;
+
+    // Addresses. Re-running configure on an interface that already carries the
+    // address must not be an error: the agent re-configures on every reconnect.
+    if let Err(e) = handle
+        .address()
+        .add(index, v4.addr().into(), v4.prefix_len())
+        .execute()
+        .await
+    {
+        if !already_exists(&e) {
+            return Err(TunError::Netlink(e.to_string()));
+        }
+    }
+    if let Some(v6) = v6 {
+        if let Err(e) = handle
+            .address()
+            .add(index, v6.addr().into(), v6.prefix_len())
+            .execute()
+            .await
+        {
+            if !already_exists(&e) {
+                return Err(TunError::Netlink(e.to_string()));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn already_exists(e: &rtnetlink::Error) -> bool {
+    matches!(e, rtnetlink::Error::NetlinkError(err) if err.raw_code() == -17)
+}
+
+#[cfg(target_os = "linux")]
+async fn link_index(tun: &Tun) -> Result<(rtnetlink::Handle, u32), TunError> {
     use futures::TryStreamExt;
-    use rtnetlink::{new_connection, packet_route::address::AddressAttribute};
+    use rtnetlink::new_connection;
 
     let (connection, handle, _) = new_connection().map_err(|e| TunError::Netlink(e.to_string()))?;
     tokio::spawn(connection);
 
-    // Find link index by name.
     let mut links = handle
         .link()
         .get()
@@ -26,92 +77,78 @@ pub async fn configure(
         .await
         .map_err(|e| TunError::Netlink(e.to_string()))?
         .ok_or_else(|| TunError::Netlink(format!("link {} not found", tun.name())))?;
-    let index = link.header.index;
-
-    // Set MTU and bring up.
-    handle
-        .link()
-        .set(index)
-        .mtu(mtu as u32)
-        .up()
-        .execute()
-        .await
-        .map_err(|e| TunError::Netlink(e.to_string()))?;
-
-    // Add IPv4 address.
-    handle
-        .address()
-        .add(index, v4.addr(), v4.prefix_len())
-        .execute()
-        .await
-        .map_err(|e| TunError::Netlink(e.to_string()))?;
-
-    // Add IPv6 if present.
-    if let Some(v6) = v6 {
-        handle
-            .address()
-            .add(index, v6.addr(), v6.prefix_len())
-            .execute()
-            .await
-            .map_err(|e| TunError::Netlink(e.to_string()))?;
-    }
-
-    Ok(())
+    Ok((handle, link.header.index))
 }
 
-#[cfg(not(target_os = "linux"))]
-pub async fn configure(
-    _tun: &Tun,
-    _v4: Ipv4Net,
-    _v6: Option<Ipv6Net>,
-    _mtu: u16,
-) -> Result<(), TunError> {
-    Err(TunError::Unsupported(
-        "configure not supported on this platform",
-    ))
+/// Build the message for a route that leaves through `index` and nothing else:
+/// scope `link`, no gateway, exactly as `ip route add <net> dev <tun>` does.
+#[cfg(target_os = "linux")]
+fn route_message(route: &IpNet, index: u32) -> rtnetlink::packet_route::route::RouteMessage {
+    use rtnetlink::packet_route::route::RouteScope;
+    use rtnetlink::RouteMessageBuilder;
+
+    match route.network() {
+        std::net::IpAddr::V4(v4) => RouteMessageBuilder::<std::net::Ipv4Addr>::new()
+            .destination_prefix(v4, route.prefix_len())
+            .output_interface(index)
+            .scope(RouteScope::Link)
+            .build(),
+        std::net::IpAddr::V6(v6) => RouteMessageBuilder::<std::net::Ipv6Addr>::new()
+            .destination_prefix(v6, route.prefix_len())
+            .output_interface(index)
+            .scope(RouteScope::Link)
+            .build(),
+    }
 }
 
 #[cfg(target_os = "linux")]
 pub async fn set_routes(tun: &Tun, routes: &[IpNet]) -> Result<(), TunError> {
-    use futures::TryStreamExt;
-
-    let (connection, handle, _) = new_connection().map_err(|e| TunError::Netlink(e.to_string()))?;
-    tokio::spawn(connection);
-
-    let mut links = handle
-        .link()
-        .get()
-        .match_name(tun.name().to_string())
-        .execute();
-    let link = links
-        .try_next()
-        .await
-        .map_err(|e| TunError::Netlink(e.to_string()))?
-        .ok_or_else(|| TunError::Netlink(format!("link {} not found", tun.name())))?;
-    let index = link.header.index;
-
+    if routes.is_empty() {
+        return Ok(());
+    }
+    let (handle, index) = link_index(tun).await?;
     for route in routes {
-        let dst = route.network();
-        let prefix = route.prefix_len();
-        let mut req = handle.route().add();
-        match dst {
-            std::net::IpAddr::V4(v4) => {
-                req = req
-                    .v4()
-                    .destination_prefix(v4, prefix)
-                    .output_interface(index);
+        if let Err(e) = handle
+            .route()
+            .add(route_message(route, index))
+            .execute()
+            .await
+        {
+            if already_exists(&e) {
+                continue;
             }
-            std::net::IpAddr::V6(v6) => {
-                req = req
-                    .v6()
-                    .destination_prefix(v6, prefix)
-                    .output_interface(index);
-            }
+            return Err(TunError::Netlink(format!("add route {route}: {e}")));
         }
-        // Ignore already exists.
-        let _ = req.execute().await;
     }
     Ok(())
+}
+
+/// Withdraw routes. A route that is already gone is not an error — the kernel
+/// removes them itself when the interface goes down.
+#[cfg(target_os = "linux")]
+pub async fn remove_routes(tun: &Tun, routes: &[IpNet]) -> Result<(), TunError> {
+    if routes.is_empty() {
+        return Ok(());
+    }
+    let (handle, index) = link_index(tun).await?;
+    for route in routes {
+        if let Err(e) = handle
+            .route()
+            .del(route_message(route, index))
+            .execute()
+            .await
+        {
+            tracing::debug!(route = %route, error = %e, "route delete ignored");
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub async fn remove_routes(_tun: &Tun, _routes: &[IpNet]) -> Result<(), TunError> {
+    Err(TunError::Unsupported(
+        "remove_routes not supported on this platform",
+    ))
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -196,4 +233,26 @@ fn ipv4_mask(prefix: u8) -> String {
     };
     let octets = mask.to_be_bytes();
     format!("{}.{}.{}.{}", octets[0], octets[1], octets[2], octets[3])
+}
+
+#[cfg(target_os = "macos")]
+pub async fn remove_routes_macos(tun: &Tun, routes: &[IpNet]) -> Result<(), TunError> {
+    for route in routes {
+        let mut cmd = tokio::process::Command::new("/sbin/route");
+        cmd.args([
+            "-n",
+            "delete",
+            "-net",
+            &route.to_string(),
+            "-interface",
+            tun.name(),
+        ]);
+        let st = cmd.status().await.map_err(TunError::Io)?;
+        if !st.success() {
+            // The kernel drops interface routes with the interface; a route
+            // that is already gone is not a failure.
+            tracing::debug!(route = %route, "route delete ignored");
+        }
+    }
+    Ok(())
 }

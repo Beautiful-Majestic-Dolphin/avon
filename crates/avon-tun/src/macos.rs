@@ -16,6 +16,15 @@ pub struct Tun {
     mtu: u16,
 }
 
+impl std::fmt::Debug for Tun {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tun")
+            .field("name", &self.name)
+            .field("mtu", &self.mtu)
+            .finish()
+    }
+}
+
 impl Tun {
     pub async fn create(name: &str, mtu: u16) -> Result<Self, TunError> {
         // Reuse the Linux implementation pattern but with macOS utun.

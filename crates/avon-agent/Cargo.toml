@@ -60,6 +60,11 @@ optional = true
 
 [features]
 default = []
+# Hardware key providers are selected in avon-keystore; the agent only forwards
+# the feature so its own platform code can be gated on the same name.
+tpm2 = ["avon-keystore/tpm2"]
+keychain = ["avon-keystore/keychain"]
+cng = ["avon-keystore/cng"]
 tpm = ["tss-esapi"]
 fido2 = ["ctap-hid-fido2"]
 

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.avon.helper</string>
+
+    <!-- No UserName key: launchd runs system daemons as root, and this one has
+         to (it creates the utun, sets routes and drives pf). The agent daemon
+         next door is the unprivileged half. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/avon-agent-helper</string>
+        <string>--socket</string>
+        <string>/var/run/avon/helper.sock</string>
+        <string>--user</string>
+        <string>_avon</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Library/Logs/AVON/helper.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Library/Logs/AVON/helper-error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>RUST_LOG</key>
+        <string>info</string>
+    </dict>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

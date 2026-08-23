@@ -1,28 +1,19 @@
 #!/bin/bash
-# AVON Agent macOS pre-install script
-# Stops the existing agent service before upgrading
-
+# Stop both daemons before the payload is replaced. Neither may be running when
+# their binary changes underneath them.
 set -e
 
-PLIST_PATH="/Library/LaunchDaemons/ai.avon.agent.plist"
-SERVICE_LABEL="ai.avon.agent"
-
-echo "AVON Agent: Running pre-install..."
-
-# Stop existing service if running
-if [ -f "$PLIST_PATH" ]; then
-    echo "Stopping existing AVON agent service..."
-    if launchctl list "$SERVICE_LABEL" &>/dev/null; then
-        launchctl bootout system "$PLIST_PATH" 2>/dev/null || true
+for label in ai.avon.agent ai.avon.helper; do
+    plist="/Library/LaunchDaemons/$label.plist"
+    if [ -f "$plist" ]; then
+        launchctl bootout "system/$label" 2>/dev/null || true
     fi
-fi
+done
 
-# Kill any lingering agent processes
-if pgrep -x avon-agent &>/dev/null; then
-    echo "Stopping lingering avon-agent processes..."
-    pkill -x avon-agent 2>/dev/null || true
-    sleep 1
-fi
-
-echo "AVON Agent: Pre-install complete."
+for proc in avon-agent avon-agent-helper; do
+    if pgrep -x "$proc" >/dev/null 2>&1; then
+        pkill -x "$proc" 2>/dev/null || true
+    fi
+done
+sleep 1
 exit 0

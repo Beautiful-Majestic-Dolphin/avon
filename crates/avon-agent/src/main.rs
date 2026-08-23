@@ -3,10 +3,8 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod config;
-mod platform;
-
-use config::AgentConfig;
+use avon_agent::config::AgentConfig;
+use avon_agent::platform;
 
 #[derive(Parser)]
 #[command(name = "avon-agent")]

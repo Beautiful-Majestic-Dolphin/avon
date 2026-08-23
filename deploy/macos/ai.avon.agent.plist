@@ -5,10 +5,18 @@
     <key>Label</key>
     <string>ai.avon.agent</string>
 
+    <!-- The agent is unprivileged: everything that needs root is in the helper. -->
+    <key>UserName</key>
+    <string>_avon</string>
+    <key>GroupName</key>
+    <string>wheel</string>
+
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/avon-agent</string>
         <string>run</string>
+        <string>--config</string>
+        <string>/Library/Application Support/AVON/agent.toml</string>
     </array>
 
     <key>RunAtLoad</key>
@@ -21,7 +29,7 @@
     </dict>
 
     <key>ThrottleInterval</key>
-    <integer>5</integer>
+    <integer>10</integer>
 
     <key>WorkingDirectory</key>
     <string>/Library/Application Support/AVON</string>
@@ -34,8 +42,11 @@
 
     <key>EnvironmentVariables</key>
     <dict>
-        <key>AVON_LOG_LEVEL</key>
+        <!-- RUST_LOG is what the binary reads; AVON_LOG_LEVEL was never consumed. -->
+        <key>RUST_LOG</key>
         <string>info</string>
+        <key>AVON_HELPER_SOCKET</key>
+        <string>/var/run/avon/helper.sock</string>
     </dict>
 
     <key>SoftResourceLimits</key>
