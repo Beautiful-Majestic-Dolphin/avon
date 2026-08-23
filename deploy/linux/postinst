@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if ! id -u avon >/dev/null 2>&1; then
+  useradd --system --home /var/lib/avon --shell /usr/sbin/nologin avon
+fi
+mkdir -p /var/lib/avon /var/log/avon
+chown avon:avon /var/lib/avon /var/log/avon
+chmod 700 /var/lib/avon
+systemctl daemon-reload || true
