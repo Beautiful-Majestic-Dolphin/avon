@@ -1,0 +1,22 @@
+[Unit]
+Description=AVON Endpoint Agent
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=avon
+Group=avon
+ExecStart=/usr/bin/avon-agent run
+ExecStartPre=/usr/bin/avon-agent-helper --data-dir /var/lib/avon
+Restart=on-failure
+RestartSec=5
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/avon /var/log/avon
+
+[Install]
+WantedBy=multi-user.target
