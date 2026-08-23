@@ -6,6 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "../../proto/avon/v2/ca.proto",
         "../../proto/avon/v2/agent.proto",
         "../../proto/avon/v2/gateway.proto",
+        "../../proto/avon/v2/admin.proto",
     ];
     tonic_build::configure()
         .build_server(true)

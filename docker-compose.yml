@@ -201,6 +201,41 @@ services:
       - public
       - protected
 
+  admin:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.admin-api
+    environment:
+      AVON_DATABASE_URL: postgres://avon_admin:${ADMIN_DB_PASSWORD}@postgres:5432/avon
+      AVON_DATABASE_TLS_CA: /certs/ca.crt
+      AVON_REDIS_URL: rediss://:${REDIS_PASSWORD}@redis:6379/1
+      AVON_REDIS_TLS_CA: /certs/ca.crt
+      AVON_TLS_CERT: /certs/admin.crt
+      AVON_TLS_KEY: /certs/admin.key
+      AVON_TLS_CA: /certs/ca.crt
+      AVON_ADMIN_CONTROL_URL: https://control:50051
+      AVON_ADMIN_CONTROL_SERVER_NAME: control
+      AVON_ADMIN_WEBAUTHN_RP_ID: localhost
+      AVON_ADMIN_WEBAUTHN_ORIGIN: http://localhost:8080
+      AVON_ADMIN_CORS_ORIGINS: '["http://localhost:5173"]'
+      AVON_ADMIN_ENABLE_DOCS: "false"
+      AVON_ADMIN_JWT_SECRET_FILE: /certs/admin.jwt
+      AVON_LOG_FORMAT: json
+    ports:
+      - "8080:8080"
+    volumes:
+      - certs:/certs:ro
+    depends_on:
+      control:
+        condition: service_started
+      bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/ready').status==200 else 1)"]
+      interval: 10s
+      retries: 12
+
+
 networks:
   public: {}
   protected:
