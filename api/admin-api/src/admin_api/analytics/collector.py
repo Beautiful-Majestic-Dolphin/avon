@@ -1,8 +1,4 @@
-"""Analytics data collector for AVON.
-
-Background task that periodically queries Prometheus for key metrics,
-stores snapshots, performs hourly rollups, and runs anomaly detection.
-"""
+"""Analytics data collector for AVON — leader-elected."""
 
 import asyncio
 
@@ -16,7 +12,6 @@ from admin_api.db.connection import DatabasePool
 
 logger = structlog.get_logger()
 
-# Prometheus queries to collect
 METRIC_QUERIES = {
     "connected_agents": "sum(avon_connected_agents) or vector(0)",
     "active_tunnels": "sum(avon_active_tunnels) or vector(0)",
@@ -32,7 +27,6 @@ METRIC_QUERIES = {
 
 
 async def query_prometheus(client: httpx.AsyncClient, query: str) -> float | None:
-    """Query Prometheus and return the scalar value."""
     try:
         response = await client.get(
             f"{settings.analytics_prometheus_url}/api/v1/query",
@@ -41,16 +35,12 @@ async def query_prometheus(client: httpx.AsyncClient, query: str) -> float | Non
         )
         if response.status_code != 200:
             return None
-
         data = response.json()
         if data.get("status") != "success":
             return None
-
         results = data.get("data", {}).get("result", [])
         if not results:
             return None
-
-        # Extract scalar value from instant query result
         value = results[0].get("value", [None, None])
         if len(value) >= 2 and value[1] != "NaN":
             return float(value[1])
@@ -61,12 +51,10 @@ async def query_prometheus(client: httpx.AsyncClient, query: str) -> float | Non
 
 
 async def collect_metrics() -> None:
-    """Collect all metrics from Prometheus and store snapshots."""
     pool = DatabasePool._pool
     if pool is None:
         logger.warning("analytics_collector_no_db")
         return
-
     async with httpx.AsyncClient() as client, pool.acquire() as conn:
         collected = 0
         for metric_name, query in METRIC_QUERIES.items():
@@ -74,19 +62,12 @@ async def collect_metrics() -> None:
             if value is not None:
                 await AnalyticsQueries.store_snapshot(conn, metric_name, value)
                 collected += 1
-
         if collected > 0:
             logger.debug("analytics_collected", metrics=collected)
-
-        # Hourly rollup
         rollups = await AnalyticsQueries.rollup_hourly(conn)
         if rollups > 0:
             logger.debug("analytics_rollup", new_rollups=rollups)
-
-        # Anomaly detection
         await run_anomaly_detection(conn)
-
-        # Cleanup old snapshots
         deleted = await AnalyticsQueries.cleanup_old_snapshots(
             conn, retention_days=settings.analytics_retention_days
         )
@@ -95,18 +76,48 @@ async def collect_metrics() -> None:
 
 
 async def collector_loop() -> None:
-    """Background loop that collects analytics on a schedule."""
+    """Background loop — leader-elected via SET NX EX 330."""
     interval = settings.analytics_collection_interval_seconds
     logger.info(
         "analytics_collector_started",
         interval_seconds=interval,
         prometheus_url=settings.analytics_prometheus_url,
     )
+    # Try to use Redis for leader election if available
+    try:
+        import redis.asyncio as redis
 
-    while True:
-        try:
-            await collect_metrics()
-        except Exception as e:
-            logger.error("analytics_collection_error", error=str(e))
-
-        await asyncio.sleep(interval)
+        redis_client = redis.from_url(settings.redis_url)
+        instance_id = (
+            settings.instance_id if hasattr(settings, "instance_id") else "admin-api"
+        )
+        while True:
+            try:
+                acquired = await redis_client.set(
+                    "avon:admin:analytics-leader", instance_id, nx=True, ex=330
+                )
+                if acquired:
+                    logger.info("analytics_leader_acquired", instance=instance_id)
+                    try:
+                        await collect_metrics()
+                    finally:
+                        # Extend while running — keep key alive, but let it expire if we die
+                        await redis_client.expire("avon:admin:analytics-leader", 330)
+                else:
+                    logger.debug("analytics_not_leader_skip")
+            except Exception as e:
+                logger.debug("analytics_leader_error", error=str(e))
+                # Fallback: run anyway if Redis unavailable (single replica dev)
+                try:
+                    await collect_metrics()
+                except Exception as ce:
+                    logger.error("analytics_collection_error", error=str(ce))
+            await asyncio.sleep(interval)
+    except Exception:
+        # No redis — simple loop
+        while True:
+            try:
+                await collect_metrics()
+            except Exception as e:
+                logger.error("analytics_collection_error", error=str(e))
+            await asyncio.sleep(interval)
