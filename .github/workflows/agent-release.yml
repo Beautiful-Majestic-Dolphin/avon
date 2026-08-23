@@ -47,6 +47,16 @@ jobs:
             runner: macos-14
             cross: false
             strip: true
+          # Static musl builds: one binary that runs on any glibc vintage,
+          # which is what an appliance or a container image wants.
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            cross: true
+            strip: false
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-latest
+            cross: true
+            strip: false
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             cross: false
@@ -171,6 +181,59 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: agent-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Static musl tarballs
+  # ---------------------------------------------------------------------------
+  package-musl:
+    name: Package musl (${{ matrix.arch }})
+    needs: build-agent
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            target: x86_64-unknown-linux-musl
+          - arch: aarch64
+            target: aarch64-unknown-linux-musl
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Download binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: agent-${{ matrix.target }}
+          path: staged
+
+      - name: Assert the binaries really are static
+        run: |
+          for bin in staged/avon-agent staged/avon-agent-helper; do
+            file "$bin"
+            file "$bin" | grep -q "statically linked" || {
+              echo "$bin is not static — a musl build that links dynamically defeats the point" >&2
+              exit 1
+            }
+          done
+
+      - name: Build tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NAME="avon-agent-${VERSION}-linux-${{ matrix.arch }}-musl"
+          mkdir -p "$NAME" dist
+          cp staged/avon-agent staged/avon-agent-helper "$NAME/"
+          chmod +x "$NAME"/avon-agent*
+          cp deploy/linux/avon-agent.service deploy/linux/avon-agent-helper.service LICENSE "$NAME/"
+          tar czf "dist/${NAME}.tar.gz" "$NAME"
+
+      - name: Upload musl tarball
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: agent-musl-${{ matrix.arch }}
           path: dist/*
           if-no-files-found: error
           retention-days: 7
@@ -312,7 +375,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-release-assets:
     name: Publish Release Assets
-    needs: [package-macos, package-linux, package-windows]
+    needs: [package-macos, package-linux, package-musl, package-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Download all packages
