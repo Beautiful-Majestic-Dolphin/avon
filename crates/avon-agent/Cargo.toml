@@ -69,6 +69,21 @@ tempfile.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.deb]
+name = "avon-agent"
+maintainer = "AVON Team <support@avon.example>"
+copyright = "2026, AVON"
+license-file = ["LICENSE", "0"]
+extended-description = "AVON Endpoint Agent with hardware-backed identity"
+depends = "systemd, libssl3"
+section = "net"
+priority = "optional"
+assets = [
+    ["target/release/avon-agent", "usr/bin/", "755"],
+    ["target/release/avon-agent-helper", "usr/bin/", "755"],
+    ["deploy/linux/avon-agent.service", "lib/systemd/system/", "644"],
+]
+
 [lib]
 name = "avon_agent"
 path = "src/lib.rs"
