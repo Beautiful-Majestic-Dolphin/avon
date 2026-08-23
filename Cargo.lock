@@ -358,6 +358,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "avon-attest"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "p256",
+ "rand 0.8.7",
+ "serde",
+ "serde_json",
+ "sha2",
+ "spki",
+ "thiserror 2.0.20",
+ "tracing",
+]
+
+[[package]]
 name = "avon-bootstrap"
 version = "0.2.0"
 dependencies = [

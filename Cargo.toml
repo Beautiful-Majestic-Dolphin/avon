@@ -6,6 +6,7 @@ exclude = ["crates/avon-crypto/fuzz", "crates/avon-tunnel/fuzz"]
 members = [
     "crates/avon-crypto",
     "crates/avon-keystore",
+    "crates/avon-attest",
     "crates/avon-protocol",
     "crates/avon-tls",
     "crates/avon-tunnel",
@@ -78,6 +79,7 @@ avon-tun = { path = "crates/avon-tun" }
 avon-agent = { path = "crates/avon-agent" }
 avon-policy = { path = "crates/avon-policy" }
 avon-keystore = { path = "crates/avon-keystore" }
+avon-attest = { path = "crates/avon-attest" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
