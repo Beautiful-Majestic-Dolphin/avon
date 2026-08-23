@@ -2,6 +2,7 @@
 //! session lifecycle and the reconnecting run loop.
 
 pub mod agent;
+pub mod attest;
 pub mod control;
 pub mod identity;
 pub mod peer;

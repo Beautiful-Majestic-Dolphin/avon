@@ -327,6 +327,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "avon-attest",
  "avon-common",
  "avon-crypto",
  "avon-keystore",
@@ -462,6 +463,7 @@ name = "avon-control"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "avon-attest",
  "avon-common",
  "avon-config",
  "avon-crypto",
@@ -483,6 +485,7 @@ dependencies = [
  "ipnet",
  "metrics",
  "prost",
+ "rand 0.8.7",
  "rcgen",
  "redis",
  "serde",

@@ -56,6 +56,7 @@ impl Agent {
     ) -> Self {
         let status = StatusHandle::new(identity.device_id, identity.certificate.tbs.not_after);
         status.set_state("enrolled");
+        status.set_key_provider(identity.provider.kind().as_str());
         Self {
             cfg,
             identity: Arc::new(identity),
@@ -354,6 +355,9 @@ impl Agent {
                             match down.msg {
                                 Some(pulse_down::Msg::Ack(ack)) => {
                                     status.set_last_pulse(ack.server_time_unix);
+                                    if !ack.attestation_state.is_empty() {
+                                        status.set_attestation_state(&ack.attestation_state);
+                                    }
                                     if status.snapshot().state != "connected" {
                                         status.set_state("connected");
                                     }
@@ -384,6 +388,24 @@ impl Agent {
                                                 }
                                             }
                                         }
+                                    }
+                                }
+                                Some(pulse_down::Msg::Attest(challenge)) => {
+                                    // Answer on the pulse stream we already
+                                    // have; a provider with no attestation
+                                    // hardware answers "none", which is a
+                                    // legitimate answer.
+                                    let evidence = crate::attest::answer_challenge(
+                                        identity.provider.as_ref(),
+                                        &challenge.nonce,
+                                    );
+                                    status.set_attestation_state("pending");
+                                    if let Some(tx) = pulse_tx.as_ref() {
+                                        let _ = tx
+                                            .send(PulseUp {
+                                                msg: Some(pulse_up::Msg::Attestation(evidence)),
+                                            })
+                                            .await;
                                     }
                                 }
                                 Some(pulse_down::Msg::PeerOffer(offer)) => {

@@ -47,6 +47,12 @@ class DeviceDetailResponse(BaseModel):
     pod_ids: list[UUID] = Field(default_factory=list)
     posture: DevicePostureResponse | None = None
     active_tunnels: int = 0
+    # `attestation_state` is what policy conditions read; `attestation` carries
+    # the evidence behind it (PCR digest, attestation key, the TPM's reset
+    # counter) so an operator can see why a device is or is not trusted.
+    attestation_state: str = "none"
+    attestation: dict | None = None
+    key_provider: str | None = None
 
 
 class DeviceEnrollmentRequest(BaseModel):

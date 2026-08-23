@@ -41,7 +41,31 @@ pub trait KeyProvider: Send + Sync {
     fn rotate_tls_key(&mut self) -> Result<String, KeyError>;
     /// `None` for the software provider; a signed statement for hardware ones.
     fn hardware_binding(&self, device_hint: &[u8]) -> Result<Option<HardwareBinding>, KeyError>;
+    /// A fresh attestation quote over `nonce`, when the provider is backed by
+    /// hardware that can produce one.
+    ///
+    /// Returning `None` is the honest answer for everything that cannot: the
+    /// control plane records "no evidence" rather than treating a
+    /// software-signed statement as proof of a measured boot.
+    fn attestation_quote(&self, _nonce: &[u8]) -> Result<Option<Quote>, KeyError> {
+        Ok(None)
+    }
     fn persist(&self) -> Result<(), KeyError>;
+}
+
+/// What a TPM returns from `TPM2_Quote`, carried verbatim so the verifier
+/// checks the bytes the TPM signed rather than a re-encoding of them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Quote {
+    /// The `TPMS_ATTEST` structure.
+    pub attest: Vec<u8>,
+    /// DER-encoded ECDSA signature over `attest`, made by the attestation key.
+    pub signature: Vec<u8>,
+    /// SPKI DER of the attestation key's public half.
+    pub ak_public: Vec<u8>,
+    /// The PCR values the quote covers, so the verifier can recompute the
+    /// digest the TPM signed.
+    pub pcrs: Vec<(u32, Vec<u8>)>,
 }
 
 pub(crate) fn write_private(path: &Path, data: &[u8]) -> Result<(), KeyError> {
