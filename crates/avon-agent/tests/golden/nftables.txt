@@ -1,0 +1,9 @@
+table inet avon {
+  chain forward {
+    type filter hook forward priority 0; policy drop;
+    ip daddr 10.0.0.0/8 accept
+    ip daddr 172.16.0.0/12 accept
+    oifname "avon0" accept
+    drop
+  }
+}

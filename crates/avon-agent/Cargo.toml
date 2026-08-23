@@ -16,6 +16,7 @@ path = "src/bin/avon-agent-helper.rs"
 
 [dependencies]
 tokio.workspace = true
+async-trait.workspace = true
 nix = { version = "0.29", features = ["socket", "uio", "user", "fs", "process"] }
 ipnet = "2.9"
 serde.workspace = true
