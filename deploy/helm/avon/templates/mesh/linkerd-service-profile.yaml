@@ -29,19 +29,6 @@ spec:
 apiVersion: linkerd.io/v1alpha2
 kind: ServiceProfile
 metadata:
-  name: {{ include "avon.policyEngine.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
-  labels:
-    {{- include "avon.policyEngine.labels" . | nindent 4 }}
-spec:
-  routes:
-    - name: HTTP
-      condition:
-        pathRegex: /.*
-      timeout: 10s
----
-apiVersion: linkerd.io/v1alpha2
-kind: ServiceProfile
-metadata:
   name: {{ include "avon.adminApi.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
   labels:
     {{- include "avon.adminApi.labels" . | nindent 4 }}

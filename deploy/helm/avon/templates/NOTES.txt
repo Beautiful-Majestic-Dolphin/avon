@@ -22,7 +22,6 @@ SERVICES DEPLOYED:
    Internal: {{ include "avon.ca.fullname" . }}:{{ .Values.ca.service.port }}
 
 4. Policy Engine (HTTP)
-   Internal: {{ include "avon.policyEngine.fullname" . }}:{{ .Values.policyEngine.service.port }}
 
 5. Admin API (HTTP)
    Internal: {{ include "avon.adminApi.fullname" . }}:{{ .Values.adminApi.service.port }}

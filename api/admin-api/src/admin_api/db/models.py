@@ -39,20 +39,39 @@ class DbPod(BaseModel):
 
 
 class DbPolicy(BaseModel):
-    """Policy database model."""
+    """Policy database model — v2 stores spec JSONB."""
 
     id: UUID
+    tenant_id: UUID | None = None
     name: str
     description: str | None = None
-    source_pod_id: UUID
-    destination_pod_id: UUID
-    action: str  # "allow" or "deny"
-    priority: int = 100
     enabled: bool = True
-    conditions: dict | None = None
+    priority: int = 100
+    spec: dict = Field(default_factory=dict)
+    version: int = 1
     created_at: datetime
     updated_at: datetime
     created_by: UUID | None = None
+    # legacy columns for backward compat
+    source_pod_id: UUID | None = None
+    destination_pod_id: UUID | None = None
+    action: str | None = None
+    conditions: dict | None = None
+
+    model_config = {"extra": "ignore"}
+
+
+class DbDeviceClass(BaseModel):
+    """Device class database model."""
+
+    id: UUID
+    tenant_id: UUID
+    name: str
+    description: str | None = None
+    match_rules: dict = Field(default_factory=dict)
+    mud_url: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class DbUser(BaseModel):

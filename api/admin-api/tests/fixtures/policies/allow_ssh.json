@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "effect": "allow",
+  "priority": 100,
+  "source": { "pods": ["11111111-1111-1111-1111-111111111111"] },
+  "destination": { "cidrs": ["10.20.0.0/16"] },
+  "l4": [ { "protocol": "tcp", "ports": "22,443,8000-8100" }, { "protocol": "icmp" } ],
+  "conditions": { "posture": { "firewall_enabled": true }, "attestation": "any" }
+}

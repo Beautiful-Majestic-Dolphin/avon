@@ -61,20 +61,6 @@ ca:
       cpu: 500m
       memory: 512Mi
 
-policyEngine:
-  replicaCount: 2
-  logLevel: info
-  image:
-    tag: staging
-    pullPolicy: Always
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-
 adminApi:
   replicaCount: 2
   logLevel: info

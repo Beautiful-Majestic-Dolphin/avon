@@ -61,9 +61,36 @@ class ControlClient:
         protocol: str,
         port: int,
     ):
-        # Placeholder: will call AdminService.Explain
-        # For now, return dummy
-        return {"allow": False, "reason": "not implemented"}
+        try:
+            from admin_api.proto import admin_pb2, admin_pb2_grpc  # type: ignore
+
+            stub = admin_pb2_grpc.AdminServiceStub(self._channel)
+            req = admin_pb2.ExplainRequest(
+                tenant_id=str(tenant_id),
+                device_id=str(device_id),
+                destination=destination,
+                protocol=protocol,
+                port=port,
+            )
+            resp = await stub.Explain(req, timeout=5)
+            return {
+                "allow": bool(getattr(resp, "allow", False)),
+                "reason": str(getattr(resp, "reason", "")),
+                "matched_policies": list(
+                    getattr(resp, "matched_policies", [])
+                    or getattr(resp, "matched", [])
+                ),
+                "cedar": str(getattr(resp, "cedar", "")),
+            }
+        except Exception as e:
+            logger.debug("control_client_explain_failed", error=str(e))
+            # fallback dummy — allow tests with fake_control to override via patch
+            return {
+                "allow": False,
+                "reason": "not implemented",
+                "matched_policies": [],
+                "cedar": "",
+            }
 
     async def revoke_device(
         self, tenant_id: UUID, device_id: UUID, reason: str

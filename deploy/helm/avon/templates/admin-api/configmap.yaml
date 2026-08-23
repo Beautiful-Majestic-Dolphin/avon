@@ -8,6 +8,5 @@ data:
   LOG_LEVEL: "info"
   ADMIN_API_PORT: "{{ .Values.adminApi.service.port }}"
   CONTROL_SERVICE_URL: "{{ include "avon.control.fullname" . }}:{{ .Values.control.service.port }}"
-  POLICY_ENGINE_URL: "{{ include "avon.policyEngine.fullname" . }}:{{ .Values.policyEngine.service.port }}"
   POSTGRESQL_HOST: {{ include "avon.postgresql.host" . | quote }}
   REDIS_HOST: {{ include "avon.redis.host" . | quote }}

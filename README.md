@@ -153,7 +153,6 @@ avons-corners/
 │   ├── avon-pulse/            # Heartbeat/session service
 │   └── avon-agent/            # Endpoint agent binary
 ├── services/                  # Python services
-│   ├── policy-engine/         # Policy evaluation (FastAPI)
 │   └── admin-api/             # Admin REST API (FastAPI)
 ├── proto/                     # Protocol Buffer definitions
 ├── deploy/
@@ -196,7 +195,6 @@ python3 -m venv venv
 source venv/bin/activate
 
 # Install services
-pip install -e services/policy-engine[dev]
 pip install -e api/admin-api[dev]
 
 # Run tests

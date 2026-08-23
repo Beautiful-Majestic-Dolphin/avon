@@ -83,20 +83,6 @@ ca:
       cpu: 1000m
       memory: 1Gi
 
-policyEngine:
-  replicaCount: 3
-  logLevel: warn
-  image:
-    tag: ""
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 250m
-      memory: 256Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-
 adminApi:
   replicaCount: 3
   logLevel: warn

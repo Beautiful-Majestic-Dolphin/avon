@@ -1,5 +1,6 @@
 """Database queries for AVON Admin API."""
 
+import contextlib
 from datetime import datetime
 from uuid import UUID
 
@@ -351,7 +352,7 @@ class PodQueries:
 
 
 class PolicyQueries:
-    """Database queries for policies."""
+    """Database queries for policies — v2 spec stored as JSONB."""
 
     @staticmethod
     async def list_policies(
@@ -360,72 +361,135 @@ class PolicyQueries:
         skip: int = 0,
         limit: int = 100,
     ) -> list[DbPolicy]:
-        """List policies with optional filtering."""
-        if enabled is not None:
-            rows = await conn.fetch(
-                """
-                SELECT * FROM policies
-                WHERE enabled = $1
-                ORDER BY priority, created_at
-                OFFSET $2 LIMIT $3
-                """,
-                enabled,
-                skip,
-                limit,
-            )
+        """List policies with optional filtering + tenant isolation."""
+        tenant_id = await conn.fetchval(
+            "SELECT current_setting('avon.tenant_id', true)"
+        )
+        if tenant_id:
+            if enabled is not None:
+                rows = await conn.fetch(
+                    """
+                    SELECT * FROM policies WHERE tenant_id = $1::uuid AND enabled = $2
+                    ORDER BY priority, created_at OFFSET $3 LIMIT $4
+                    """,
+                    tenant_id,
+                    enabled,
+                    skip,
+                    limit,
+                )
+            else:
+                rows = await conn.fetch(
+                    """
+                    SELECT * FROM policies WHERE tenant_id = $1::uuid
+                    ORDER BY priority, created_at OFFSET $2 LIMIT $3
+                    """,
+                    tenant_id,
+                    skip,
+                    limit,
+                )
         else:
-            rows = await conn.fetch(
-                """
-                SELECT * FROM policies
-                ORDER BY priority, created_at
-                OFFSET $1 LIMIT $2
-                """,
-                skip,
-                limit,
-            )
-        return [DbPolicy(**dict(row)) for row in rows]
+            if enabled is not None:
+                rows = await conn.fetch(
+                    """
+                    SELECT * FROM policies WHERE enabled = $1
+                    ORDER BY priority, created_at OFFSET $2 LIMIT $3
+                    """,
+                    enabled,
+                    skip,
+                    limit,
+                )
+            else:
+                rows = await conn.fetch(
+                    """
+                    SELECT * FROM policies ORDER BY priority, created_at OFFSET $1 LIMIT $2
+                    """,
+                    skip,
+                    limit,
+                )
+        out = []
+        for row in rows:
+            d = dict(row)
+            if isinstance(d.get("spec"), str):
+                import json
+
+                with contextlib.suppress(Exception):
+                    d["spec"] = json.loads(d["spec"])
+            out.append(DbPolicy(**d))
+        return out
 
     @staticmethod
     async def get_policy(conn: asyncpg.Connection, policy_id: UUID) -> DbPolicy | None:
-        """Get a policy by ID."""
-        row = await conn.fetchrow("SELECT * FROM policies WHERE id = $1", policy_id)
-        return DbPolicy(**dict(row)) if row else None
+        """Get a policy by ID — tenant-scoped."""
+        tenant_id = await conn.fetchval(
+            "SELECT current_setting('avon.tenant_id', true)"
+        )
+        if tenant_id:
+            row = await conn.fetchrow(
+                "SELECT * FROM policies WHERE id = $1 AND tenant_id = $2::uuid",
+                policy_id,
+                tenant_id,
+            )
+        else:
+            row = await conn.fetchrow("SELECT * FROM policies WHERE id = $1", policy_id)
+        if not row:
+            return None
+        d = dict(row)
+        if isinstance(d.get("spec"), str):
+            import json
+
+            with contextlib.suppress(Exception):
+                d["spec"] = json.loads(d["spec"])
+        return DbPolicy(**d)
 
     @staticmethod
     async def create_policy(
         conn: asyncpg.Connection,
         name: str,
-        source_pod_id: UUID,
-        destination_pod_id: UUID,
-        action: str,
-        priority: int = 100,
+        spec: dict,
+        tenant_id: UUID | None = None,
         description: str | None = None,
-        conditions: dict | None = None,
+        enabled: bool = True,
         created_by: UUID | None = None,
+        priority: int | None = None,
+        **kwargs,
     ) -> DbPolicy:
-        """Create a new policy."""
+        """Create a new policy with spec validation already done."""
         import json
 
+        if tenant_id is None:
+            tenant_id = await conn.fetchval(
+                "SELECT current_setting('avon.tenant_id', true)"
+            )
+            if not tenant_id:
+                tenant_id = await conn.fetchval("SELECT id FROM tenants LIMIT 1")
+            else:
+                import uuid
+
+                tenant_id = (
+                    uuid.UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id
+                )
+        # priority from spec if not explicitly given
+        if priority is None:
+            priority = int(spec.get("priority", 100))
+        # legacy kwargs: source_pod_id etc — ignore
         row = await conn.fetchrow(
             """
-            INSERT INTO policies (
-                name, description, source_pod_id, destination_pod_id,
-                action, priority, enabled, conditions, created_by,
-                created_at, updated_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, NOW(), NOW())
+            INSERT INTO policies (tenant_id, name, description, enabled, priority, spec, version, created_by, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb, 1, $7, NOW(), NOW())
             RETURNING *
             """,
+            tenant_id,
             name,
             description,
-            source_pod_id,
-            destination_pod_id,
-            action,
+            enabled,
             priority,
-            json.dumps(conditions) if conditions else None,
+            json.dumps(spec),
             created_by,
         )
-        return DbPolicy(**dict(row))
+        d = dict(row)
+        if isinstance(d.get("spec"), str):
+            d["spec"] = json.loads(d["spec"])
+        return DbPolicy(**d)
 
     @staticmethod
     async def update_policy(
@@ -433,55 +497,55 @@ class PolicyQueries:
         policy_id: UUID,
         name: str | None = None,
         description: str | None = None,
-        action: str | None = None,
-        priority: int | None = None,
         enabled: bool | None = None,
-        conditions: dict | None = None,
+        spec: dict | None = None,
+        priority: int | None = None,
+        **kwargs,
     ) -> DbPolicy | None:
         """Update a policy."""
         import json
 
+        # legacy kwargs mapping
+        if "conditions" in kwargs and spec is None:
+            spec = kwargs.get("conditions")
+        if "action" in kwargs:
+            kwargs.pop("action", None)
         updates = []
         params: list = [policy_id]
         param_idx = 2
-
         if name is not None:
             updates.append(f"name = ${param_idx}")
             params.append(name)
             param_idx += 1
-
         if description is not None:
             updates.append(f"description = ${param_idx}")
             params.append(description)
             param_idx += 1
-
-        if action is not None:
-            updates.append(f"action = ${param_idx}")
-            params.append(action)
-            param_idx += 1
-
-        if priority is not None:
-            updates.append(f"priority = ${param_idx}")
-            params.append(priority)
-            param_idx += 1
-
         if enabled is not None:
             updates.append(f"enabled = ${param_idx}")
             params.append(enabled)
             param_idx += 1
-
-        if conditions is not None:
-            updates.append(f"conditions = ${param_idx}")
-            params.append(json.dumps(conditions))
+        if spec is not None:
+            updates.append(f"spec = ${param_idx}::jsonb")
+            params.append(json.dumps(spec))
             param_idx += 1
-
+            if priority is None and isinstance(spec, dict) and "priority" in spec:
+                priority = int(spec["priority"])
+        if priority is not None:
+            updates.append(f"priority = ${param_idx}")
+            params.append(priority)
+            param_idx += 1
         if not updates:
             return await PolicyQueries.get_policy(conn, policy_id)
-
         updates.append("updated_at = NOW()")
         query = f"UPDATE policies SET {', '.join(updates)} WHERE id = $1 RETURNING *"
         row = await conn.fetchrow(query, *params)
-        return DbPolicy(**dict(row)) if row else None
+        if not row:
+            return None
+        d = dict(row)
+        if isinstance(d.get("spec"), str):
+            d["spec"] = json.loads(d["spec"])
+        return DbPolicy(**d)
 
     @staticmethod
     async def delete_policy(conn: asyncpg.Connection, policy_id: UUID) -> bool:
@@ -495,14 +559,132 @@ class PolicyQueries:
         enabled: bool | None = None,
     ) -> int:
         """Count policies with optional enabled filter."""
-        if enabled is not None:
-            row = await conn.fetchrow(
-                "SELECT COUNT(*) as count FROM policies WHERE enabled = $1",
-                enabled,
+        tenant_id = await conn.fetchval(
+            "SELECT current_setting('avon.tenant_id', true)"
+        )
+        if tenant_id:
+            if enabled is not None:
+                row = await conn.fetchrow(
+                    "SELECT COUNT(*) as count FROM policies WHERE tenant_id = $1::uuid AND enabled = $2",
+                    tenant_id,
+                    enabled,
+                )
+            else:
+                row = await conn.fetchrow(
+                    "SELECT COUNT(*) as count FROM policies WHERE tenant_id = $1::uuid",
+                    tenant_id,
+                )
+        else:
+            if enabled is not None:
+                row = await conn.fetchrow(
+                    "SELECT COUNT(*) as count FROM policies WHERE enabled = $1", enabled
+                )
+            else:
+                row = await conn.fetchrow("SELECT COUNT(*) as count FROM policies")
+        return row["count"] if row else 0
+
+
+class DeviceClassQueries:
+    """Database queries for device_classes."""
+
+    @staticmethod
+    async def list_device_classes(conn: asyncpg.Connection) -> list:
+        from admin_api.db.models import DbDeviceClass
+
+        tenant_id = await conn.fetchval(
+            "SELECT current_setting('avon.tenant_id', true)"
+        )
+        if tenant_id:
+            rows = await conn.fetch(
+                "SELECT * FROM device_classes WHERE tenant_id = $1::uuid ORDER BY name",
+                tenant_id,
             )
         else:
-            row = await conn.fetchrow("SELECT COUNT(*) as count FROM policies")
-        return row["count"] if row else 0
+            rows = await conn.fetch("SELECT * FROM device_classes ORDER BY name")
+        out = []
+        for r in rows:
+            d = dict(r)
+            if isinstance(d.get("match_rules"), str):
+                import json
+
+                try:
+                    d["match_rules"] = json.loads(d["match_rules"])
+                except Exception:
+                    d["match_rules"] = {}
+            out.append(DbDeviceClass(**d))
+        return out
+
+    @staticmethod
+    async def get_device_class(conn: asyncpg.Connection, class_id: UUID):
+        from admin_api.db.models import DbDeviceClass
+
+        tenant_id = await conn.fetchval(
+            "SELECT current_setting('avon.tenant_id', true)"
+        )
+        if tenant_id:
+            row = await conn.fetchrow(
+                "SELECT * FROM device_classes WHERE id = $1 AND tenant_id = $2::uuid",
+                class_id,
+                tenant_id,
+            )
+        else:
+            row = await conn.fetchrow(
+                "SELECT * FROM device_classes WHERE id = $1", class_id
+            )
+        if not row:
+            return None
+        d = dict(row)
+        if isinstance(d.get("match_rules"), str):
+            import json
+
+            try:
+                d["match_rules"] = json.loads(d["match_rules"])
+            except Exception:
+                d["match_rules"] = {}
+        return DbDeviceClass(**d)
+
+    @staticmethod
+    async def create_device_class(
+        conn: asyncpg.Connection,
+        name: str,
+        tenant_id: UUID | None = None,
+        description: str | None = None,
+        match_rules: dict | None = None,
+    ):
+        import json
+
+        from admin_api.db.models import DbDeviceClass
+
+        if tenant_id is None:
+            tenant_id = await conn.fetchval(
+                "SELECT current_setting('avon.tenant_id', true)"
+            )
+            if not tenant_id:
+                tenant_id = await conn.fetchval("SELECT id FROM tenants LIMIT 1")
+            else:
+                import uuid
+
+                tenant_id = (
+                    uuid.UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id
+                )
+        row = await conn.fetchrow(
+            "INSERT INTO device_classes (tenant_id, name, description, match_rules) VALUES ($1, $2, $3, $4::jsonb) RETURNING *",
+            tenant_id,
+            name,
+            description,
+            json.dumps(match_rules or {}),
+        )
+        d = dict(row)
+        if isinstance(d.get("match_rules"), str):
+            d["match_rules"] = json.loads(d["match_rules"])
+        return DbDeviceClass(**d)
+
+    @staticmethod
+    async def delete_device_class(conn: asyncpg.Connection, class_id: UUID) -> bool:
+        result = await conn.execute(
+            "DELETE FROM device_classes WHERE id = $1", class_id
+        )
+        return result == "DELETE 1"
 
 
 class UserQueries:

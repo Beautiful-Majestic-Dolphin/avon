@@ -1,4 +1,4 @@
-"""Policy schemas for AVON Admin API."""
+"""Policy schemas for AVON Admin API — v2 spec with JSON Schema contract."""
 
 from datetime import datetime, time
 from uuid import UUID
@@ -6,20 +6,18 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+# Legacy schemas retained for backward compatibility with existing tests.
 class TimeWindowSchema(BaseModel):
-    """Time window for policy conditions."""
+    """Time window for policy conditions (legacy)."""
 
     start_time: time
     end_time: time
-    days_of_week: list[int] = Field(
-        default_factory=lambda: [0, 1, 2, 3, 4, 5, 6],
-        description="Days of week (0=Monday, 6=Sunday)",
-    )
+    days_of_week: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4, 5, 6])
     timezone: str = "UTC"
 
 
 class PostureRequirementSchema(BaseModel):
-    """Device posture requirements for policy conditions."""
+    """Device posture requirements (legacy)."""
 
     min_os_version: str | None = None
     min_agent_version: str | None = None
@@ -31,7 +29,7 @@ class PostureRequirementSchema(BaseModel):
 
 
 class PolicyConditionsSchema(BaseModel):
-    """Policy conditions."""
+    """Policy conditions (legacy)."""
 
     time_window: TimeWindowSchema | None = None
     posture_requirements: PostureRequirementSchema | None = None
@@ -43,12 +41,12 @@ class PolicyResponse(BaseModel):
     id: UUID
     name: str
     description: str | None = None
-    source_pod_id: UUID
-    destination_pod_id: UUID
-    action: str
-    priority: int
     enabled: bool
+    priority: int
+    spec: dict
+    version: int
     created_at: datetime
+    updated_at: datetime
 
 
 class PolicyDetailResponse(BaseModel):
@@ -57,29 +55,32 @@ class PolicyDetailResponse(BaseModel):
     id: UUID
     name: str
     description: str | None = None
-    source_pod_id: UUID
-    source_pod_name: str | None = None
-    destination_pod_id: UUID
-    destination_pod_name: str | None = None
-    action: str
-    priority: int
     enabled: bool
-    conditions: PolicyConditionsSchema | None = None
+    priority: int
+    spec: dict
+    version: int
     created_at: datetime
     updated_at: datetime
     created_by: UUID | None = None
 
 
 class PolicyCreateRequest(BaseModel):
-    """Policy creation request."""
+    """Policy creation request — spec is validated against docs/policy-schema.json.
+    Supports both v2 (spec dict) and legacy pod-based fields for backward compat.
+    """
 
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1000)
-    source_pod_id: UUID
-    destination_pod_id: UUID
-    action: str = Field(..., pattern="^(allow|deny)$")
-    priority: int = Field(default=100, ge=1, le=10000)
+    enabled: bool = True
+    spec: dict | None = Field(None, description="PolicySpec v2 JSON")
+    # legacy fields
+    source_pod_id: UUID | None = None
+    destination_pod_id: UUID | None = None
+    action: str | None = Field(None, pattern="^(allow|deny)$")
+    priority: int | None = Field(None, ge=0, le=10000)
     conditions: PolicyConditionsSchema | None = None
+
+    model_config = {"extra": "ignore"}
 
 
 class PolicyUpdateRequest(BaseModel):
@@ -87,10 +88,9 @@ class PolicyUpdateRequest(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1000)
-    action: str | None = Field(None, pattern="^(allow|deny)$")
-    priority: int | None = Field(None, ge=1, le=10000)
     enabled: bool | None = None
-    conditions: PolicyConditionsSchema | None = None
+    spec: dict | None = None
+    priority: int | None = Field(None, ge=0, le=10000)
 
 
 class PolicyListResponse(BaseModel):
@@ -103,18 +103,26 @@ class PolicyListResponse(BaseModel):
     has_more: bool
 
 
-class PolicyEvaluationRequest(BaseModel):
-    """Request to evaluate a policy."""
+class ExplainRequest(BaseModel):
+    """Explain a flow decision."""
 
-    source_device_id: UUID
-    destination_device_id: UUID
+    device_id: UUID
+    destination: str
+    protocol: str = Field(..., pattern="^(tcp|udp|icmp|any)$")
+    port: int = Field(..., ge=1, le=65535)
 
 
-class PolicyEvaluationResponse(BaseModel):
-    """Policy evaluation result."""
+class ExplainResponse(BaseModel):
+    """Explain response from AdminService."""
 
-    action: str
-    policy_id: UUID | None = None
-    policy_name: str | None = None
+    allow: bool
     reason: str
-    evaluation_time_ms: float
+    matched_policies: list[str] = Field(default_factory=list)
+    cedar: str = ""
+
+
+class CedarResponse(BaseModel):
+    """Cedar debug response."""
+
+    cedar: str
+    policy_id: UUID
