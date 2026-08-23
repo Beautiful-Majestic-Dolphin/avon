@@ -2,10 +2,12 @@ use std::time::Duration;
 
 use avon_config::Validate;
 use avon_control::config::ControlConfig;
-use avon_control::service::{admin::AdminServiceImpl, agent::AgentServiceImpl, gateway::GatewayServiceImpl, AppState};
+use avon_control::service::{
+    admin::AdminServiceImpl, agent::AgentServiceImpl, gateway::GatewayServiceImpl, AppState,
+};
 use avon_observability::{grpc_health, init_tracing, install_metrics, serve_health, Readiness};
-use avon_protocol::v2::agent_service_server::AgentServiceServer;
 use avon_protocol::v2::admin_service_server::AdminServiceServer;
+use avon_protocol::v2::agent_service_server::AgentServiceServer;
 use avon_protocol::v2::gateway_service_server::GatewayServiceServer;
 use clap::Parser;
 use tonic::transport::Server;
@@ -83,7 +85,9 @@ async fn main() -> anyhow::Result<()> {
         .add_service(AgentServiceServer::new(AgentServiceImpl::new(
             state.clone(),
         )))
-        .add_service(AdminServiceServer::new(AdminServiceImpl::new(state.clone())))
+        .add_service(AdminServiceServer::new(AdminServiceImpl::new(
+            state.clone(),
+        )))
         .add_service(GatewayServiceServer::new(GatewayServiceImpl::new(state)))
         .serve_with_shutdown(cfg.listen_addr, async {
             let _ = tokio::signal::ctrl_c().await;
