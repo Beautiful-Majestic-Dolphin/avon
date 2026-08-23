@@ -93,7 +93,9 @@ async fn main() -> anyhow::Result<()> {
             let tun = avon_tun::Tun::create(&cfg.tun_name, cfg.overlay_mtu).await?;
             let tun: std::sync::Arc<dyn avon_agent_core::traits::TunProvider> =
                 std::sync::Arc::new(tun);
-            let posture = std::sync::Arc::new(platform::posture::PlatformPosture);
+            let posture = std::sync::Arc::new(platform::posture::PostureCollector::new(
+                std::time::Duration::from_secs(60),
+            ));
             let agent_cfg = avon_agent_core::AgentCoreConfig {
                 control,
                 pulse_interval: std::time::Duration::from_secs(cfg.pulse_interval_secs),
