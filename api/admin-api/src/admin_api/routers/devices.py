@@ -1,11 +1,14 @@
 """Device management endpoints for AVON Admin API."""
 
+import contextlib
 from uuid import UUID
 
 import asyncpg
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
+from admin_api.audit import log_event
 from admin_api.auth.dependencies import CurrentUser, get_current_admin, get_current_user
 from admin_api.db.connection import get_db
 from admin_api.db.queries import ActivityQueries, DeviceQueries
@@ -15,7 +18,9 @@ from admin_api.schemas.device import (
     DeviceListResponse,
     DeviceResponse,
     EnrollmentTokenResponse,
+    EnrollTokenRequest,
 )
+from admin_api.services.control_client import ControlClient
 from admin_api.services.enrollment import EnrollmentService
 
 logger = structlog.get_logger()
@@ -60,6 +65,92 @@ async def list_devices(
         limit=limit,
         has_more=(skip + len(items)) < total,
     )
+
+
+# --- 4.12: Enroll tokens (hashed, single-show) ---
+
+
+@router.post(
+    "/enroll-tokens",
+    response_model=EnrollmentTokenResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_enroll_token(
+    req: EnrollTokenRequest,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_admin),
+):
+    # Support both old and new field names
+    device_name = req.device_name or req.name or "device"
+    # Use tenant from current user
+    tenant_id = getattr(current_user.user, "tenant_id", None)
+    # Create via enrollment service
+    svc = EnrollmentService(db)
+    result = await svc.create_enrollment(
+        name=device_name,
+        device_type=req.device_type,
+        assigned_pods=req.assigned_pods,
+        created_by=current_user.id,
+        expires_hours=req.expires_in_hours,
+        max_uses=req.max_uses,
+        require_approval=req.require_approval,
+        tenant_id=tenant_id,
+    )
+    # Audit without plaintext token
+    with contextlib.suppress(Exception):
+        await log_event(
+            db,
+            tenant_id or current_user.user.id,
+            actor=current_user.id,
+            event="enrollment.created",
+            target=None,
+            details={
+                "device_name": device_name,
+                "max_uses": req.max_uses,
+                "require_approval": req.require_approval,
+            },
+        )
+    return result
+
+
+@router.get("/enroll-tokens")
+async def list_enroll_tokens(
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_admin),
+):
+    rows = await db.fetch(
+        "SELECT id, device_name, device_kind, max_uses, use_count, require_approval, expires_at, created_at FROM enrollment_tokens WHERE tenant_id = $1 ORDER BY created_at DESC",
+        getattr(current_user.user, "tenant_id", None) or current_user.id,
+    )
+    items = []
+    for r in rows:
+        items.append(
+            {
+                "id": str(r["id"]),
+                "device_name": r["device_name"],
+                "device_kind": r["device_kind"],
+                "max_uses": r["max_uses"],
+                "use_count": r["use_count"],
+                "require_approval": r["require_approval"],
+                "expires_at": r["expires_at"].isoformat() if r["expires_at"] else None,
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+        )
+    return {"items": items, "total": len(items)}
+
+
+@router.delete("/enroll-tokens/{token_id}")
+async def delete_enroll_token(
+    token_id: UUID,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_admin),
+):
+    await db.execute(
+        "DELETE FROM enrollment_tokens WHERE id = $1 AND tenant_id = $2",
+        token_id,
+        getattr(current_user.user, "tenant_id", None) or current_user.id,
+    )
+    return {"success": True}
 
 
 @router.get("/{device_id}", response_model=DeviceDetailResponse)
@@ -261,3 +352,80 @@ async def delete_device(
     )
 
     return {"success": True, "message": f"Device {device.name} has been deleted"}
+
+
+# --- 4.12: Device lifecycle via Control ---
+
+
+@router.post("/{device_id}/approve")
+async def approve_device_endpoint(
+    device_id: UUID,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_admin),
+):
+    # Get tenant
+    tenant_id = (
+        getattr(current_user.user, "tenant_id", None)
+        or await db.fetchval("SELECT tenant_id FROM devices WHERE id = $1", device_id)
+        or current_user.id
+    )
+    client = ControlClient()
+    try:
+        await client.approve_device(tenant_id, device_id)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"control unavailable: {e}") from e
+    # Update local status only after control success
+    await db.execute(
+        "UPDATE devices SET status = 'active'::device_status, updated_at = NOW() WHERE id = $1",
+        device_id,
+    )
+    with contextlib.suppress(Exception):
+        await log_event(
+            db,
+            tenant_id,
+            actor=current_user.id,
+            event="device.approve",
+            target=device_id,
+            details={},
+        )
+    return {"success": True}
+
+
+class RevokeRequest(BaseModel):
+    reason: str = "revoked"
+
+
+@router.post("/{device_id}/revoke")
+async def revoke_device_endpoint(
+    device_id: UUID,
+    body: RevokeRequest = None,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_admin),
+):
+    # body may contain reason
+    reason = body.reason if body else "revoked"
+    # Try to get tenant
+    tenant_id = (
+        getattr(current_user.user, "tenant_id", None)
+        or await db.fetchval("SELECT tenant_id FROM devices WHERE id = $1", device_id)
+        or current_user.id
+    )
+    client = ControlClient()
+    try:
+        await client.revoke_device(tenant_id, device_id, reason)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"control unavailable: {e}") from e
+    await db.execute(
+        "UPDATE devices SET status = 'revoked'::device_status, updated_at = NOW() WHERE id = $1",
+        device_id,
+    )
+    with contextlib.suppress(Exception):
+        await log_event(
+            db,
+            tenant_id,
+            actor=current_user.id,
+            event="device.revoke",
+            target=device_id,
+            details={"reason": reason},
+        )
+    return {"success": True}
