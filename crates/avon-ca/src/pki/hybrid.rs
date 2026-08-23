@@ -1,5 +1,5 @@
 use avon_common::ids::TenantId;
-use avon_crypto::cert::{Certificate, SubjectKind, TbsCertificate};
+use avon_crypto::cert::{Certificate, HardwareBinding, SubjectKind, TbsCertificate};
 use avon_crypto::hybrid::signature::{Domain, HybridSignature};
 use avon_protocol::v2::Csr;
 use sha2::{Digest, Sha256};
@@ -15,6 +15,7 @@ pub const SERVICE_LIFETIME_SECS: i64 = 7 * 86_400;
 pub struct CsrData {
     pub template: TbsCertificate,
     pub tls_csr_pem: String,
+    pub hardware_binding: Option<HardwareBinding>,
 }
 
 /// Verify proof of possession and template hygiene. Validity, serial and
@@ -47,9 +48,18 @@ pub fn verify_csr(csr: &Csr) -> Result<CsrData, PkiError> {
         .signing_key
         .verify(Domain::Csr, &csr.tbs_template, &proof)
         .map_err(|_| PkiError::CsrProof)?;
+    let hardware_binding = if csr.hardware_binding.is_empty() {
+        None
+    } else {
+        Some(
+            HardwareBinding::decode(&csr.hardware_binding)
+                .map_err(|e| PkiError::CsrTemplate(e.to_string()))?,
+        )
+    };
     Ok(CsrData {
         template,
         tls_csr_pem: csr.tls_csr_pem.clone(),
+        hardware_binding,
     })
 }
 
@@ -107,6 +117,7 @@ impl Issuer<'_> {
             issuer_key_id: self.keys.issuing.verifying_key().key_id(),
             sans,
             tls_cert_sha256: Some(Sha256::digest(&tls_cert_der).into()),
+            hardware_binding: csr.hardware_binding,
         };
         let certificate = Certificate::sign(tbs, &self.keys.issuing)?;
         Ok(Issued {

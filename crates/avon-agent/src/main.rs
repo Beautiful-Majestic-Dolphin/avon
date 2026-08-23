@@ -45,6 +45,9 @@ enum Commands {
         /// Data directory for storing identity
         #[arg(long)]
         data_dir: Option<PathBuf>,
+        /// Key provider: auto|software|tpm2|keychain|cng
+        #[arg(long, default_value = "auto")]
+        key_provider: String,
     },
     /// Show agent status
     Status {
@@ -123,6 +126,7 @@ async fn main() -> anyhow::Result<()> {
             ca_file,
             ca_fingerprint,
             data_dir,
+            key_provider,
         } => {
             let data_dir = data_dir.unwrap_or_else(default_data_dir);
             // Resolve token.
@@ -163,6 +167,9 @@ async fn main() -> anyhow::Result<()> {
                 format!("https://{}", control)
             };
             let fp = platform::fingerprint::PlatformFingerprint;
+            let choice: avon_keystore::ProviderChoice = key_provider
+                .parse()
+                .unwrap_or(avon_keystore::ProviderChoice::Auto);
             let id = avon_agent_core::identity::enroll(
                 &control_url,
                 &token,
@@ -170,6 +177,7 @@ async fn main() -> anyhow::Result<()> {
                 &ca_pem,
                 // Derive server name from control URL.
                 &url_server_name(&control_url),
+                choice,
                 &fp,
                 env!("CARGO_PKG_VERSION"),
             )

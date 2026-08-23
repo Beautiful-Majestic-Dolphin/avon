@@ -277,6 +277,7 @@ fn service_csr(
         issuer_key_id: [0; 32],
         sans: vec![],
         tls_cert_sha256: None,
+        hardware_binding: None,
     }
     .encode();
     let proof = signing.sign(Domain::Csr, &template)?.to_bytes();
@@ -286,6 +287,7 @@ fn service_csr(
         tbs_template: template,
         proof,
         tls_csr_pem,
+        hardware_binding: Vec::new(),
     })
 }
 

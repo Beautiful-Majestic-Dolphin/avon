@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use avon_crypto::cert::{SubjectKind, TbsCertificate};
+use avon_crypto::cert::{HardwareBinding, SubjectKind, TbsCertificate};
 use avon_protocol::v2::{EnrollRequest, EnrollResponse, Uuid as PbUuid};
 use sqlx::PgPool;
 use tonic::Status;
@@ -93,7 +93,25 @@ pub async fn enroll(
     } else {
         "active"
     };
-    let key_provider = "software";
+    let key_provider = if csr.hardware_binding.is_empty() {
+        "software".to_string()
+    } else {
+        let binding = HardwareBinding::decode(&csr.hardware_binding)
+            .map_err(|_| Status::invalid_argument("binding decode"))?;
+        // Verify binding against the keys in the CSR template and the device hint (fingerprint hash)
+        if let Some(kem) = &template.kem_key {
+            let hint = fingerprint.clone().unwrap_or_default();
+            avon_keystore::verify_binding(&binding, &template.signing_key, kem, &hint).map_err(
+                |e| {
+                    tracing::warn!(reason = %e, "binding verification failed");
+                    Status::invalid_argument("binding verification failed")
+                },
+            )?;
+        } else {
+            return Err(Status::invalid_argument("kem required for binding"));
+        }
+        binding.provider.as_str().to_string()
+    };
 
     // The CSR is forwarded unchanged: its proof covers the template the device
     // signed (empty tenant, zero subject); the CA fills both from the request.
@@ -106,7 +124,7 @@ pub async fn enroll(
         status,
         token.device_class_id,
         fingerprint.as_deref(),
-        key_provider,
+        &key_provider,
     )
     .await
     .map_err(|e| {

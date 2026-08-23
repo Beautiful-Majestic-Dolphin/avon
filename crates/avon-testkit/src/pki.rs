@@ -62,6 +62,7 @@ impl TestPki {
                 issuer_key_id: root_kp.verifying_key().key_id(),
                 sans: vec![],
                 tls_cert_sha256: None,
+                hardware_binding: None,
             },
             &root_kp,
         )
@@ -81,6 +82,7 @@ impl TestPki {
                 issuer_key_id: root_kp.verifying_key().key_id(),
                 sans: vec![],
                 tls_cert_sha256: None,
+                hardware_binding: None,
             },
             &root_kp,
         )
@@ -164,6 +166,7 @@ pub fn make_csr(
         issuer_key_id: [0; 32],
         sans: vec![],
         tls_cert_sha256: None,
+        hardware_binding: None,
     }
     .encode();
     let proof = signing
@@ -180,5 +183,6 @@ pub fn make_csr(
         tbs_template: template,
         proof,
         tls_csr_pem,
+        hardware_binding: Vec::new(),
     }
 }

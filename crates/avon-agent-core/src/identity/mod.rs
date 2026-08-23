@@ -1,19 +1,13 @@
-pub mod software;
-
 use std::path::Path;
 
 use avon_common::ids::{DeviceId, TenantId};
 use avon_crypto::cert::{Certificate, ChainVerifier, SubjectKind, TbsCertificate};
-use avon_crypto::hybrid::kem::HybridKemPublicKey;
-use avon_crypto::hybrid::signature::{Domain, HybridSigningKeyPair};
+use avon_crypto::hybrid::signature::Domain;
 use avon_protocol::v2::Csr;
 use rcgen::KeyPair;
 
-use crate::traits::KeyProvider;
-
-pub use software::SoftwareKeyProvider;
-
 use crate::traits::FingerprintProvider;
+use avon_keystore::{HardwareBinding, KeyProvider, ProviderChoice};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IdentityError {
@@ -23,6 +17,8 @@ pub enum IdentityError {
     Crypto(#[from] avon_crypto::CryptoError),
     #[error("cert: {0}")]
     Cert(#[from] avon_crypto::cert::CertError),
+    #[error("keystore: {0}")]
+    Keystore(#[from] avon_keystore::KeyError),
     #[error("tls: {0}")]
     Tls(String),
     #[error("protocol: {0}")]
@@ -47,7 +43,6 @@ pub struct ChainCache {
 impl Clone for ChainCache {
     fn clone(&self) -> Self {
         let verifier = ChainVerifier::new(vec![self.root.clone()]).unwrap_or_else(|_| {
-            // `allow` unwrap lint: this is infallible for a previously verified root
             #[allow(clippy::unwrap_used)]
             {
                 ChainVerifier::new(vec![self.root.clone()]).unwrap()
@@ -69,7 +64,7 @@ pub struct Identity {
     pub certificate: Certificate,
     pub tls_cert_pem: String,
     pub chain: ChainCache,
-    pub provider: Box<dyn crate::traits::KeyProvider>,
+    pub provider: Box<dyn KeyProvider>,
     pub renew_after: i64,
 }
 
@@ -115,12 +110,12 @@ fn write_private(path: &Path, data: &[u8]) -> Result<(), IdentityError> {
 }
 
 fn make_csr(
-    signing: &HybridSigningKeyPair,
-    kem: &HybridKemPublicKey,
+    provider: &dyn KeyProvider,
     tls_key: &KeyPair,
     tenant: &str,
     subject: [u8; 16],
     kind: SubjectKind,
+    hardware_binding: Option<HardwareBinding>,
 ) -> Csr {
     let template = TbsCertificate {
         version: 2,
@@ -128,17 +123,18 @@ fn make_csr(
         tenant_id: tenant.to_string(),
         subject_id: subject,
         kind,
-        signing_key: signing.verifying_key(),
-        kem_key: Some(kem.clone()),
+        signing_key: provider.signing_public(),
+        kem_key: Some(provider.kem_public()),
         not_before: 0,
         not_after: 0,
         issuer_key_id: [0; 32],
         sans: vec![],
         tls_cert_sha256: None,
+        hardware_binding: hardware_binding.clone(),
     }
     .encode();
     #[allow(clippy::expect_used)]
-    let proof = signing
+    let proof = provider
         .sign(Domain::Csr, &template)
         .expect("csr sign")
         .to_bytes();
@@ -149,10 +145,12 @@ fn make_csr(
         .expect("csr")
         .pem()
         .expect("pem");
+    let hw_blob = hardware_binding.map(|b| b.encode()).unwrap_or_default();
     Csr {
         tbs_template: template,
         proof,
         tls_csr_pem,
+        hardware_binding: hw_blob,
     }
 }
 
@@ -160,12 +158,14 @@ fn make_csr(
 /// pinning the server certificate against `ca_pem` and SNI `server_name`.
 /// Writes `identity.key`, `identity.bin`, `identity.json` and `ca.pem` into
 /// `data_dir`.
+#[allow(clippy::too_many_arguments)]
 pub async fn enroll(
     control: &str,
     token: &str,
     data_dir: &Path,
     ca_pem: &[u8],
     server_name: &str,
+    choice: ProviderChoice,
     fingerprint: &dyn FingerprintProvider,
     version: &str,
 ) -> Result<Identity, IdentityError> {
@@ -179,23 +179,22 @@ pub async fn enroll(
         std::fs::set_permissions(data_dir, std::fs::Permissions::from_mode(0o700))?;
     }
 
-    let provider = SoftwareKeyProvider::generate(data_dir)?;
-    provider.save()?;
+    let provider = avon_keystore::open_or_create(choice, data_dir)?;
 
-    // Build a CSR with empty tenant/subject as the control expects for new devices.
+    let fp = fingerprint.collect();
+    let hardware_binding = provider.hardware_binding(&fp.hash)?;
+
     let tls_key =
         KeyPair::from_pem(provider.tls_key_pem()).map_err(|e| IdentityError::Tls(e.to_string()))?;
     let csr = make_csr(
-        provider.signing(),
-        &provider.kem().public_key(),
+        provider.as_ref(),
         &tls_key,
         "",
         [0; 16],
         SubjectKind::Device,
+        hardware_binding,
     );
 
-    // Anonymous TLS channel pinned to the provided CA.
-    let fp = fingerprint.collect();
     let url = control.to_string();
     let ca_bytes = ca_pem.to_vec();
     let server_name = server_name.to_string();
@@ -263,11 +262,9 @@ pub async fn enroll(
     let tls_ca_pem = chain_pb.tls_ca_pem.clone();
     let renew_after = cred.renew_after_unix;
 
-    // Verify chain.
     let verifier = ChainVerifier::new(vec![root.clone()])?;
     let now = chrono::Utc::now().timestamp();
     verifier.verify(&certificate, std::slice::from_ref(&issuing), now)?;
-    // Check tls_cert_sha256 binds to the returned leaf.
     let tls_der = pem::parse(&tls_cert_pem)
         .map_err(|e| IdentityError::Tls(e.to_string()))?
         .into_contents();
@@ -279,9 +276,6 @@ pub async fn enroll(
         return Err(IdentityError::Corrupt("tls binding"));
     }
 
-    // Persist. Store the full CA bundle provided for enrollment as tls_ca_pem,
-    // so later control connections can verify the server (which is signed by
-    // the test PKI's CA, not necessarily the chain's TLS CA).
     let full_ca_pem = String::from_utf8(ca_pem.to_vec()).unwrap_or(tls_ca_pem.clone());
     let persisted = PersistedIdentity {
         device_id: device_id.to_string(),
@@ -299,9 +293,6 @@ pub async fn enroll(
         &serde_json::to_vec_pretty(&persisted).map_err(|_| IdentityError::Corrupt("encode"))?,
     )?;
     write_private(data_dir.join("ca.pem").as_path(), ca_pem)?;
-    // Also keep the provider's sealed files already written via save().
-    // Update the TLS key in the sealed store to match the cert we received?
-    // The cert was issued for the key we generated, so no need to re-save.
 
     let verifying_chain = ChainVerifier::new(vec![root.clone()])?;
     Ok(Identity {
@@ -315,13 +306,13 @@ pub async fn enroll(
             verifier: verifying_chain,
             tls_ca_pem: full_ca_pem,
         },
-        provider: Box::new(provider),
+        provider,
         renew_after,
     })
 }
 
 pub async fn load(data_dir: &Path) -> Result<Identity, IdentityError> {
-    let provider = SoftwareKeyProvider::load(data_dir)?;
+    let provider = avon_keystore::open_existing(data_dir)?;
     let data = std::fs::read(data_dir.join("identity.json"))?;
     let persisted: PersistedIdentity =
         serde_json::from_slice(&data).map_err(|_| IdentityError::Corrupt("json"))?;
@@ -357,7 +348,7 @@ pub async fn load(data_dir: &Path) -> Result<Identity, IdentityError> {
             verifier,
             tls_ca_pem: persisted.tls_ca_pem,
         },
-        provider: Box::new(provider),
+        provider,
         renew_after: persisted.renew_after,
     })
 }

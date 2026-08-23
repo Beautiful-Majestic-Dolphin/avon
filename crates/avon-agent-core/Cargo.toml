@@ -9,6 +9,7 @@ description = "Platform-independent agent core: identity, control client, sessio
 [dependencies]
 avon-common.workspace = true
 avon-crypto.workspace = true
+avon-keystore.workspace = true
 avon-protocol.workspace = true
 avon-tls.workspace = true
 avon-tunnel.workspace = true

@@ -11,7 +11,8 @@ pub mod status;
 pub mod traits;
 
 pub use agent::{Agent, AgentCoreConfig};
-pub use identity::{enroll, load, Identity, IdentityError, SoftwareKeyProvider};
+pub use avon_keystore::SoftwareKeyProvider;
+pub use identity::{enroll, load, Identity, IdentityError};
 pub use status::{Status, StatusHandle};
 pub use traits::{FingerprintProvider, KeyProvider, PostureProvider, TunProvider};
 
@@ -25,6 +26,8 @@ pub enum AgentError {
     Tunnel(#[from] avon_tunnel::TunnelError),
     #[error("crypto: {0}")]
     Crypto(#[from] avon_crypto::CryptoError),
+    #[error("keystore: {0}")]
+    Keystore(#[from] avon_keystore::KeyError),
     #[error("protocol: {0}")]
     Protocol(String),
     #[error("tun: {0}")]

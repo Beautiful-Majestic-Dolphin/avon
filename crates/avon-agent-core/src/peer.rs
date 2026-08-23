@@ -159,12 +159,17 @@ impl PeerManager {
                 .map_err(|e| AgentError::Protocol(format!("responder cert verify: {e}")))?;
         }
 
-        let est = Initiator::complete(
+        let est = Initiator::complete_with(
             pending,
             &answer,
             session_id,
             identity.certificate.id(),
-            identity.provider.kem(),
+            |ct| {
+                identity
+                    .provider
+                    .decapsulate(ct)
+                    .map_err(|e| avon_tunnel::TunnelError::Protocol(e.to_string()))
+            },
             &responder_cert,
         )?;
 
@@ -254,13 +259,18 @@ impl PeerManager {
         }
 
         let my_index = self.table.allocate_index()?;
-        let (answer, established) = Responder::answer(
+        let (answer, established) = Responder::answer_with(
             session_id,
             &initiator_cert,
             &offer.eph_kem_pk,
             crypto_suite,
             identity.certificate.id(),
-            identity.provider.signing(),
+            |domain, msg| {
+                identity
+                    .provider
+                    .sign(domain, msg)
+                    .map_err(|e| avon_tunnel::TunnelError::Protocol(e.to_string()))
+            },
             my_index,
             None,
         )?;

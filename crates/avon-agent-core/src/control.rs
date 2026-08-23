@@ -172,9 +172,8 @@ impl ControlClient {
         let msg = auth_message_bytes(&nonce, &client_hash, &server_hash);
         let sig = identity
             .provider
-            .signing()
             .sign(Domain::Auth, &msg)
-            .map_err(AgentError::Crypto)?;
+            .map_err(|e| AgentError::Protocol(e.to_string()))?;
         tx.send(AuthMessage {
             msg: Some(auth_message::Msg::Proof(AuthProof {
                 signature: sig.to_bytes(),
@@ -197,9 +196,8 @@ impl ControlClient {
             HybridKemCiphertext::from_bytes(&result.kem_ciphertext).map_err(AgentError::Crypto)?;
         let ss = identity
             .provider
-            .kem()
             .decapsulate(&ct)
-            .map_err(AgentError::Crypto)?;
+            .map_err(|e| AgentError::Protocol(e.to_string()))?;
         let token =
             open_session_token(&result.sealed_token, &ss, &nonce).map_err(AgentError::Crypto)?;
         let token_str = Base64UrlUnpadded::encode_string(&token);

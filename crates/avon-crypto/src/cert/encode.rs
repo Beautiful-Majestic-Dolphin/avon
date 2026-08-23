@@ -1,5 +1,6 @@
 use sha2::{Digest, Sha256};
 
+use super::binding::HardwareBinding;
 use super::CertError;
 use crate::error::CryptoError;
 use crate::hybrid::kem::{HybridKemPublicKey, HYBRID_KEM_PUBLIC_KEY_BYTES};
@@ -45,6 +46,7 @@ pub struct TbsCertificate {
     pub issuer_key_id: [u8; 32],
     pub sans: Vec<String>,
     pub tls_cert_sha256: Option<[u8; 32]>,
+    pub hardware_binding: Option<HardwareBinding>,
 }
 
 const MAX_TBS_LEN: usize = 16 * 1024;
@@ -137,6 +139,10 @@ impl TbsCertificate {
             Some(h) => put16(&mut out, h),
             None => put16(&mut out, &[]),
         }
+        match &self.hardware_binding {
+            Some(b) => put16(&mut out, &b.encode()),
+            None => put16(&mut out, &[]),
+        }
         out
     }
 
@@ -187,6 +193,12 @@ impl TbsCertificate {
             }
             n => return Err(CertError::Encoding(format!("bad tls hash length {n}"))),
         };
+        let hw_bytes = r.bytes16(crate::cert::binding::MAX_BINDING_BYTES)?;
+        let hardware_binding = if hw_bytes.is_empty() {
+            None
+        } else {
+            Some(HardwareBinding::decode(hw_bytes)?)
+        };
         r.done()?;
         Ok(Self {
             version,
@@ -201,6 +213,7 @@ impl TbsCertificate {
             issuer_key_id,
             sans,
             tls_cert_sha256,
+            hardware_binding,
         })
     }
 }

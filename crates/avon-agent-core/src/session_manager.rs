@@ -95,12 +95,17 @@ impl SessionManager {
                 .map_err(|e| AgentError::Protocol(format!("gateway cert verify: {e}")))?;
         }
 
-        let est = avon_tunnel::Initiator::complete(
+        let est = avon_tunnel::Initiator::complete_with(
             pending,
             &answer,
             session_id,
             identity.certificate.id(),
-            identity.provider.kem(),
+            |ct| {
+                identity
+                    .provider
+                    .decapsulate(ct)
+                    .map_err(|e| avon_tunnel::TunnelError::Protocol(e.to_string()))
+            },
             &gw_cert,
         )?;
 
