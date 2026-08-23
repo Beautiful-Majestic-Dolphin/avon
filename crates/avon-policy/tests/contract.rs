@@ -5,7 +5,10 @@ use avon_policy::spec::PolicySpec;
 fn policy_fixtures() -> Vec<String> {
     // The Python tests copy crates fixtures into api/admin-api/tests/fixtures/policies/
     let candidates = [
-        format!("{}/../../api/admin-api/tests/fixtures/policies", env!("CARGO_MANIFEST_DIR")),
+        format!(
+            "{}/../../api/admin-api/tests/fixtures/policies",
+            env!("CARGO_MANIFEST_DIR")
+        ),
         format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR")),
     ];
     let mut fixtures = Vec::new();
@@ -46,7 +49,11 @@ fn every_python_fixture_parses_validates_and_compiles() {
             pods: vec![],
             device_classes: vec![],
             devices: vec![],
-            policies: vec![avon_policy::entities::PolicyEntry { id: uuid::Uuid::new_v4(), name: "t".into(), spec }],
+            policies: vec![avon_policy::entities::PolicyEntry {
+                id: uuid::Uuid::new_v4(),
+                name: "t".into(),
+                spec,
+            }],
         };
         let out = avon_policy::compile::compile(&data, 0);
         assert!(out.is_ok(), "compile failed: {:?}", out.err());
@@ -55,7 +62,11 @@ fn every_python_fixture_parses_validates_and_compiles() {
 
 #[test]
 fn invalid_ports_fixture_is_rejected() {
-    let raw = std::fs::read_to_string(format!("{}/tests/fixtures/invalid_ports.json", env!("CARGO_MANIFEST_DIR"))).unwrap();
+    let raw = std::fs::read_to_string(format!(
+        "{}/tests/fixtures/invalid_ports.json",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
     // Either deserialization or validation must fail
     let spec: Result<PolicySpec, _> = serde_json::from_str(&raw);
     if let Ok(p) = spec {
