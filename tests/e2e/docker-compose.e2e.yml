@@ -74,6 +74,30 @@ services:
       gateway:
         condition: service_started
 
+  agent-c:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.agent-e2e
+    container_name: avon-e2e-agent-c
+    environment:
+      AVON_AGENT_PULSE_INTERVAL_SECS: 10
+      AVON_AGENT_TUN_NAME: avon0
+    volumes:
+      - certs:/certs:ro
+      - agent-c-data:/var/lib/avon
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      - public
+    depends_on:
+      control:
+        condition: service_started
+      gateway:
+        condition: service_started
+
 volumes:
   agent-a-data: {}
   agent-b-data: {}
+  agent-c-data: {}

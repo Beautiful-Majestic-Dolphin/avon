@@ -45,6 +45,21 @@ class Agent:
     def device_id(self) -> str:
         return self.status().get("device_id") or ""
 
+
+    def tcp_open(self, ip: str, port: int, timeout: int = 2) -> bool:
+        try:
+            self.compose.exec(self.service, "bash", "-c", f"timeout {timeout} bash -c 'cat < /dev/null > /dev/tcp/{ip}/{port}'", timeout=timeout+2)
+            return True
+        except Exception:
+            try:
+                # fallback via nc
+                self.compose.exec(self.service, "nc", "-z", "-w", str(timeout), ip, str(port), timeout=timeout+2)
+                return True
+            except Exception:
+                return False
+    def device_id_prop(self) -> str:
+        return self.status().get("device_id") or ""
+
     def dial_peer(self, device_id: str) -> bool:
         # Use avon-agent CLI if available, else fallback to direct via control? For now use a helper via docker exec with a small python.
         # The agent's peer dial is not exposed via CLI; we use a control-plane helper via the agent's own API?
