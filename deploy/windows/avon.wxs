@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="AVON Agent" Language="1033" Version="0.2.0" Manufacturer="AVON" UpgradeCode="12345678-1234-1234-1234-123456789ABC">
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Feature Id="ProductFeature" Title="AVON Agent" Level="1">
+      <ComponentGroupRef Id="AvonFiles" />
+    </Feature>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="AVON">
+          <Component Id="AvonAgent" Guid="*">
+            <File Id="AvonAgentExe" Source="avon-agent.exe" KeyPath="yes" />
+            <ServiceInstall Id="AvonAgentService" Name="avon-agent" DisplayName="AVON Agent" Type="ownProcess" Start="auto" ErrorControl="normal" Account="NT AUTHORITY\LocalSystem" />
+            <ServiceControl Id="AvonAgentServiceControl" Name="avon-agent" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+  </Product>
+</Wix>
