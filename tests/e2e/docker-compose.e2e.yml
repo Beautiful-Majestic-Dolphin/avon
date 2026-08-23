@@ -97,7 +97,77 @@ services:
       gateway:
         condition: service_started
 
+  # A software TPM the agent talks to over TCP, so the TPM-backed path can be
+  # exercised in CI on machines that have no TPM of their own.
+  swtpm:
+    image: debian:12-slim
+    container_name: avon-e2e-swtpm
+    command: >
+      bash -c "apt-get update -qq && apt-get install -y -qq swtpm swtpm-tools >/dev/null &&
+               mkdir -p /tmpstate &&
+               swtpm socket --tpm2 --tpmstate dir=/tmpstate
+                 --ctrl type=tcp,port=2322,bindaddr=0.0.0.0
+                 --server type=tcp,port=2321,bindaddr=0.0.0.0
+                 --flags not-need-init,startup-clear"
+    networks:
+      - public
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/2321"]
+      interval: 5s
+      retries: 20
+
+  agent-tpm:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.agent-e2e
+    container_name: avon-e2e-agent-tpm
+    environment:
+      AVON_AGENT_PULSE_INTERVAL_SECS: 10
+      AVON_AGENT_TUN_NAME: avon0
+      AVON_AGENT_KEY_PROVIDER: tpm2
+      AVON_TPM_TCTI: "swtpm:host=swtpm,port=2321"
+    volumes:
+      - certs:/certs:ro
+      - agent-tpm-data:/var/lib/avon
+      - shared:/shared
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      - public
+    depends_on:
+      swtpm:
+        condition: service_healthy
+      control:
+        condition: service_started
+      gateway:
+        condition: service_started
+
+  # Started empty and left idle: the clone test copies an identity into it and
+  # checks that the copy is useless. Deliberately no AVON_TPM_TCTI — this
+  # container has no TPM.
+  agent-clone:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.agent-e2e
+    container_name: avon-e2e-agent-clone
+    entrypoint: ["sleep", "infinity"]
+    environment:
+      AVON_AGENT_TUN_NAME: avon1
+    volumes:
+      - certs:/certs:ro
+      - shared:/shared
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      - public
+
 volumes:
   agent-a-data: {}
   agent-b-data: {}
   agent-c-data: {}
+  agent-tpm-data: {}
+  shared: {}

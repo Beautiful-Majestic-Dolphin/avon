@@ -1,24 +1,22 @@
-"""AVON E2E Test Library
+"""AVON E2E test library.
 
-Common utilities and clients for end-to-end testing.
+The modules here are the vocabulary the scenarios are written in: a compose
+project, an agent, the admin API, and the fault injection used to knock things
+over on purpose.
 """
 
-from .admin_client import AdminClient
-from .agent_client import AgentClient
-from .helpers import (
-    wait_for_condition,
-    wait_for_service,
-    generate_test_id,
-    cleanup_test_data,
-)
+from .admin import Admin
+from .agent import Agent
+from .compose import Compose
 from .config import E2EConfig
+from .faults import Faults
+from .metrics import metric
 
 __all__ = [
-    "AdminClient",
-    "AgentClient",
-    "wait_for_condition",
-    "wait_for_service",
-    "generate_test_id",
-    "cleanup_test_data",
+    "Admin",
+    "Agent",
+    "Compose",
     "E2EConfig",
+    "Faults",
+    "metric",
 ]
