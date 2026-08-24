@@ -29,7 +29,9 @@ AVON is a **post-quantum zero trust network access (ZTNA)** platform that provid
 - **Continuous Verification**: Sessions are validated continuously, not just at connection time
 - **Policy-Based Access**: Fine-grained, context-aware access control
 - **Cloud Native**: Kubernetes-first deployment with Helm charts
-- **Cross-Platform Agent**: Single binary for Linux, macOS, and Windows
+- **Cross-Platform Agent**: Linux, macOS and Windows, with platform-native data
+  planes (TUN, utun, WinTun) and packaging (deb/rpm, signed pkg, MSI). Hardware
+  key custody currently varies by platform — see Project status
 
 ## Architecture Overview
 
@@ -51,9 +53,9 @@ AVON is a **post-quantum zero trust network access (ZTNA)** platform that provid
 │   ┌─────────────────┼─────────────────┐                        │
 │   │                 │                 │                        │
 │   ▼                 ▼                 ▼                        │
-│ ┌──────┐      ┌─────────┐      ┌──────┐                       │
-│ │ Auth │      │  Pulse  │      │  CA  │    Control Plane      │
-│ └──────┘      └─────────┘      └──────┘                       │
+│ ┌─────────┐   ┌──────────┐    ┌──────┐                        │
+│ │ Control │   │  Attest  │    │  CA  │    Control Plane       │
+│ └─────────┘   └──────────┘    └──────┘                        │
 │                     │                                           │
 │   ┌─────────────────┼─────────────────┐                        │
 │   │                 │                 │                        │
@@ -65,6 +67,53 @@ AVON is a **post-quantum zero trust network access (ZTNA)** platform that provid
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+## Project status
+
+AVON is under active development and is **not yet production-ready**. This
+section records what is currently proven, what is known to be incomplete, and how
+to check for yourself — so the claims above can be read with the right
+expectations.
+
+A layered end-to-end harness (`tests/e2e/`) brings the system up one layer at a
+time and reports a verdict per layer. It is deliberately built to refuse to
+report success it has not earned: a scenario that asserts nothing fails, a
+skipped scenario fails, and a known gap is reported as `MISSING` rather than
+quietly passing.
+
+```bash
+cd tests/e2e && uv run python runner.py       # walk every layer
+cd tests/e2e && uv run python runner.py --layer l2   # one layer plus prerequisites
+```
+
+**Proven by that harness today:**
+
+| Layer | What it covers | Verdict |
+|---|---|---|
+| Build | Workspace compiles, images build | pass |
+| Crypto | Hybrid PQ primitives, AEAD suites, replay window, test vectors | pass |
+| Control plane | Enrollment, single-use and expiring tokens, uniform rejection | pass |
+| Data plane | Tunnel carries HTTP, SSH, Postgres, UDP; rekey; relay | under repair |
+| Policy, device trust, network | — | blocked on the data plane |
+
+**Known gaps, stated plainly:**
+
+- **An agent cannot reach a gateway advertised by DNS name.** The responder
+  endpoint is parsed as a literal socket address and never resolved, so a gateway
+  published as `host:port` is rejected (`avon-agent-core/src/session_manager.rs`).
+  Use a literal address for the gateway's public endpoint until this is fixed.
+- **Peer-to-peer direct paths are not wired.** `PeerManager` exists and the
+  forwarding path prefers a direct session, but nothing in the run loop dials a
+  peer, so all agent-to-agent traffic relays through the gateway. The harness
+  records this as `MISSING` rather than pretending otherwise.
+- **Hardware key custody is real only on Linux.** The TPM 2.0 provider seals key
+  material against a real TPM and produces genuine `TPM2_Quote` attestations. The
+  macOS Keychain and Windows CNG providers are currently **simulations** that do
+  not call `SecKeyCreateRandomKey` or `NCryptCreatePersistedKey`; each says so in
+  its own module header. Use `--key-provider tpm2` on Linux for hardware-backed
+  identity, and treat macOS and Windows as software custody until those land.
+- **Kubernetes deployment is not yet exercised** by the harness. The Helm chart
+  installs, but no automated test proves a working deployment from it.
 
 ## Quick Start
 
@@ -130,10 +179,16 @@ curl -LO https://github.com/Beautiful-Majestic-Dolphin/avon/releases/latest/down
 tar -xzf avon-agent-linux-amd64.tar.gz
 sudo mv avon-agent /usr/local/bin/
 
-# Enroll agent
+# Enroll agent. --control is the control plane, not the gateway; the agent
+# learns its gateway from the control plane after enrolling.
 sudo avon-agent enroll \
-  --gateway gateway.avon.example.com:4600 \
-  --token "YOUR_ENROLLMENT_TOKEN"
+  --control https://control.avon.example.com:50051 \
+  --token "YOUR_ENROLLMENT_TOKEN" \
+  --ca-file /etc/avon/trust-ca.crt \
+  --key-provider auto
+
+# `--key-provider auto` prefers hardware key custody where it is available and
+# falls back to the software provider with a warning naming the reason.
 
 # Start agent
 sudo systemctl start avon-agent
@@ -143,24 +198,37 @@ sudo systemctl start avon-agent
 
 ```
 avons-corners/
-├── crates/                    # Rust workspace
+├── crates/                    # Rust workspace (19 crates)
 │   ├── avon-crypto/           # Post-quantum cryptography (ML-KEM-768, ML-DSA-65)
-│   ├── avon-protocol/         # Wire protocol implementation
+│   ├── avon-protocol/         # Wire protocol definitions (protobuf v2)
+│   ├── avon-tunnel/           # ATP/2 data-plane transport
 │   ├── avon-common/           # Shared types and utilities
+│   ├── avon-config/           # Configuration loading
+│   ├── avon-db/               # Schema and database access
+│   ├── avon-tls/              # TLS/mTLS setup for every service
+│   ├── avon-control/          # Control plane: enroll, authenticate, pulse, sessions
+│   ├── avon-ca/               # Certificate authority and key custody
+│   ├── avon-policy/           # Policy engine (Cedar)
+│   ├── avon-attest/           # Attestation evidence and TPM quote verification
+│   ├── avon-keystore/         # Key providers: software, TPM 2.0, Keychain, CNG
 │   ├── avon-gateway/          # UDP gateway service
-│   ├── avon-auth/             # Authentication service (gRPC)
-│   ├── avon-ca/               # Certificate authority
-│   ├── avon-pulse/            # Heartbeat/session service
-│   └── avon-agent/            # Endpoint agent binary
+│   ├── avon-tun/              # Platform TUN devices (Linux, macOS, WinTun)
+│   ├── avon-agent-core/       # Agent run loop, shared with future mobile agents
+│   ├── avon-agent/            # Endpoint agent binary and privileged helper
+│   ├── avon-bootstrap/        # One-shot cluster bootstrap
+│   ├── avon-observability/    # Health, readiness, metrics, tracing
+│   └── avon-testkit/          # Test fixtures and fault injection
 ├── services/                  # Python services
 │   └── admin-api/             # Admin REST API (FastAPI)
 ├── proto/                     # Protocol Buffer definitions
 ├── deploy/
 │   ├── docker/                # Dockerfiles for all services
 │   └── helm/                  # Helm charts with env-specific values
+├── migrations/                # SQL schema
 ├── tests/
-│   ├── integration/           # Integration tests
-│   └── e2e/                   # End-to-end tests (Docker Compose)
+│   ├── compose/               # Compose smoke tests
+│   ├── golden/                # Golden files for generated firewall rules
+│   └── e2e/                   # Layered end-to-end harness (Docker Compose)
 ├── docs/                      # Comprehensive documentation
 └── .github/workflows/         # CI/CD pipelines
 ```
@@ -281,7 +349,11 @@ We welcome contributions! Please see our [Development Guide](docs/development.md
 
 ## Roadmap
 
-- [ ] Windows agent with TPM 2.0 support
+- [x] Windows agent (WinTun data plane, service, MSI installer)
+- [x] macOS agent (utun, signed pkg, launchd)
+- [x] TPM 2.0 key custody and attestation (Linux)
+- [ ] Hardware-backed key custody on macOS and Windows — see Project status
+- [ ] Peer-to-peer direct paths (the mechanism exists; it is not wired into the run loop)
 - [ ] Mobile agents (iOS, Android)
 - [ ] Service mesh integration (Istio, Linkerd)
 - [ ] Hardware security key support (YubiKey, SoloKey)
