@@ -19,6 +19,12 @@ suite at this commit:
     otherwise "fail" the moment you invoke the runner at all. An empty layer
     is NOT_RUN, not PASS and not FAIL: it must not masquerade as passing, and
     it must not block the layers above it either.
+
+Every subprocess this file launches is bounded by a timeout (docker compose's
+own --wait-timeout for bring-up; explicit `timeout=` for cargo, pytest
+collection, and the pytest run itself). A hung registry fetch or a scenario
+module that blocks on import must become a diagnosed FAIL, never an
+unbounded hang and never a silently-swallowed PASS.
 """
 
 import argparse
@@ -40,6 +46,15 @@ RESULTS = HERE / "results"
 # pytest's ExitCode.NO_TESTS_COLLECTED. Not imported from pytest directly so
 # this stays meaningful even when read out of context.
 NO_TESTS_COLLECTED = 5
+
+# Process-level bounds. None of these are "how long the work should take" --
+# they exist so a hung registry fetch or a scenario module that blocks on
+# import turns into a diagnosed FAIL instead of a harness that never returns.
+CARGO_TIMEOUT = 1800  # a cold `cargo build --workspace` legitimately takes minutes
+COLLECT_TIMEOUT = 120  # collection only; nothing here should take long
+PYTEST_TIMEOUT = 900  # generous multiple of pytest.ini's own per-test timeout
+                       # (120s); bounds a layer's *total* run without assuming
+                       # how many scenarios that layer will eventually have
 
 COMPOSE = [
     "docker", "compose",
@@ -102,7 +117,17 @@ def _cargo_layer(layer):
     }
     started = time.time()
     for cmd in commands[layer.name]:
-        proc = subprocess.run(cmd, cwd=REPO, env={**_env(), "CARGO_INCREMENTAL": "0"})
+        try:
+            proc = subprocess.run(
+                cmd, cwd=REPO, env={**_env(), "CARGO_INCREMENTAL": "0"},
+                timeout=CARGO_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            return LayerResult(
+                verdict=Verdict.FAIL,
+                duration=time.time() - started,
+                detail=f"{' '.join(cmd)} timed out after {CARGO_TIMEOUT}s",
+            )
         if proc.returncode != 0:
             return LayerResult(
                 verdict=Verdict.FAIL,
@@ -131,6 +156,13 @@ def _bring_up(layer, timeout):
 
 
 def _run_pytest(layer, sidecar):
+    """Returns (code, output). code is None on a timeout, never raises.
+
+    `code is None` is a sentinel distinct from every real pytest exit code
+    (0-5): the caller in run_layers() checks for it before treating the
+    return as a real result. pytest's own per-test timeout (pytest.ini)
+    bounds a single test; it does not bound the process as a whole.
+    """
     cmd = [
         "uv", "run", "pytest",
         "-m", layer.marker,
@@ -138,12 +170,22 @@ def _run_pytest(layer, sidecar):
         "--junitxml", str(RESULTS / f"junit-{layer.name}.xml"),
         "-q",
     ]
-    proc = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True,
+                              timeout=PYTEST_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return None, f"pytest timed out after {PYTEST_TIMEOUT}s"
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
 def _collect_missing(layer, sidecar):
     """MISSING is known at collection, so a BLOCKED layer still reports it.
+
+    Returns (missing_list, timeout_detail). timeout_detail is None unless the
+    collect subprocess itself hung -- e.g. a scenario module blocking on
+    import -- in which case missing_list is [] and timeout_detail explains
+    why, for run_layers() to fold into that layer's verdict once it's
+    actually reached.
 
     Exit code 5 ("no tests collected") is expected, not an error: at this
     commit no layer has any marked scenarios yet, so every collect for every
@@ -153,10 +195,14 @@ def _collect_missing(layer, sidecar):
     """
     cmd = ["uv", "run", "pytest", "-m", layer.marker,
            f"--sidecar={sidecar}", "--collect-only", "-q"]
-    subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
+    try:
+        subprocess.run(cmd, cwd=HERE, capture_output=True, text=True,
+                       timeout=COLLECT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return [], f"collection timed out after {COLLECT_TIMEOUT}s"
     if not Path(sidecar).exists():
-        return []
-    return json.loads(Path(sidecar).read_text()).get("missing", [])
+        return [], None
+    return json.loads(Path(sidecar).read_text()).get("missing", []), None
 
 
 def _parse_junit(path):
@@ -191,10 +237,14 @@ def run_layers(selected=None, start_from=None, up_timeout=180):
         order = [n for n in order if n in selected]
 
     missing_by_layer = {}
+    collect_timeouts = {}
     for layer in LAYERS:
         if layer.kind == "compose":
             sidecar = RESULTS / f"collect-{layer.name}.json"
-            missing_by_layer[layer.name] = len(_collect_missing(layer, sidecar))
+            missing, timeout_detail = _collect_missing(layer, sidecar)
+            missing_by_layer[layer.name] = len(missing)
+            if timeout_detail:
+                collect_timeouts[layer.name] = timeout_detail
 
     results = {}
     started_at = None
@@ -216,6 +266,18 @@ def run_layers(selected=None, start_from=None, up_timeout=180):
                 break
             continue
 
+        if layer.name in collect_timeouts:
+            # Collection itself hung -- e.g. a scenario module blocking on
+            # import. That is a real problem with this layer, not merely an
+            # unknown one, so treat it as a FAIL rather than bringing compose
+            # up for a run we already know can't be trusted.
+            results[layer.name] = LayerResult(
+                verdict=Verdict.FAIL,
+                missing=missing_by_layer.get(layer.name, 0),
+                detail=collect_timeouts[layer.name],
+            )
+            break
+
         started = time.time()
         code, output = _bring_up(layer, up_timeout)
         if code != 0:
@@ -228,9 +290,17 @@ def run_layers(selected=None, start_from=None, up_timeout=180):
             break
 
         sidecar = RESULTS / f"sidecar-{layer.name}.json"
+        junit_path = RESULTS / f"junit-{layer.name}.xml"
+        # Stale-evidence guard: unlink before running so a pytest subprocess
+        # that dies non-gracefully (SIGKILL, OOM, our own timeout below)
+        # never leaves a *previous* run's sidecar/JUnit behind to be misread
+        # as this run's passed/total/witnesses.
+        sidecar.unlink(missing_ok=True)
+        junit_path.unlink(missing_ok=True)
+
         code, output = _run_pytest(layer, sidecar)
         payload = json.loads(sidecar.read_text()) if sidecar.exists() else {}
-        passed, total = _parse_junit(RESULTS / f"junit-{layer.name}.xml")
+        passed, total = _parse_junit(junit_path)
 
         if code == NO_TESTS_COLLECTED:
             # No scenarios are marked for this layer yet. Not a failure --
@@ -247,6 +317,11 @@ def run_layers(selected=None, start_from=None, up_timeout=180):
             )
             continue
 
+        # code is None here means _run_pytest itself timed out. That is not
+        # 0 and not NO_TESTS_COLLECTED, so it falls straight into the FAIL
+        # branch below with `output` already holding "pytest timed out after
+        # <n>s" -- no special case needed, and passed/total/missing are
+        # honestly (0, 0, 0) since the killed subprocess never wrote evidence.
         results[layer.name] = LayerResult(
             verdict=Verdict.PASS if code == 0 else Verdict.FAIL,
             passed=passed,
@@ -286,10 +361,11 @@ def main(argv=None):
     # There is no `avon-e2e` command on PATH (tests/e2e is a harness, not an
     # installed package -- see R9). The canonical invocation is
     # `uv run python runner.py`, so --help should show something a reader can
-    # actually type rather than a program name that doesn't exist.
-    parser = argparse.ArgumentParser(prog="python runner.py")
-    parser.add_argument("--layer", help="run one layer plus its prerequisites")
-    parser.add_argument("--from", dest="start_from",
+    # paste verbatim rather than a program name that doesn't exist.
+    parser = argparse.ArgumentParser(prog="uv run python runner.py")
+    parser.add_argument("--layer", choices=LAYER_NAMES,
+                        help="run one layer plus its prerequisites")
+    parser.add_argument("--from", dest="start_from", choices=LAYER_NAMES,
                         help="start here against an already-running stack; "
                              "lower layers are reported NOT_RUN, not PASS")
     args = parser.parse_args(argv)
