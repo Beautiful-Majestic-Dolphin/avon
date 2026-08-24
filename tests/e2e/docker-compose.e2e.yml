@@ -3,6 +3,19 @@
 #   docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml up -d --build
 
 services:
+  # The agents live on `public`; the base compose leaves control and the CA on
+  # `default` alone, so without this every agent fails enrollment with
+  # "control: transport error" — it cannot resolve or reach them at all.
+  control:
+    networks:
+      - default
+      - public
+
+  ca:
+    networks:
+      - default
+      - public
+
   gateway:
     build:
       context: .
@@ -102,13 +115,19 @@ services:
   swtpm:
     image: debian:12-slim
     container_name: avon-e2e-swtpm
-    command: >
-      bash -c "apt-get update -qq && apt-get install -y -qq swtpm swtpm-tools >/dev/null &&
-               mkdir -p /tmpstate &&
-               swtpm socket --tpm2 --tpmstate dir=/tmpstate
-                 --ctrl type=tcp,port=2322,bindaddr=0.0.0.0
-                 --server type=tcp,port=2321,bindaddr=0.0.0.0
-                 --flags not-need-init,startup-clear"
+    # One command per line, no folding: the previous `>` scalar kept the
+    # newlines of its more-indented lines, so swtpm started as
+    # `swtpm socket --tpm2 --tpmstate dir=/tmpstate` with nothing listening and
+    # the option lines ran as separate commands that failed quietly.
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        apt-get update -qq
+        apt-get install -y -qq swtpm swtpm-tools >/dev/null
+        mkdir -p /tmpstate
+        exec swtpm socket --tpm2 --tpmstate dir=/tmpstate --ctrl type=tcp,port=2322,bindaddr=0.0.0.0 --server type=tcp,port=2321,bindaddr=0.0.0.0 --flags not-need-init,startup-clear
     networks:
       - public
     healthcheck:
