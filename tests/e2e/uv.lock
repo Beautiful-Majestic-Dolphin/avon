@@ -18,7 +18,7 @@ wheels = [
 [[package]]
 name = "avon-e2e"
 version = "0.2.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "pytest" },
