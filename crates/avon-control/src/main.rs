@@ -14,6 +14,13 @@ use tonic::transport::Server;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Distroless images have no shell and no wget/curl, so Docker's
+    // HEALTHCHECK invokes this binary itself: `avon health-check`. Handle
+    // that before clap ever sees argv.
+    if std::env::args().nth(1).as_deref() == Some("health-check") {
+        let ok = avon_observability::health_probe_from_env() == std::process::ExitCode::SUCCESS;
+        std::process::exit(i32::from(!ok));
+    }
     // Before anything builds a rustls config: redis (rediss://) and sqlx each
     // construct their own, and rustls will not guess a provider.
     avon_tls::install_default_provider();
