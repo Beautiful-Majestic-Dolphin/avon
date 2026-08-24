@@ -27,18 +27,76 @@ services:
       - protected
     # gateway already has NET_ADMIN and /dev/net/tun from base compose
 
-  target:
+  # Four services because each breaks differently. A single nginx on port 80
+  # cannot tell you whether the tunnel carries UDP, survives a rekey mid-session,
+  # or corrupts a wire protocol that does not silently retry.
+  target-http:
     image: nginx:alpine
-    container_name: avon-e2e-target
+    container_name: avon-e2e-target-http
     profiles: ["l3", "l4", "l5", "lnet"]
+    command: >
+      sh -c "dd if=/dev/urandom of=/usr/share/nginx/html/big.bin bs=1M count=8 2>/dev/null;
+             exec nginx -g 'daemon off;'"
     networks:
       protected:
         ipv4_address: 172.30.0.10
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      # 127.0.0.1, not localhost: this container's /etc/hosts resolves
+      # `localhost` to ::1 first, and nginx here only binds the IPv4 wildcard,
+      # so wget's default AAAA-first lookup hit "Connection refused" every
+      # time even with the server fully up. The `control` service's
+      # healthcheck above (line 263 of docker-compose.yml) already avoids
+      # this the same way.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 3s
+      retries: 20
+
+  target-ssh:
+    image: linuxserver/openssh-server:latest
+    container_name: avon-e2e-target-ssh
+    profiles: ["l3", "l4", "l5", "lnet"]
+    environment:
+      PASSWORD_ACCESS: "true"
+      USER_NAME: avon
+      USER_PASSWORD: avon-e2e
+      SUDO_ACCESS: "false"
+    networks:
+      protected:
+        ipv4_address: 172.30.0.11
+    healthcheck:
+      test: ["CMD", "sh", "-c", "netstat -ltn | grep -q ':2222'"]
+      interval: 3s
+      retries: 20
+
+  target-pg:
+    image: postgres:16
+    container_name: avon-e2e-target-pg
+    profiles: ["l3", "l4", "l5", "lnet"]
+    environment:
+      POSTGRES_PASSWORD: avon-e2e
+      POSTGRES_DB: probe
+    networks:
+      protected:
+        ipv4_address: 172.30.0.12
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 3s
+      retries: 20
+
+  target-udp:
+    image: alpine:3.20
+    container_name: avon-e2e-target-udp
+    profiles: ["l3", "l4", "l5", "lnet"]
+    command: >
+      sh -c "apk add --no-cache socat >/dev/null &&
+             exec socat -v UDP-RECVFROM:9999,fork EXEC:'/bin/cat'"
+    networks:
+      protected:
+        ipv4_address: 172.30.0.13
+    healthcheck:
+      test: ["CMD", "sh", "-c", "netstat -lun | grep -q ':9999'"]
+      interval: 3s
+      retries: 30
 
   agent-a:
     profiles: ["l3", "l4", "l5", "lnet"]
@@ -63,7 +121,7 @@ services:
         condition: service_started
       gateway:
         condition: service_started
-      target:
+      target-http:
         condition: service_healthy
 
   agent-b:
