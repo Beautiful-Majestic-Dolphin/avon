@@ -1,5 +1,6 @@
 """The runner's decision logic, tested without Docker."""
 
+import json
 import subprocess
 
 import pytest
@@ -137,3 +138,35 @@ def test_walk_continues_past_a_cargo_timeout_instead_of_raising(monkeypatch, tmp
     assert "timed out after 0.1s" in results["l0"].detail
     assert results["l1"].verdict is Verdict.BLOCKED
     assert "upstream l0" in results["l1"].detail
+
+
+# -- stale-evidence guard, class fix (fix round 3) ---------------------------
+#
+# _collect_missing writes and reads its own sidecar (collect-<layer>.json)
+# through the same --sidecar= flag as the real run. A subprocess that dies
+# non-gracefully without raising TimeoutExpired -- SIGKILL, OOM -- skips
+# pytest_sessionfinish and would leave a *previous* run's file on disk for
+# _collect_missing to read back as if it were fresh. That count feeds the
+# ratchet Task 5 builds, which fails CI when MISSING grows, so a stale read
+# here specifically could make a newly-added gap look like no change at all.
+
+
+def test_collect_missing_does_not_read_back_a_stale_sidecar(monkeypatch, tmp_path):
+    sidecar = tmp_path / "collect-l2.json"
+    sidecar.write_text(json.dumps(
+        {"missing": [{"nodeid": "stale::test", "reason": "leftover from a previous run"}]}
+    ))
+
+    def fake_run(cmd, **kwargs):
+        # Simulate a subprocess that dies without ever rewriting the
+        # sidecar (e.g. SIGKILL/OOM) -- nothing recreates the file.
+        return subprocess.CompletedProcess(cmd, 1)
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    layer = Layer("l2", "l2", "compose", profile="l2", description="control plane")
+
+    missing, timeout_detail = runner._collect_missing(layer, sidecar)
+
+    assert missing == []
+    assert timeout_detail is None
+    assert not sidecar.exists()
