@@ -3,6 +3,7 @@
 use std::net::IpAddr;
 use std::sync::Arc;
 
+use anyhow::Context;
 use avon_common::ids::{DeviceId, GatewayId, SessionId, TenantId};
 use avon_crypto::cert::crl::Crl;
 use avon_crypto::cert::{Certificate, ChainVerifier};
@@ -107,10 +108,15 @@ impl GatewayState {
         cfg: &crate::config::GatewayConfig,
         _policy: Arc<dyn FlowPolicy>,
     ) -> anyhow::Result<(Arc<Self>, mpsc::Receiver<avon_tunnel::EndpointEvent>)> {
-        let cert = Certificate::decode(&std::fs::read(cfg.identity_dir.join("gateway.avon.crt"))?)?;
-        let signing = HybridSigningKeyPair::from_secret_bytes(&std::fs::read(
-            cfg.identity_dir.join("gateway.avon.key"),
-        )?)?;
+        let cert_path = cfg.identity_dir.join("gateway.avon.crt");
+        let cert = Certificate::decode(&std::fs::read(&cert_path).with_context(|| {
+            format!("reading AVON identity certificate {}", cert_path.display())
+        })?)?;
+        let key_path = cfg.identity_dir.join("gateway.avon.key");
+        let signing = HybridSigningKeyPair::from_secret_bytes(
+            &std::fs::read(&key_path)
+                .with_context(|| format!("reading AVON identity key {}", key_path.display()))?,
+        )?;
         let id = GatewayId::from(uuid::Uuid::from_bytes(cert.tbs.subject_id));
 
         let table = Arc::new(SessionTable::new());
