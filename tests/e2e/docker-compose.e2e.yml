@@ -30,6 +30,7 @@ services:
   target:
     image: nginx:alpine
     container_name: avon-e2e-target
+    profiles: ["l3", "l4", "l5", "lnet"]
     networks:
       protected:
         ipv4_address: 172.30.0.10
@@ -40,6 +41,7 @@ services:
       retries: 10
 
   agent-a:
+    profiles: ["l3", "l4", "l5", "lnet"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.agent-e2e
@@ -65,6 +67,7 @@ services:
         condition: service_healthy
 
   agent-b:
+    profiles: ["l3", "l4", "l5", "lnet"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.agent-e2e
@@ -88,6 +91,7 @@ services:
         condition: service_started
 
   agent-c:
+    profiles: ["l3", "l4", "l5", "lnet"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.agent-e2e
@@ -115,6 +119,7 @@ services:
   swtpm:
     image: debian:12-slim
     container_name: avon-e2e-swtpm
+    profiles: ["l5"]
     # One command per line, no folding: the previous `>` scalar kept the
     # newlines of its more-indented lines, so swtpm started as
     # `swtpm socket --tpm2 --tpmstate dir=/tmpstate` with nothing listening and
@@ -136,6 +141,7 @@ services:
       retries: 20
 
   agent-tpm:
+    profiles: ["l5"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.agent-e2e
@@ -167,6 +173,7 @@ services:
   # checks that the copy is useless. Deliberately no AVON_TPM_TCTI — this
   # container has no TPM.
   agent-clone:
+    profiles: ["l5"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.agent-e2e
