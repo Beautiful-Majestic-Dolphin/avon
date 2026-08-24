@@ -17,8 +17,10 @@ pub enum ConfigLoadError {
     #[error("cannot parse config file {path}: {source}")]
     Parse {
         path: PathBuf,
+        // Boxed: `toml::de::Error` is large enough on Windows that carrying it
+        // inline makes every `Result` in this module oversized.
         #[source]
-        source: toml::de::Error,
+        source: Box<toml::de::Error>,
     },
     #[error("invalid value for {field}: {reason}")]
     Invalid { field: &'static str, reason: String },
@@ -105,7 +107,7 @@ impl AgentConfig {
         })?;
         toml::from_str(&text).map_err(|source| ConfigLoadError::Parse {
             path: path.to_path_buf(),
-            source,
+            source: Box::new(source),
         })
     }
 
