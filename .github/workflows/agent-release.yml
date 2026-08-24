@@ -31,36 +31,52 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `features` names the hardware key providers compiled in. A binary
+          # built without them answers `--key-provider tpm2` with "not built
+          # into this binary", so this is what decides whether a release can use
+          # hardware-backed identity at all.
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             cross: false
             strip: true
+            features: tpm2
+          # No tpm2 here: the provider links tpm2-tss through pkg-config, and
+          # the cross image has no arm64 tpm2-tss. Giving arm64 Linux a TPM
+          # means a cross image that carries libtss2-dev:arm64.
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             cross: true
             strip: false
+            features: ""
           - target: x86_64-apple-darwin
             runner: macos-13
             cross: false
             strip: true
+            features: keychain
           - target: aarch64-apple-darwin
             runner: macos-14
             cross: false
             strip: true
+            features: keychain
           # Static musl builds: one binary that runs on any glibc vintage,
-          # which is what an appliance or a container image wants.
+          # which is what an appliance or a container image wants. tpm2-tss is
+          # not statically linkable here, and a static binary that dlopens a
+          # TCTI defeats the point, so these are software-provider only.
           - target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
             cross: true
             strip: false
+            features: ""
           - target: aarch64-unknown-linux-musl
             runner: ubuntu-latest
             cross: true
             strip: false
+            features: ""
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             cross: false
             strip: false
+            features: cng
 
     steps:
       - name: Checkout code
@@ -86,20 +102,24 @@ jobs:
         if: matrix.cross
         run: cargo install cross --locked --version 0.2.5
 
+      - name: Install tpm2-tss headers
+        if: contains(matrix.features, 'tpm2')
+        run: sudo apt-get update -y && sudo apt-get install -y libtss2-dev pkg-config
+
       # The helper is a Unix binary: on Windows the agent service owns the
       # adapter itself, because a WinTun session cannot be handed to another
       # process.
       - name: Build (Unix)
         if: ${{ !matrix.cross && runner.os != 'Windows' }}
-        run: cargo build --release --locked -p avon-agent --target ${{ matrix.target }} --bin avon-agent --bin avon-agent-helper
+        run: cargo build --release --locked -p avon-agent --target ${{ matrix.target }} --bin avon-agent --bin avon-agent-helper --features "${{ matrix.features }}"
 
       - name: Build (cross)
         if: matrix.cross
-        run: cross build --release --locked -p avon-agent --target ${{ matrix.target }} --bin avon-agent --bin avon-agent-helper
+        run: cross build --release --locked -p avon-agent --target ${{ matrix.target }} --bin avon-agent --bin avon-agent-helper --features "${{ matrix.features }}"
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        run: cargo build --release --locked -p avon-agent --target ${{ matrix.target }} --bin avon-agent
+        run: cargo build --release --locked -p avon-agent --target ${{ matrix.target }} --bin avon-agent --features "${{ matrix.features }}"
 
       - name: Strip binaries
         if: matrix.strip
@@ -156,6 +176,7 @@ jobs:
 
       - name: Install packaging tools
         run: |
+          sudo apt-get update -y && sudo apt-get install -y rpm
           cargo install cargo-deb --version 2.7.0 --locked
           cargo install cargo-generate-rpm --version 0.16.0 --locked
 
@@ -165,7 +186,11 @@ jobs:
           mkdir -p dist
           cargo deb -p avon-agent --no-build --no-strip --deb-version "$VERSION" \
             --target-arch ${{ matrix.arch }} --output "dist/"
-          cargo generate-rpm -p crates/avon-agent --auto-req no -o "dist/"
+          # amd64 links tpm2-tss; the rpm has to say so or it installs onto a
+          # host where the binary cannot start. cargo-deb gets this from
+          # `depends = "$auto"`. arm64 has no such linkage.
+          AUTO_REQ=${{ matrix.arch == 'amd64' && 'auto' || 'no' }}
+          cargo generate-rpm -p crates/avon-agent --auto-req "$AUTO_REQ" -o "dist/"
 
       - name: Build tarball
         run: |
