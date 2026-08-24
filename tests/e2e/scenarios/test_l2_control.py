@@ -43,7 +43,7 @@ def test_a_tokens_uses_are_finite(compose, witness):
 
     first_code, first_out = _enrol(compose, token, "/tmp/d2")
     assert first_code == 0, first_out
-    witness("first enrolment", "succeeded")
+    witness("first enrolment exit", first_code)
 
     second_code, second_out = _enrol(compose, token, "/tmp/d3")
     witness("second enrolment exit", second_code)
@@ -66,6 +66,11 @@ def test_a_garbage_token_is_rejected_without_saying_why(compose, witness):
     code, out = _enrol(compose, "not-a-real-token", "/tmp/d5")
     witness("rejected exit", code)
     assert code != 0
+    assert "enrollment rejected" in out or "PermissionDenied" in out, (
+        "expected the control plane's generic rejection, got something else "
+        "entirely (a harness failure would satisfy the negative checks below "
+        "without ever exercising the uniform-rejection contract): " + out
+    )
     lowered = out.lower()
     assert "expired" not in lowered and "exhausted" not in lowered, (
         "the rejection must not say which check failed: " + out
