@@ -314,7 +314,6 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
- "tss-esapi",
  "url",
  "uuid",
  "windows-service",
@@ -586,6 +585,7 @@ dependencies = [
 name = "avon-keystore"
 version = "0.2.0"
 dependencies = [
+ "avon-attest",
  "avon-crypto",
  "core-foundation 0.10.1",
  "p256",

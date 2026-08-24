@@ -24,7 +24,7 @@ pub mod software;
 pub mod cng;
 #[cfg(all(feature = "keychain", target_os = "macos"))]
 pub mod keychain;
-#[cfg(all(feature = "tpm2", any(target_os = "linux", target_os = "windows")))]
+#[cfg(all(feature = "tpm2", target_os = "linux"))]
 pub mod tpm2;
 
 pub use binding::{binding_message, verify_binding, BindingError};

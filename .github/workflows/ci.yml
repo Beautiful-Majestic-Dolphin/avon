@@ -55,7 +55,9 @@ jobs:
         if: matrix.os == 'linux'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y swtpm tpm2-tools
+          # libtss2-dev is what the TPM provider links against; tpm2-tools
+          # supplies tpm2_startup and the tpm2_pcrextend the sealing test uses.
+          sudo apt-get install -y swtpm tpm2-tools libtss2-dev
           mkdir -p /tmp/swtpm0 /tmp/swtpm1
           swtpm socket --tpmstate dir=/tmp/swtpm0 --ctrl type=tcp,port=2321 --server type=tcp,port=2322 --flags not-need-init --tpm2 &
           swtpm socket --tpmstate dir=/tmp/swtpm1 --ctrl type=tcp,port=2323 --server type=tcp,port=2324 --flags not-need-init --tpm2 &
@@ -66,6 +68,11 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # The TPM provider is Linux-only and off by default, so the sweep above
+      # never compiles it.
+      - name: "Clippy (Linux: TPM provider)"
+        if: matrix.os == 'linux'
+        run: cargo clippy -p avon-keystore -p avon-agent --features avon-keystore/tpm2 --all-targets --locked -- -D warnings
       - name: "Unit and integration tests (Linux: with Postgres/Redis)"
         if: matrix.os == 'linux'
         run: AVON_TEST_TPM=swtpm AVON_TPM_TCTI=swtpm:host=127.0.0.1,port=2321 AVON_TEST_TPM_ALT_TCTI=swtpm:host=127.0.0.1,port=2323 cargo test --workspace --locked --features avon-crypto/test-vectors,avon-keystore/tpm2

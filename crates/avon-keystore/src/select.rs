@@ -39,25 +39,39 @@ impl ProviderChoice {
     }
 }
 
+/// Try each hardware provider this build has, in platform order.
+///
+/// `available()` only says the hardware answered, not that a key can be made in
+/// it — a TPM whose owner hierarchy has an auth value set is present and
+/// unusable. Under `Auto` that is a reason to fall back with a warning naming
+/// the reason, not to refuse to enrol; an explicit `--key-provider` still fails
+/// hard, which is handled by the caller.
 fn try_hardware(_dir: &Path) -> Result<Option<Box<dyn KeyProvider>>, KeyError> {
-    #[cfg(all(feature = "tpm2", any(target_os = "linux", target_os = "windows")))]
+    #[cfg(all(feature = "tpm2", target_os = "linux"))]
     {
         if crate::tpm2::Tpm2KeyProvider::available() {
-            return Ok(Some(Box::new(crate::tpm2::Tpm2KeyProvider::create(_dir)?)));
+            match crate::tpm2::Tpm2KeyProvider::create(_dir) {
+                Ok(p) => return Ok(Some(Box::new(p))),
+                Err(e) => tracing::warn!(error = %e, "a TPM is present but unusable"),
+            }
         }
     }
     #[cfg(all(feature = "keychain", target_os = "macos"))]
     {
         if crate::keychain::KeychainKeyProvider::available() {
-            return Ok(Some(Box::new(
-                crate::keychain::KeychainKeyProvider::create(_dir)?,
-            )));
+            match crate::keychain::KeychainKeyProvider::create(_dir) {
+                Ok(p) => return Ok(Some(Box::new(p))),
+                Err(e) => tracing::warn!(error = %e, "the Keychain is present but unusable"),
+            }
         }
     }
     #[cfg(all(feature = "cng", target_os = "windows"))]
     {
         if crate::cng::CngKeyProvider::available() {
-            return Ok(Some(Box::new(crate::cng::CngKeyProvider::create(_dir)?)));
+            match crate::cng::CngKeyProvider::create(_dir) {
+                Ok(p) => return Ok(Some(Box::new(p))),
+                Err(e) => tracing::warn!(error = %e, "CNG is present but unusable"),
+            }
         }
     }
     let _ = _dir;
@@ -120,7 +134,7 @@ pub fn open_or_create(
             }
         },
         ProviderChoice::Tpm2 => {
-            #[cfg(all(feature = "tpm2", any(target_os = "linux", target_os = "windows")))]
+            #[cfg(all(feature = "tpm2", target_os = "linux"))]
             {
                 return Ok(Box::new(crate::tpm2::Tpm2KeyProvider::create(dir)?));
             }
@@ -180,7 +194,7 @@ pub fn open_existing(dir: &Path) -> Result<Box<dyn KeyProvider>, KeyError> {
     };
     Ok(match kind {
         ProviderKind::Software => Box::new(SoftwareKeyProvider::open(dir)?),
-        #[cfg(all(feature = "tpm2", any(target_os = "linux", target_os = "windows")))]
+        #[cfg(all(feature = "tpm2", target_os = "linux"))]
         ProviderKind::Tpm2 => Box::new(crate::tpm2::Tpm2KeyProvider::open(dir)?),
         #[cfg(all(feature = "keychain", target_os = "macos"))]
         ProviderKind::Keychain => Box::new(crate::keychain::KeychainKeyProvider::open(dir)?),
