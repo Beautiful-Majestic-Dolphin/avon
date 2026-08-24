@@ -22,8 +22,10 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::binding::{binding_message, HardwareBinding};
-use crate::provider::{write_private, write_provider_record, KeyError, KeyProvider, ProviderKind};
+use crate::binding::binding_message;
+use crate::provider::{
+    write_private, write_provider_record, HardwareBinding, KeyError, KeyProvider, ProviderKind,
+};
 
 const PUBLIC_FILE: &str = "keychain-public.json";
 const SEALED_FILE: &str = "keychain-sealed.bin";
@@ -49,21 +51,24 @@ fn keychain_key() -> Vec<u8> {
     Sha256::digest(path.as_bytes()).to_vec()
 }
 
-fn seal(material: &[u8]) -> SealedEnvelope {
+fn seal(material: &[u8]) -> Result<SealedEnvelope, KeyError> {
     let key = keychain_key();
     let mut nonce = [0u8; 12];
     rand::thread_rng().fill_bytes(&mut nonce);
     let mut ct = material.to_vec();
     let aead = avon_crypto::aead::AeadKey::new(
         avon_crypto::aead::Suite::Aes256Gcm,
-        key.as_slice().try_into().unwrap(),
+        key.as_slice()
+            .try_into()
+            .map_err(|_| KeyError::Corrupt("keychain key"))?,
     );
-    let _ = aead.seal_in_place(&nonce, b"avon-keychain-seal", &mut ct);
-    SealedEnvelope {
+    aead.seal_in_place(&nonce, b"avon-keychain-seal", &mut ct)
+        .map_err(|_| KeyError::Corrupt("seal"))?;
+    Ok(SealedEnvelope {
         nonce: nonce.to_vec(),
         ct,
         binding_priv: vec![],
-    }
+    })
 }
 
 fn unseal(envelope: &SealedEnvelope) -> Result<Vec<u8>, KeyError> {
@@ -74,8 +79,13 @@ fn unseal(envelope: &SealedEnvelope) -> Result<Vec<u8>, KeyError> {
             .try_into()
             .map_err(|_| KeyError::Corrupt("keychain key"))?,
     );
+    let nonce: [u8; 12] = envelope
+        .nonce
+        .as_slice()
+        .try_into()
+        .map_err(|_| KeyError::Corrupt("sealed nonce"))?;
     let mut buf = envelope.ct.clone();
-    aead.open_in_place(&envelope.nonce, b"avon-keychain-seal", &mut buf)
+    aead.open_in_place(&nonce, b"avon-keychain-seal", &mut buf)
         .map_err(|_| KeyError::Corrupt("keychain unseal failed"))?;
     Ok(buf)
 }
@@ -143,7 +153,7 @@ impl KeychainKeyProvider {
         material.extend_from_slice(&(k.len() as u32).to_be_bytes());
         material.extend_from_slice(&k);
 
-        let mut envelope = seal(&material);
+        let mut envelope = seal(&material)?;
         envelope.binding_priv = hw_signing.to_bytes().as_slice().to_vec();
 
         let tls = rcgen::KeyPair::generate_for(&rcgen::PKCS_ED25519)
@@ -159,11 +169,11 @@ impl KeychainKeyProvider {
 
         write_private(
             &dir.join(SEALED_FILE),
-            &serde_json::to_vec(&envelope).unwrap(),
+            &serde_json::to_vec(&envelope).map_err(|_| KeyError::Corrupt("provider json"))?,
         )?;
         write_private(
             &dir.join(PUBLIC_FILE),
-            &serde_json::to_vec(&public).unwrap(),
+            &serde_json::to_vec(&public).map_err(|_| KeyError::Corrupt("provider json"))?,
         )?;
         write_private(&dir.join(TLS_FILE), tls_pem.as_bytes())?;
         // Also write provider.json
@@ -172,7 +182,7 @@ impl KeychainKeyProvider {
         let meta = serde_json::json!({"kind":"keychain","secure_enclave":secure_enclave});
         write_private(
             &dir.join("keychain-meta.json"),
-            &serde_json::to_vec(&meta).unwrap(),
+            &serde_json::to_vec(&meta).map_err(|_| KeyError::Corrupt("provider json"))?,
         )?;
 
         Ok(Self {
@@ -206,7 +216,11 @@ impl KeychainKeyProvider {
             if *pos + 4 > buf.len() {
                 return Err(KeyError::Corrupt("sealed material"));
             }
-            let n = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap()) as usize;
+            let n = u32::from_be_bytes(
+                buf[*pos..*pos + 4]
+                    .try_into()
+                    .map_err(|_| KeyError::Corrupt("sealed material"))?,
+            ) as usize;
             *pos += 4;
             if *pos + n > buf.len() {
                 return Err(KeyError::Corrupt("sealed material"));
@@ -224,14 +238,15 @@ impl KeychainKeyProvider {
             return Err(KeyError::Corrupt("sealed material mismatch"));
         }
 
-        let hw_signing = SigningKey::from_bytes(
-            envelope
-                .binding_priv
-                .as_slice()
-                .try_into()
-                .map_err(|_| KeyError::Corrupt("hw key"))?,
-        )
-        .map_err(|_| KeyError::Corrupt("hw key"))?;
+        // Check the length ourselves: `&[u8] -> &FieldBytes` panics on a
+        // mismatch rather than erroring, and this input comes off disk.
+        let hw_bytes: [u8; 32] = envelope
+            .binding_priv
+            .as_slice()
+            .try_into()
+            .map_err(|_| KeyError::Corrupt("hw key"))?;
+        let hw_signing =
+            SigningKey::from_bytes(&hw_bytes.into()).map_err(|_| KeyError::Corrupt("hw key"))?;
 
         let tls_key_pem = String::from_utf8(
             std::fs::read(dir.join(TLS_FILE)).map_err(|_| KeyError::Corrupt("tls.key"))?,
@@ -304,7 +319,7 @@ impl KeyProvider for KeychainKeyProvider {
         write_private(&self.dir.join(TLS_FILE), self.tls_key_pem.as_bytes())?;
         write_private(
             &self.dir.join(SEALED_FILE),
-            &serde_json::to_vec(&self.sealed).unwrap(),
+            &serde_json::to_vec(&self.sealed).map_err(|_| KeyError::Corrupt("provider json"))?,
         )?;
         let public = PublicMaterial {
             signing_pk: self.signing.verifying_key().to_bytes(),
@@ -314,7 +329,7 @@ impl KeyProvider for KeychainKeyProvider {
         };
         write_private(
             &self.dir.join(PUBLIC_FILE),
-            &serde_json::to_vec(&public).unwrap(),
+            &serde_json::to_vec(&public).map_err(|_| KeyError::Corrupt("provider json"))?,
         )?;
         write_provider_record(&self.dir, ProviderKind::Keychain)?;
         Ok(())
