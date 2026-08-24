@@ -8,7 +8,6 @@ Three properties this file exists to enforce:
 """
 
 import json
-import time
 
 import pytest
 
@@ -43,6 +42,9 @@ def pytest_collection_modifyitems(config, items):
         if marker is None:
             kept.append(item)
             continue
+        # reason must be passed as a keyword: @pytest.mark.missing("text") puts
+        # "text" in marker.args, not marker.kwargs, so it is rejected below as
+        # reason-less even though a reason was supplied. Use reason="text".
         reason = marker.kwargs.get("reason")
         if not reason:
             raise pytest.UsageError(
@@ -83,18 +85,30 @@ def _is_scenario(item) -> bool:
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item, call):
     report = yield
-    if report.when != "call":
-        return report
 
     if not _is_scenario(item):
         return report
 
     if report.skipped:
+        # Deliberately not gated on report.when == "call": @pytest.mark.skip,
+        # @pytest.mark.skipif, and pytest.skip() raised inside a fixture all
+        # report at "setup" (there is no "call" phase at all once setup is
+        # skipped) — a fixture skipping because a prerequisite is missing is
+        # the single most common shape of "quiet pass" this rule exists to
+        # catch. Checking every phase (setup/call/teardown) here, ahead of
+        # the call-only gate below, is what makes that catch the skip
+        # regardless of which phase it happened in.
         report.outcome = "failed"
         report.longrepr = (
             f"{item.nodeid} was skipped. Skips are failures in this suite: a "
             "missing prerequisite is a FAIL or a MISSING, never a quiet pass."
         )
+        return report
+
+    if report.when != "call":
+        # The witness check below only makes sense for a test that actually
+        # ran its body; a setup/teardown report that isn't a skip needs no
+        # action here.
         return report
 
     recorded = item.config.stash[WITNESS_KEY].get(item.nodeid, [])
