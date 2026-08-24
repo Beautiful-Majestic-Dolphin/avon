@@ -93,6 +93,13 @@ class LayerResult:
     witnesses: dict = field(default_factory=dict)
 
 
+# Imported here, not at module top, so ratchet's own `from runner import
+# Verdict` finds Verdict already defined -- importing this earlier would be a
+# circular import (runner -> ratchet -> runner) that fails before Verdict
+# exists.
+import ratchet  # noqa: E402
+
+
 def propagate_blocked(results, order, missing_by_layer=None):
     """Fill in BLOCKED for every layer above the first failure."""
     missing_by_layer = missing_by_layer or {}
@@ -390,7 +397,24 @@ def main(argv=None):
     parser.add_argument("--from", dest="start_from", choices=LAYER_NAMES,
                         help="start here against an already-running stack; "
                              "lower layers are reported NOT_RUN, not PASS")
+    parser.add_argument("--update-baseline", action="store_true",
+                        help="record the current verdicts as the new baseline "
+                             "(requires a full walk -- not --layer or --from)")
     args = parser.parse_args(argv)
+
+    # R10: snapshot(results) records only the layers present in `results`. On
+    # a partial run (--layer or --from) it would silently drop every unrun
+    # layer from the baseline -- destroying the ratchet's memory that those
+    # layers used to PASS -- and would write a MISSING total that
+    # undercounts, so the next full run reports "MISSING grew" and fails CI
+    # spuriously. Both push toward false confidence, so refuse before doing
+    # any work at all, not merely warn after the fact.
+    if args.update_baseline and (args.layer or args.start_from):
+        parser.error(
+            "--update-baseline requires a full walk; it cannot be combined "
+            "with --layer or --from, or it would silently erase the "
+            "baseline's memory of every layer this run skipped"
+        )
 
     selected = None
     if args.layer:
@@ -405,6 +429,23 @@ def main(argv=None):
         json.dumps({k: asdict(v) for k, v in results.items()},
                    indent=2, default=str)
     )
+
+    baseline = ratchet.load()
+    problems = ratchet.compare(results, baseline)
+
+    if args.update_baseline:
+        ratchet.BASELINE.write_text(
+            json.dumps(ratchet.snapshot(results), indent=2) + "\n"
+        )
+        print("\nbaseline updated")
+        return 0
+
+    if problems:
+        print("\nREGRESSION:")
+        for problem in problems:
+            print(f"  {problem}")
+        return 1
+    print("\nno regression against baseline")
     return 0
 
 
