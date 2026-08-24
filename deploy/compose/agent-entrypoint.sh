@@ -10,9 +10,9 @@ if [ ! -f /var/lib/avon/identity.json ]; then
     exit 1
   fi
   if [ -n "${TOKEN_FILE:-}" ]; then
-    avon-agent enroll --control "https://control:50051" --token-file "$TOKEN_FILE" --ca-file /certs/ca.crt --data-dir /var/lib/avon --key-provider "${AVON_AGENT_KEY_PROVIDER:-auto}"
+    avon-agent enroll --control "https://control:50051" --token-file "$TOKEN_FILE" --ca-file /certs/trust-ca.crt --data-dir /var/lib/avon --key-provider "${AVON_AGENT_KEY_PROVIDER:-auto}"
   else
-    avon-agent enroll --control "https://control:50051" --token "$AVON_AGENT_ENROLL_TOKEN" --ca-file /certs/ca.crt --data-dir /var/lib/avon --key-provider "${AVON_AGENT_KEY_PROVIDER:-auto}"
+    avon-agent enroll --control "https://control:50051" --token "$AVON_AGENT_ENROLL_TOKEN" --ca-file /certs/trust-ca.crt --data-dir /var/lib/avon --key-provider "${AVON_AGENT_KEY_PROVIDER:-auto}"
   fi
 fi
 mkdir -p /etc/avon

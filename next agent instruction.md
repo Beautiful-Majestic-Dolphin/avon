@@ -16,6 +16,9 @@ is closed. Two larger things it did not know about turned up on the way: the
 macOS and Windows providers are simulations that never compiled, and the e2e
 stack cannot come up. Both are described below.
 
+Expect the `E2E` workflow to stay red until the remaining compose defects in
+section 2 are fixed.
+
 ## What is verified, and how
 
 | Check | Where it ran | Result |
@@ -153,26 +156,36 @@ Doing them properly is the same shape of work as the TPM provider was:
   — `cargo xwin` compiles it, nothing local runs it. It needs a Windows runner,
   which means CI or a VM.
 
-### 2. The e2e stack cannot come up, for at least four unrelated reasons
+### 2. The e2e stack cannot come up, for several unrelated reasons
 
-`5d4f3f1` fixed two of them (swtpm never listening; control and the CA not on
-the agents' network). What remains, found by running
+Three are fixed (swtpm never listening; control and the CA not on the agents'
+network; the agent trusting the wrong CA file). What remains, found by running
 `docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml up -d`
 after `cp .env.example .env && ./deploy/compose/gen-infra-certs.sh`:
 
-1. **Control requires a client certificate on the port agents enrol against.**
-   Every agent dies with `control: transport error`; with `RUST_LOG=debug` the
-   handshake says `Client auth requested but no cert/sigscheme available`, and
-   the CertificateRequest names the AVON TLS CA. A device has no certificate
-   until it has enrolled, so enrollment cannot be behind mTLS. Either that
-   listener takes `require_client_cert: false` (`avon-tls`'s
-   `rustls_server_config` already supports it) or enrollment moves to its own
-   listener. **This is a security decision about the bootstrap path — worth
-   agreeing before implementing.** It is also phase 2/3 work, not phase 5.
+1. ~~Control requires a client certificate on the port agents enrol against.~~
+   **Wrong — fixed.** Control serves with `server_tls_config_optional_client`
+   (`client_auth_optional(true)`), and `avon-tls` says why in the function's own
+   doc comment: enrollment is deliberately unauthenticated at the TLS layer, and
+   every other RPC calls `require_device`/`require_service`. The real cause was
+   that `agent-entrypoint.sh` passed `--ca-file /certs/ca.crt`, which is the
+   *CA service's own leaf certificate* (`subject=CN = rcgen self signed cert`,
+   `issuer=CN = AVON TLS CA`), not the trust root. The root is
+   `/certs/trust-ca.crt`, which is what every other service already uses as
+   `AVON_TLS_CA`. The agent was handing rustls a leaf as its only trust anchor,
+   so it could not verify control's server certificate.
+
+   The `Client auth requested but no cert/sigscheme available` debug line is a
+   red herring: under TLS 1.3 the client sees `CertificateRequest` *before* the
+   server's `Certificate`, so a log that stops just after it has failed on the
+   *server's* chain, not on client auth. With `--ca-file /certs/trust-ca.crt` a
+   device enrolls, including with `--key-provider tpm2` against the swtpm
+   container — verified.
 2. **The gateway exits with `Error: No such file or directory (os error 2)`.**
    The `ip_forward` complaint above it is harmless (`/proc/sys` is read-only
    under Docker Desktop and the entrypoint tolerates it). The real error is
    unattributed — it needs `RUST_LOG=debug` and a look at which path it wants.
+   Given blocker 1, suspect a cert path before anything else.
 3. **`control` and `admin` both publish host port 8080**, so whichever starts
    second fails to bind and admin never runs.
 4. Admin then reports `database unreachable: Temporary failure in name
@@ -214,12 +227,11 @@ New this session:
 
 ## Where to pick up
 
-1. Decide the enrollment-mTLS question (e2e blocker 1) — it gates every scenario.
-2. The rest of the e2e stack: blockers 2–4, then run the suite and see what the
-   scenarios actually say.
-3. Real Keychain and CNG providers. Keychain is fully testable here; CNG needs a
+1. The rest of the e2e stack: blockers 2–4 above, then run the suite and see
+   what the scenarios actually say. Enrollment works now, TPM included.
+2. Real Keychain and CNG providers. Keychain is fully testable here; CNG needs a
    Windows runner.
-4. Phase 6 (`docs/superpowers/plans/2026-08-20-avon-phase6-edge-assurance-release.md`),
+3. Phase 6 (`docs/superpowers/plans/2026-08-20-avon-phase6-edge-assurance-release.md`),
    15 tasks, nothing started.
 
 ## Files worth knowing about
