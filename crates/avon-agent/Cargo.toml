@@ -51,9 +51,6 @@ base64ct.workspace = true
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 libc = "0.2"
 
-[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
-tss-esapi = { version = "7.5", optional = true }
-
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-service = "0.7"
 
@@ -68,7 +65,6 @@ default = []
 tpm2 = ["avon-keystore/tpm2"]
 keychain = ["avon-keystore/keychain"]
 cng = ["avon-keystore/cng"]
-tpm = ["tss-esapi"]
 fido2 = ["ctap-hid-fido2"]
 
 [dev-dependencies]

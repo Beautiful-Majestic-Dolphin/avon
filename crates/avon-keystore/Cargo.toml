@@ -18,8 +18,14 @@ p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
 rsa = { version = "0.9", features = ["sha2"] }
 sha2 = "0.10"
 spki = "0.7"
+# The hardware providers need an RNG of their own; everything else takes its
+# randomness from avon-crypto.
+rand = { version = "0.8", optional = true }
 
-[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+# tss-esapi builds against tpm2-tss, which is discovered with pkg-config and has
+# no Windows distribution; Windows TPM-backed keys go through the CNG provider
+# and its Platform Crypto Provider instead.
+[target.'cfg(target_os = "linux")'.dependencies]
 tss-esapi = { version = "7.5", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -31,13 +37,16 @@ windows = { version = "0.58", features = ["Win32_Security_Cryptography", "Win32_
 
 [features]
 default = []
-tpm2 = ["dep:tss-esapi"]
-keychain = ["dep:security-framework", "dep:core-foundation"]
-cng = ["dep:windows"]
+tpm2 = ["dep:tss-esapi", "dep:rand"]
+keychain = ["dep:security-framework", "dep:core-foundation", "dep:rand"]
+cng = ["dep:windows", "dep:rand"]
 
 [dev-dependencies]
 tempfile.workspace = true
 rand = "0.8"
+# The TPM tests check a real quote with the same verifier the control plane
+# uses; avon-attest depends on nothing here, so this is not a cycle.
+avon-attest.workspace = true
 
 [lints]
 workspace = true
