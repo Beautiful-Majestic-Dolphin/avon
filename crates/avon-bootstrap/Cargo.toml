@@ -10,6 +10,9 @@ description = "One-shot initialisation for an AVON deployment: schema, CA chain,
 name = "avon-bootstrap"
 path = "src/main.rs"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 avon-ca.workspace = true
 avon-config.workspace = true
@@ -26,6 +29,10 @@ sha2 = "0.10"
 sqlx.workspace = true
 tokio.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+avon-testkit.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true
