@@ -13,13 +13,16 @@ CONFTEST = (Path(__file__).parent / "conftest.py").read_text()
 
 
 def test_a_passing_test_without_a_witness_is_a_failure(pytester):
+    # The witness rule only binds scenarios/ (Ruling R5): place the fake test
+    # under scenarios/ so this actually exercises the enforcement path,
+    # rather than trivially passing because the rule never looked at it.
     pytester.makeconftest(CONFTEST)
-    pytester.makepyfile(
-        test_x="""
+    pytester.makepyfile(**{
+        "scenarios/test_x": """
         def test_no_witness():
             assert 1 == 1
         """
-    )
+    })
     result = pytester.runpytest("-p", "no:cacheprovider")
     result.assert_outcomes(failed=1)
     result.stdout.fnmatch_lines(["*without recording a witness*"])
@@ -27,25 +30,25 @@ def test_a_passing_test_without_a_witness_is_a_failure(pytester):
 
 def test_a_witnessed_test_passes(pytester):
     pytester.makeconftest(CONFTEST)
-    pytester.makepyfile(
-        test_x="""
+    pytester.makepyfile(**{
+        "scenarios/test_x": """
         def test_with_witness(witness):
             witness("observed", 42)
         """
-    )
+    })
     result = pytester.runpytest("-p", "no:cacheprovider")
     result.assert_outcomes(passed=1)
 
 
 def test_a_skip_is_a_failure(pytester):
     pytester.makeconftest(CONFTEST)
-    pytester.makepyfile(
-        test_x="""
+    pytester.makepyfile(**{
+        "scenarios/test_x": """
         import pytest
         def test_skipped(witness):
             pytest.skip("nope")
         """
-    )
+    })
     result = pytester.runpytest("-p", "no:cacheprovider")
     result.assert_outcomes(failed=1)
     result.stdout.fnmatch_lines(["*Skips are failures*"])
@@ -63,7 +66,10 @@ def test_missing_requires_a_reason(pytester):
     )
     result = pytester.runpytest("-p", "no:cacheprovider")
     assert result.ret != 0
-    result.stdout.fnmatch_lines(["*requires reason=*"])
+    # pytest.UsageError's own text is written straight to stderr by
+    # wrap_session(); look where the behavior already is (Ruling R6) rather
+    # than adding a print() to the code under test.
+    result.stderr.fnmatch_lines(["*requires reason=*"])
 
 
 def test_missing_is_not_executed_and_is_recorded(pytester, tmp_path):

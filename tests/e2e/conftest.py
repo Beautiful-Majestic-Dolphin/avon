@@ -45,15 +45,9 @@ def pytest_collection_modifyitems(config, items):
             continue
         reason = marker.kwargs.get("reason")
         if not reason:
-            message = (
+            raise pytest.UsageError(
                 f"{item.nodeid}: @pytest.mark.missing requires reason='why this is a gap'"
             )
-            # pytest.UsageError's own text is written by wrap_session() straight
-            # to the real stderr, which pytester's result.stdout never sees.
-            # Print it ourselves so the failure is visible wherever this run's
-            # output is being read.
-            print(message)
-            raise pytest.UsageError(message)
         config.stash[MISSING_KEY].append({"nodeid": item.nodeid, "reason": reason})
     items[:] = kept
 
@@ -70,17 +64,29 @@ def witness(request):
     return record
 
 
+def _is_scenario(item) -> bool:
+    """True if `item` lives under scenarios/.
+
+    The witness and skip-to-failure rules bind scenarios, because scenarios
+    are the things that make claims about whether AVON actually works.
+    Harness unit tests (test_conftest_rules.py, and later test_runner.py,
+    test_ratchet.py, test_lib_discipline.py) sit beside scenarios/, not
+    inside it, and are not scenarios themselves.
+    """
+    try:
+        rel = item.path.relative_to(item.config.rootpath)
+    except ValueError:
+        rel = item.path
+    return "scenarios" in rel.parts
+
+
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item, call):
     report = yield
     if report.when != "call":
         return report
 
-    if "pytester" in item.fixturenames:
-        # A test that requests pytester spins up its own nested pytest
-        # session to exercise these very rules against fake scenarios; it is
-        # a meta-test of the harness, not a scenario, and is not itself
-        # bound by the rules it is testing.
+    if not _is_scenario(item):
         return report
 
     if report.skipped:
