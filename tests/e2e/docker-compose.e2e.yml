@@ -83,20 +83,31 @@ services:
       interval: 3s
       retries: 20
 
+  # R16: alpine/socat, not `apk add socat` at start on plain alpine. The apk
+  # install had no retry and nothing in either compose file restarts a dead
+  # container, so a transient mirror hiccup made this container exit outright
+  # rather than sit unhealthy-and-retrying -- runner.py folds that into the
+  # generic "services never became healthy" bucket, which reads as an AVON
+  # data-plane failure and cascades to BLOCKED on l4/l5/lnet. alpine/socat's
+  # ENTRYPOINT is ["socat"], so `command` below is just socat's own argv --
+  # no shell, nothing to install, nothing to fail at start. Pinned to 1.8.1.3,
+  # whose image digests are identical to `latest` as of this change.
   target-udp:
-    image: alpine:3.20
+    image: alpine/socat:1.8.1.3
     container_name: avon-e2e-target-udp
     profiles: ["l3", "l4", "l5", "lnet"]
-    command: >
-      sh -c "apk add --no-cache socat >/dev/null &&
-             exec socat -v UDP-RECVFROM:9999,fork EXEC:'/bin/cat'"
+    command: ["-v", "UDP-RECVFROM:9999,fork", "EXEC:/bin/cat"]
     networks:
       protected:
         ipv4_address: 172.30.0.13
     healthcheck:
+      # The image is Alpine-based and keeps a real shell plus netstat, so this
+      # proves the same thing the other targets' healthchecks prove -- a
+      # listener actually bound, not just "container up." Retry budget
+      # matches its siblings now that there's no apk install to wait out.
       test: ["CMD", "sh", "-c", "netstat -lun | grep -q ':9999'"]
       interval: 3s
-      retries: 30
+      retries: 20
 
   agent-a:
     profiles: ["l3", "l4", "l5", "lnet"]
