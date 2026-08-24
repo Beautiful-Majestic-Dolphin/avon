@@ -108,8 +108,12 @@ async fn main() -> anyhow::Result<()> {
             }
             let provider = SealedFileProvider::from_file(&cli.master_key_file)?;
             let keys = load_or_init(&pool, &provider, true).await?;
-            issue_service_certs(&pool, &keys, &out, &services, &dns).await?;
-            let token = create_owner(&pool, &email, &password, &tenant).await?;
+            // Resolved once and shared: the gateway's device row and the
+            // owner's user row must land in the same tenant, not just
+            // "whichever id each function happened to look up".
+            let tenant_id = resolve_tenant(&pool, &tenant).await?;
+            issue_service_certs(&pool, &keys, &out, &services, &dns, tenant_id).await?;
+            let token = create_owner(&pool, &email, &password, tenant_id).await?;
             // Write enroll token for compose e2e agents.
             let token_path = out.join("enroll.token");
             let _ = std::fs::write(&token_path, &token);
@@ -124,7 +128,18 @@ async fn main() -> anyhow::Result<()> {
             let pool = avon_db::connect(&cli.db).await?;
             let provider = SealedFileProvider::from_file(&cli.master_key_file)?;
             let keys = load_or_init(&pool, &provider, true).await?;
-            issue_service_certs(&pool, &keys, &out, &services, &dns).await?;
+            // `certs` has no --tenant of its own (it only reissues
+            // infrastructure credentials, never touches users/tenants), so
+            // fall back to the tenant migrations always seed.
+            issue_service_certs(
+                &pool,
+                &keys,
+                &out,
+                &services,
+                &dns,
+                avon_db::DEFAULT_TENANT_ID,
+            )
+            .await?;
         }
         Cmd::Admin {
             email,
@@ -132,7 +147,8 @@ async fn main() -> anyhow::Result<()> {
             tenant,
         } => {
             let pool = avon_db::connect(&cli.db).await?;
-            create_owner(&pool, &email, &password, &tenant).await?;
+            let tenant_id = resolve_tenant(&pool, &tenant).await?;
+            create_owner(&pool, &email, &password, tenant_id).await?;
         }
     }
     Ok(())
@@ -146,6 +162,7 @@ async fn issue_service_certs(
     out: &Path,
     services: &[String],
     dns: &[String],
+    tenant_id: uuid::Uuid,
 ) -> anyhow::Result<()> {
     std::fs::create_dir_all(out)?;
     // Not `ca.crt`: that is the file name of the CA service's own leaf.
@@ -190,6 +207,34 @@ async fn issue_service_certs(
             &keys.issuing.verifying_key().key_id(),
         )
         .await?;
+        if service == "gateway" {
+            // `gateways.id` (avon-control/src/service/gateway.rs) references
+            // `devices(id)`, and the gateway derives its own identity from
+            // this exact `service_id` (it becomes the cert's `subject_id`,
+            // which avon-gateway/src/state.rs turns straight into its
+            // GatewayId). A device row under any other id would satisfy the
+            // foreign key and still never match the gateway that registers,
+            // so it has to be keyed on `service_id`, not a fresh uuid.
+            //
+            // Only the gateway needs this: nothing else references a
+            // service's identity through `devices`, so inventing rows for
+            // `control`/`ca`/`admin` would just be unused rows.
+            //
+            // `service_id` is freshly generated on every call, so this can
+            // never collide with a still-relevant previous row — but a
+            // rerun against an existing database should still never fail to
+            // insert, so guard it anyway.
+            sqlx::query(
+                "INSERT INTO devices (id, tenant_id, name, kind, status) \
+                 VALUES ($1, $2, $3, 'gateway', 'active') \
+                 ON CONFLICT (id) DO NOTHING",
+            )
+            .bind(service_id)
+            .bind(tenant_id)
+            .bind(service)
+            .execute(pool)
+            .await?;
+        }
         write_0600(
             &out.join(format!("{service}.crt")),
             issued.tls_cert_pem.as_bytes(),
@@ -215,11 +260,22 @@ async fn issue_service_certs(
     Ok(())
 }
 
+/// Look up a tenant's id by name. Bootstrap never creates tenant rows itself
+/// (migration 0001 seeds `default` = [`avon_db::DEFAULT_TENANT_ID`]); this
+/// only resolves the name a caller passed against what's already there.
+async fn resolve_tenant(pool: &PgPool, tenant: &str) -> anyhow::Result<uuid::Uuid> {
+    let (tenant_id,): (uuid::Uuid,) = sqlx::query_as("SELECT id FROM tenants WHERE name = $1")
+        .bind(tenant)
+        .fetch_one(pool)
+        .await?;
+    Ok(tenant_id)
+}
+
 async fn create_owner(
     pool: &PgPool,
     email: &str,
     password: &str,
-    tenant: &str,
+    tenant_id: uuid::Uuid,
 ) -> anyhow::Result<String> {
     use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
     use argon2::Argon2;
@@ -228,10 +284,6 @@ async fn create_owner(
         .hash_password(password.as_bytes(), &salt)
         .map_err(|e| anyhow::anyhow!(e))?
         .to_string();
-    let (tenant_id,): (uuid::Uuid,) = sqlx::query_as("SELECT id FROM tenants WHERE name = $1")
-        .bind(tenant)
-        .fetch_one(pool)
-        .await?;
     sqlx::query(
         "INSERT INTO users (tenant_id, email, password_hash, role, mfa_required) \
          VALUES ($1, $2, $3, 'owner', true) ON CONFLICT DO NOTHING",
