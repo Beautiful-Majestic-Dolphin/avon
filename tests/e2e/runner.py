@@ -430,7 +430,20 @@ def main(argv=None):
                    indent=2, default=str)
     )
 
-    baseline = ratchet.load()
+    # A corrupt baseline (bad JSON, or JSON that isn't structurally a
+    # baseline) must fail loudly here, not be silently read as an empty
+    # baseline -- that would erase every recorded PASS and print the
+    # harness's most reassuring message for the one case that most needs a
+    # loud failure. This also gates --update-baseline: overwriting a
+    # baseline the tool cannot even parse is not a "reset", it is paving
+    # over evidence of corruption without a human ever seeing it. To
+    # deliberately reset, remove the file first -- that is the legitimate
+    # "no baseline yet" path load() already handles.
+    try:
+        baseline = ratchet.load()
+    except ratchet.BaselineError as e:
+        print(f"\n{e}", file=sys.stderr)
+        return 1
     problems = ratchet.compare(results, baseline)
 
     if args.update_baseline:
