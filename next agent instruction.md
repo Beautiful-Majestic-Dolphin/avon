@@ -1,14 +1,20 @@
-# Next Agent Instructions — Avon Phase 5 completion → Phase 6
+# Next Agent Instructions — Avon Phase 5 → Phase 6
 
 **Branch:** `main`
-**Last session:** 2026-08-23. Four commits on top of `c739a98`:
+**Last session:** 2026-08-23. Five commits on top of `e432643`:
 
 ```
-f13efdd test(e2e): device-trust scenarios, and unbreak the suite that was to run them   (5.12)
-e4654a0 feat(attest): real TPM quote verification, wired end to end                     (5.5 completion)
-fe18997 feat(platform): WinTun data plane, fail-closed enforcement, and real installers  (5.8-5.11)
-854aacf feat(agent): validated intent-only helper IPC with SCM_RIGHTS fd passing         (5.7 hardening)
+5d4f3f1 test(e2e): start swtpm at all, put control on the agents' network, drop a stale xfail
+016701e build(release): compile the hardware key providers into the binaries we ship
+0e84802 fix: unbreak the Linux and Windows lint gates
+02e3cdd feat(keystore): a real TPM 2.0 provider, and quotes a verifier will accept
+74fcf1b fix(keystore): unbreak the Keychain and CNG providers, which never compiled
 ```
+
+The previous handoff's three blocked checks all pass, and the TPM gap it named
+is closed. Two larger things it did not know about turned up on the way: the
+macOS and Windows providers are simulations that never compiled, and the e2e
+stack cannot come up. Both are described below.
 
 ## What is verified, and how
 
@@ -16,144 +22,220 @@ fe18997 feat(platform): WinTun data plane, fail-closed enforcement, and real ins
 |---|---|---|
 | `cargo fmt --all -- --check` | macOS | clean |
 | `cargo clippy --workspace --all-targets -- -D warnings` | macOS | clean |
+| `cargo clippy -p avon-keystore --features keychain --all-targets -- -D warnings` | macOS | clean |
+| `cargo test -p avon-keystore --features keychain` | macOS | 2/2 (were racing each other) |
 | `cargo test --workspace --exclude avon-db --exclude avon-testkit --exclude avon-observability` | macOS | green except `avon-agent-core --test identity` (needs Postgres: `PoolTimedOut`) |
-| `cargo clippy -p avon-tun -p avon-agent -p avon-agent-core --all-targets -- -D warnings` | Linux container (rust:1.93-bookworm) | clean — **re-run after the latest commits, see below** |
-| `cargo test -p avon-agent --test helper` with `AVON_TEST_ROOT=1`, `--cap-add NET_ADMIN`, `/dev/net/tun` | Linux container, as root | 9/9 including the real fd-passing scenario |
-| `cargo xwin check -p avon-agent -p avon-tun --all-targets --target x86_64-pc-windows-msvc` | macOS | clean |
-| `bash deploy/macos/test-pkg.sh` | macOS | `pkg contents ok` |
-| `uv run ruff/black/pytest` (admin-api) | macOS | 33 passed, 32 skipped |
-| `uv run pytest --collect-only scenarios/` | macOS | 18 tests collect (they used to fail at import) |
+| `cargo clippy --workspace --all-targets --features avon-keystore/tpm2 -- -D warnings` | Linux container | clean |
+| `cargo test -p avon-keystore --features tpm2` | Linux container, swtpm | **6/6**, including the quote cross-check |
+| `cargo test -p avon-agent --test helper` (`AVON_TEST_ROOT=1`, `--cap-add NET_ADMIN`, `/dev/net/tun`) | Linux container, root | 9/9 |
+| `bash deploy/linux/test-packages.sh` | macOS driving containers | deb + rpm **built with tpm2**, installed and run in debian:12 and rockylinux:9 |
+| `cargo xwin clippy -p avon-agent -p avon-tun -p avon-keystore --features avon-keystore/cng --all-targets --target x86_64-pc-windows-msvc -- -D warnings` | macOS | clean |
+| `bash deploy/macos/test-pkg.sh` | not re-run this session | — |
 
-### Cross-platform checking without those platforms
+### Running the cross-platform checks
 
-Two things set up last session, both worth keeping:
+Two container helpers, both worth recreating in your scratchpad (they were only
+ever session-local). Always set `CARGO_INCREMENTAL=0`: `target/debug` grew to
+35 GB and filled the disk once already.
 
 ```bash
-# Linux: build/test in a container with the repo mounted and its own target dir.
-#   scratchpad/linux-check.sh "cargo clippy -p avon-agent --all-targets -- -D warnings"
+# Plain Linux: build/test with the repo mounted and its own target volume.
 docker run --rm --cap-add NET_ADMIN --device /dev/net/tun \
   -v "$PWD":/src -w /src \
   -v avon-linux-target:/target -v avon-rustup:/usr/local/rustup \
   -v avon-cargo-reg:/usr/local/cargo/registry -v avon-cargo-bin:/usr/local/cargo/bin \
-  -e CARGO_TARGET_DIR=/target -e AVON_TEST_ROOT=1 \
-  rust:1.93-bookworm bash -c "command -v protoc >/dev/null || (apt-get update -qq && apt-get install -y -qq protobuf-compiler iputils-ping); <command>"
-
-# Windows: type-check the MSVC target from macOS (brew install llvm; cargo install cargo-xwin).
-PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo xwin check -p avon-agent --all-targets --target x86_64-pc-windows-msvc
+  -e CARGO_TARGET_DIR=/target -e CARGO_INCREMENTAL=0 -e AVON_TEST_ROOT=1 \
+  rust:1.93-bookworm bash -c \
+  "command -v protoc >/dev/null || (apt-get update -qq && apt-get install -y -qq protobuf-compiler iputils-ping); <command>"
 ```
 
-`cargo check --target x86_64-pc-windows-gnu` does **not** work: pqclean's `compat.h`
-includes `<features.h>` under GCC-not-clang, which mingw lacks. MSVC via xwin is the
-only local Windows path.
+For anything touching the TPM you need libtss2 *and* a running swtpm. Build the
+image once:
 
-## Blocked right now
+```dockerfile
+FROM rust:1.93-bookworm
+RUN apt-get update -qq && apt-get install -y -qq \
+      protobuf-compiler iputils-ping \
+      libtss2-dev tpm2-tools swtpm swtpm-tools \
+      libclang-dev clang pkg-config \
+ && rm -rf /var/lib/apt/lists/*
+```
 
-1. **Docker Desktop is down on this machine.** The disk filled during a container
-   build (`target/debug/incremental` had grown to ~35 GB — deleted), which wedged the
-   VM; `docker ps` hangs and the daemon does not come back from a shell (`open -a
-   Docker` starts `com.docker.backend` but no VM). **Start Docker Desktop from the
-   dock, then re-run:**
-   ```bash
-   scratchpad/linux-check.sh "cargo clippy -p avon-tun -p avon-agent -p avon-agent-core -p avon-control --all-targets -- -D warnings"
-   AVON_TEST_ROOT=1 scratchpad/linux-check.sh "cargo test -p avon-agent --test helper"
-   bash deploy/linux/test-packages.sh          # deb + rpm, installed in debian:12 and rockylinux:9
-   ```
-   `deploy/linux/test-packages.sh` has never completed here: it got as far as an
-   8-minute release build inside the container, then `cargo deb` failed on asset
-   paths, which is fixed (the script now copies binaries to `target/release` when
-   `CARGO_TARGET_DIR` is elsewhere) but unverified. **Run it first.**
-2. Set `CARGO_INCREMENTAL=0` for container and cross builds, or `target/debug`
-   grows tens of GB again.
+then run with two swtpm instances started and their TCTIs exported — the tests
+want `AVON_TEST_TPM`, `AVON_TPM_TCTI` and `AVON_TEST_TPM_ALT_TCTI` (the second
+is what proves a copied directory is useless against a different TPM):
 
-## The one honest gap: the TPM provider is a simulation
+```bash
+swtpm socket --tpm2 --tpmstate dir=/tmp/swtpm0 --ctrl type=tcp,port=2322 \
+  --server type=tcp,port=2321 --flags not-need-init,startup-clear --daemon
+swtpm socket --tpm2 --tpmstate dir=/tmp/swtpm1 --ctrl type=tcp,port=2324 \
+  --server type=tcp,port=2323 --flags not-need-init,startup-clear --daemon
+tpm2_startup -c -T swtpm:host=127.0.0.1,port=2321
+```
 
-`crates/avon-keystore/src/tpm2.rs` says so in its own header. It seals with
-AES-GCM under a key derived from **the TCTI string** (`Sha256(AVON_TPM_TCTI)`) —
-a public, defaulted constant — so the sealed blob is not protected by hardware at
-all, and "a cloned directory is useless" holds only because a different container
-sets a different TCTI.
+Use a *separate* target volume (`avon-tpm-target`) for that image: mixing it
+with the plain Linux volume rebuilds the world each time you switch.
 
-Because of that, `Tpm2KeyProvider::attestation_quote` deliberately returns `None`:
-a simulated quote would be the agent vouching for itself while the control plane
-recorded `verified`. Everything *around* attestation is real and tested — challenge
-issuance and single-use nonces, `TPMS_ATTEST` parsing, PCR digest recomputation,
-AK trust-on-first-use then pinning, the DB state, the admin API fields, the policy
-condition — so the remaining work is one provider:
+Windows: `cargo xwin` from macOS is still the only local path (`brew install
+llvm`, `cargo install cargo-xwin`, `PATH="/opt/homebrew/opt/llvm/bin:$PATH"`).
+`--target x86_64-pc-windows-gnu` still does not work: pqclean's `compat.h`
+includes `<features.h>` under GCC-not-clang, which mingw lacks. Use `xwin
+clippy`, not `xwin check` — `result_large_err` only shows up under clippy, and
+only on Windows.
 
-- `create`/`open`: primary under the owner hierarchy, seal the PQ material with
-  `TPM2_Create`/`TPM2_Unseal` against a PCR policy, keep the AK non-duplicable.
-- `attestation_quote(nonce)`: `TPM2_Quote` over PCRs 0 and 7 with `extraData = nonce`,
-  return the `TPMS_ATTEST` bytes verbatim plus the DER signature, the AK SPKI and the
-  PCR values (`avon_keystore::Quote`).
-- Verify against `avon-attest` in an swtpm-gated test — that is the cross-check that
-  the parser and a real TPM agree.
+## The TPM provider is real now
 
-Two e2e scenarios are `xfail` on exactly this and will start passing when it lands:
-`test_tpm_backed_agent_reports_its_provider_and_becomes_verified` and
-`test_policy_requiring_verified_attestation_admits_only_the_tpm_agent`.
+`crates/avon-keystore/src/tpm2.rs`, Linux only. Three objects under a primary
+regenerated from a fixed template in the owner hierarchy:
 
-## Bugs found and fixed last session (do not reintroduce)
+- **binding key** — unrestricted ECC P-256, `fixedTPM`/`fixedParent`, signs the
+  binding statement.
+- **attestation key** — *restricted* ECC P-256. A restricted key signs only what
+  the TPM produced, which is exactly why its `TPM2_Quote` is evidence. One key
+  cannot be both; that is why there are two.
+- **sealed object** — a 32-byte AES-256-GCM wrapping key. `TPM2_Create` seals at
+  most 128 bytes and the PQ secrets are thousands, so the secrets are wrapped
+  and only the wrapping key is sealed.
 
-- **avon-tun did not compile on Linux.** `handle.link().set(index)` and
-  `handle.route().add()` are rtnetlink 0.14 shapes; 0.15 takes message builders
-  (`LinkUnspec::new_with_index(..).mtu(..).up().build()`,
-  `RouteMessageBuilder::<Ipv4Addr>::new()…`). Route installation had therefore never
-  run on Linux. Route *removal* did not exist at all; it does now on both Unixes.
-- **`Wire` spun at 100% CPU** using `readable().await` + a non-blocking `recvmsg`:
-  readiness was never cleared. Use `stream.async_io(Interest::…, …)`.
-- **The e2e suite failed at import**, so no scenario in `tests/e2e` was running:
-  `lib/__init__.py` imported `admin_client`/`agent_client` (renamed) and `helpers`
-  (needs undeclared `aiohttp`).
-- **`avon-agent` had no `tpm2` feature** while `fingerprint/linux.rs` gated on
-  `feature = "tpm2"` — an `unexpected_cfgs` warning, which is an error under
-  `-D warnings` on Linux. It now forwards `avon-keystore/{tpm2,keychain,cng}`.
-- **No `LICENSE` file** existed, though `cargo deb` metadata referenced one.
+`attestation_quote` quotes PCRs 0 and 7 with the nonce as `extraData` and
+returns the `TPMS_ATTEST` bytes verbatim. `AVON_TPM_SEAL_PCRS=0,7` additionally
+binds the seal to a PCR policy — opt-in, because it is both a real defence
+against offline tampering and a real way to lose every identity on a BIOS update.
+
+Things that will bite you if you extend it:
+
+- **Transient object slots.** A TPM guarantees three, and sessions compete for
+  the same memory. `with_children` loads what it needs and flushes the *parent*
+  before handing the handles over, because `TPM2_Certify` needs two children
+  loaded at once. Holding the parent as well exhausts a real TPM, and swtpm
+  reports it as "out of memory for object contexts".
+- **One TPM, one caller.** The tests hold a lock. Do not remove it.
+- **`execute_with_*_session` closures must fail with `tss_esapi::Error`.** Build
+  templates, `Data`, `Digest` and tickets *before* the closure.
+- **`TPM2_Certify` needs two sessions**, one per authorised object.
+- **`PublicEccParametersBuilder::build()` requires a KDF scheme** even for a
+  signing key; omitting it fails with "some of the required parameters were not
+  provided", which does not name the parameter.
+
+Windows deliberately has no TPM provider: tss-esapi builds against tpm2-tss
+through pkg-config and there is no Windows distribution. Windows TPM-backed keys
+are the CNG provider's job, through the Platform Crypto Provider — see below.
+
+## The two gaps this session found
+
+### 1. The macOS and Windows providers are simulations, and never compiled
+
+`74fcf1b` makes them build; it does not make them real. Both still seal under a
+key derived from a *public string*:
+
+- `keychain.rs` — `Sha256("$AVON_MACOS_KEYCHAIN" or "default")`. It has never
+  called `SecKeyCreateRandomKey`, never used `kSecAttrTokenIDSecureEnclave`, and
+  never stored anything in a Keychain. `security-framework` and
+  `core-foundation` are declared dependencies and unused.
+- `cng.rs` — `Sha256(/etc/machine-id)`, **a Linux path**, on Windows. It has
+  never called `NCryptCreatePersistedKey` or `NCryptProtectSecret`, and does not
+  import the `windows` crate at all.
+
+That they never compiled is why nobody noticed: the CI jobs that would have
+caught it (`cargo test -p avon-keystore --features keychain` on macOS,
+`--features cng` on Windows) have been failing to build, not failing to pass.
+They compile and pass now, so the next regression will be visible.
+
+Doing them properly is the same shape of work as the TPM provider was:
+
+- **macOS**: a P-256 key with `kSecAttrTokenIDSecureEnclave` where there is a
+  Secure Enclave and a Keychain-resident P-256 key otherwise, recording which in
+  `provider.json`'s `secure_enclave`; PQ material as a generic-password item
+  with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Fully testable here.
+- **Windows**: `NCryptCreatePersistedKey` in `MS_PLATFORM_CRYPTO_PROVIDER` when
+  present, else `MS_KEY_STORAGE_PROVIDER`; PQ material wrapped with
+  `NCryptProtectSecret` under `LOCAL=machine`. **Only type-checkable from here**
+  — `cargo xwin` compiles it, nothing local runs it. It needs a Windows runner,
+  which means CI or a VM.
+
+### 2. The e2e stack cannot come up, for at least four unrelated reasons
+
+`5d4f3f1` fixed two of them (swtpm never listening; control and the CA not on
+the agents' network). What remains, found by running
+`docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml up -d`
+after `cp .env.example .env && ./deploy/compose/gen-infra-certs.sh`:
+
+1. **Control requires a client certificate on the port agents enrol against.**
+   Every agent dies with `control: transport error`; with `RUST_LOG=debug` the
+   handshake says `Client auth requested but no cert/sigscheme available`, and
+   the CertificateRequest names the AVON TLS CA. A device has no certificate
+   until it has enrolled, so enrollment cannot be behind mTLS. Either that
+   listener takes `require_client_cert: false` (`avon-tls`'s
+   `rustls_server_config` already supports it) or enrollment moves to its own
+   listener. **This is a security decision about the bootstrap path — worth
+   agreeing before implementing.** It is also phase 2/3 work, not phase 5.
+2. **The gateway exits with `Error: No such file or directory (os error 2)`.**
+   The `ip_forward` complaint above it is harmless (`/proc/sys` is read-only
+   under Docker Desktop and the entrypoint tolerates it). The real error is
+   unattributed — it needs `RUST_LOG=debug` and a look at which path it wants.
+3. **`control` and `admin` both publish host port 8080**, so whichever starts
+   second fails to bind and admin never runs.
+4. Admin then reports `database unreachable: Temporary failure in name
+   resolution`, which may just be a consequence of 3.
+
+Nothing in `tests/e2e/scenarios/` has ever run against a working stack. The two
+device-trust scenarios lost their `xfail` because the reason it gave (the
+simulation) is gone, not because they pass. Expect the `E2E` workflow to be red
+until the four above are fixed.
+
+Also note `tests/e2e/run_e2e.sh` is stale: it `cd`s into `tests/e2e` and uses
+`docker-compose.e2e.yml` alone, but that file is an *overlay*. The working
+invocation is the one in the compose file's own header, and the one CI uses:
+`docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml`.
 
 ## Deliberate deviations from the phase 5 plan
 
-1. **Windows runs one LocalSystem service, not the privileged split.** The helper
-   exists to pass a kernel TUN descriptor to an unprivileged process; a WinTun
+Carried over from the previous handoff, all still true:
+
+1. **Windows runs one LocalSystem service, not the privileged split.** A WinTun
    session cannot be adopted by another process, so the split would mean copying
-   every packet over a pipe. `helper` is `#[cfg(unix)]`, `avon-agent-helper.exe` is
-   not built or packaged, and the MSI installs one service. Revisit only with a
-   measured packet-relay design.
+   every packet over a pipe. `helper` is `#[cfg(unix)]`.
 2. **The Windows firewall blocks off-tunnel rather than permitting on-tunnel.**
-   Windows Firewall evaluates block before allow, so "permit on avon0, block
-   elsewhere" cannot be expressed; the renderer blocks the protected prefixes on
-   every adapter except the tunnel (`Get-NetAdapter | Where-Object Name -ne avon0`).
-   Adapters that appear after the rules are installed are not covered; the agent
-   re-applies on every session change. Golden-tested in `tests/golden/wfp.ps1`.
-3. **The helper takes `--user` as well as `--uid`.** The unit files cannot know a
+   Windows Firewall evaluates block before allow. Adapters appearing after the
+   rules are installed are not covered; the agent re-applies on session change.
+3. **The helper takes `--user` as well as `--uid`** — unit files cannot know a
    uid allocated at install time.
-4. **`QuotePolicy` lost `max_age`.** The TPM's clock counts milliseconds since the
-   TPM was made; freshness is the nonce, which the control plane issues and takes
-   back on use (`CHALLENGE_TTL`, `attest::Challenges`). The old quote fixture
-   encoded a timestamp and expired — tests now build quotes from a fixed key.
+4. **`QuotePolicy` has no `max_age`.** Freshness is the nonce, which the control
+   plane issues and takes back on use. The TPM's clock counts milliseconds since
+   the TPM was made.
+
+New this session:
+
+5. **No TPM provider on Windows** (reason above) — CNG covers it, once real.
+6. **No TPM in the arm64 Linux or musl release binaries.** musl is static and
+   tpm2-tss is not statically linkable; arm64 goes through `cross`, whose image
+   has no arm64 tpm2-tss. Fixing arm64 means a cross image carrying
+   `libtss2-dev:arm64`.
 
 ## Where to pick up
 
-1. Start Docker, run the three checks under **Blocked** above, fix whatever they find.
-2. The real TPM 2.0 provider (see the gap above). This is the last thing between the
-   repo and the phase 5 gate.
-3. Phase 6 (`docs/superpowers/plans/2026-08-20-avon-phase6-edge-assurance-release.md`),
-   15 tasks: subnet router, XFRM/ESP offload, IKEv2 interop, `no_std` profile, MUD,
-   observability contract, Helm hardening, appliance bundle, release signing/SBOM/
-   provenance, FIPS profile, performance thresholds, soak and chaos, threat model,
-   documentation rewrite, acceptance sweep. Nothing in phase 6 has been started.
+1. Decide the enrollment-mTLS question (e2e blocker 1) — it gates every scenario.
+2. The rest of the e2e stack: blockers 2–4, then run the suite and see what the
+   scenarios actually say.
+3. Real Keychain and CNG providers. Keychain is fully testable here; CNG needs a
+   Windows runner.
+4. Phase 6 (`docs/superpowers/plans/2026-08-20-avon-phase6-edge-assurance-release.md`),
+   15 tasks, nothing started.
 
 ## Files worth knowing about
 
-- `crates/avon-agent/src/helper/{protocol,server,client,wire}.rs` — validated intent-only
-  IPC, `^avon[0-9]{0,2}$`, MTU 576..=9000, routes inside the declared set, `SO_PEERCRED`
-  uid check, oversized line closes unparsed, SCM_RIGHTS fd passing.
-- `crates/avon-agent/src/{run,enforcement}.rs` — the one run path (CLI and Windows
-  service) and fail-closed rule derivation.
-- `crates/avon-agent-core/src/{attest.rs, traits.rs (Enforcement), agent.rs}` — challenge
-  answering and the session up/down hooks.
-- `crates/avon-attest/src/{tpms,verify,policy}.rs` — `TPMS_ATTEST` parsing and the checks.
-- `crates/avon-control/src/attest.rs` — nonce issue/take, verification, `devices.attestation_state`.
-- `deploy/{linux,macos,windows}/` — units, packages, installers, and their tests
-  (`test-packages.sh`, `test-pkg.sh`).
-- `.github/workflows/{ci.yml,agent-release.yml}` — CI gained a Linux packages job, a
-  root helper test, and per-OS keystore tests; the release workflow builds deb/rpm,
-  static musl tarballs, a universal signed pkg and the MSI.
+- `crates/avon-keystore/src/tpm2.rs` — the real provider; `tests/tpm2.rs` is the
+  cross-check against `avon-attest`.
+- `crates/avon-keystore/src/{keychain,cng}.rs` — simulations, honestly labelled
+  in their own headers.
+- `crates/avon-keystore/src/select.rs` — provider choice; `Auto` now falls back
+  when hardware is present but unusable.
+- `crates/avon-attest/src/{tpms,verify,policy}.rs` — `TPMS_ATTEST` parsing and
+  the four checks a quote has to pass.
+- `crates/avon-control/src/attest.rs` — nonce issue/take, `devices.attestation_state`.
+- `crates/avon-agent/src/helper/{protocol,server,client,wire}.rs` — validated
+  intent-only IPC with SCM_RIGHTS fd passing.
+- `crates/avon-agent/src/{run,enforcement}.rs` — the one run path and fail-closed
+  rule derivation.
+- `deploy/{linux,macos,windows}/` — units, packages, installers and their tests.
+- `.github/workflows/{ci.yml,agent-release.yml,e2e.yml}`.
