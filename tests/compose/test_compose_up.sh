@@ -11,8 +11,14 @@ cd "$(dirname "$0")/../.."
 
 docker compose up -d --build postgres redis bootstrap ca control
 
+# Ask compose for control's actual published host port rather than assuming
+# it — 8080 collides with admin, so control publishes on 8090 (see
+# docker-compose.yml), and that mapping is compose's to decide, not ours to
+# hardcode a second time.
+control_port="$(docker compose port control 8080 | cut -d: -f2)"
+
 for _ in $(seq 1 90); do
-  if curl -fsS http://localhost:8080/ready >/dev/null 2>&1; then
+  if curl -fsS "http://localhost:${control_port}/ready" >/dev/null 2>&1; then
     echo "control ready"
     exit 0
   fi
