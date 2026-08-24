@@ -283,7 +283,11 @@ def render(results):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="avon-e2e")
+    # There is no `avon-e2e` command on PATH (tests/e2e is a harness, not an
+    # installed package -- see R9). The canonical invocation is
+    # `uv run python runner.py`, so --help should show something a reader can
+    # actually type rather than a program name that doesn't exist.
+    parser = argparse.ArgumentParser(prog="python runner.py")
     parser.add_argument("--layer", help="run one layer plus its prerequisites")
     parser.add_argument("--from", dest="start_from",
                         help="start here against an already-running stack; "
