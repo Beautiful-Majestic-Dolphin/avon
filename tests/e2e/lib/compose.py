@@ -44,15 +44,25 @@ class Compose:
         return self._run("exec", "-T", service, *cmd, timeout=timeout)
 
     def exec_capture(self, service: str, *cmd: str, timeout: int = 60) -> tuple[int, str]:
-        """Run a command and return (exit code, output) instead of raising.
+        """Run a command and return (exit code, output).
 
-        Some checks are about a command *failing* — a cloned identity that must
-        not open, a port that must not connect — and an exception loses the
-        output that says why.
+        Raises HarnessError if docker could not run the command at all.
         """
         full = self.base + ["exec", "-T", service, *cmd]
-        result = subprocess.run(full, cwd=REPO, capture_output=True, text=True, timeout=timeout)
-        return result.returncode, (result.stdout or "") + (result.stderr or "")
+        result = subprocess.run(full, cwd=REPO, capture_output=True, text=True,
+                                timeout=timeout)
+        combined = (result.stdout or "") + (result.stderr or "")
+        harness_failures = (
+            "No such service",
+            "is not running",
+            "Cannot connect to the Docker daemon",
+            "executable file not found",
+        )
+        if any(marker in combined for marker in harness_failures):
+            raise HarnessError(
+                f"harness could not run {' '.join(cmd)} in {service}: {combined.strip()}"
+            )
+        return result.returncode, combined
 
     def stop(self, service: str):
         self._run("stop", service)
