@@ -10,7 +10,8 @@ OUT=$(mktemp -d); trap 'rm -rf "$OUT"' EXIT
 BUILD='set -eu
   cargo install cargo-deb --version 2.7.0 --locked >/dev/null 2>&1 || true
   cargo install cargo-generate-rpm --version 0.16.0 --locked >/dev/null 2>&1 || true
-  cargo build --release --locked -p avon-agent --bin avon-agent --bin avon-agent-helper
+  cargo build --release --locked -p avon-agent --bin avon-agent --bin avon-agent-helper \
+    --features "${AVON_PKG_FEATURES:-tpm2}"
   # The package metadata names target/release; a container build with its own
   # CARGO_TARGET_DIR has to put the binaries where the assets say they are.
   if [ "${CARGO_TARGET_DIR:-}" != "" ] && [ "$CARGO_TARGET_DIR" != "$PWD/target" ]; then
@@ -18,7 +19,10 @@ BUILD='set -eu
     cp "$CARGO_TARGET_DIR/release/avon-agent" "$CARGO_TARGET_DIR/release/avon-agent-helper" target/release/
   fi
   cargo deb -p avon-agent --no-build --output /out/ >/dev/null
-  cargo generate-rpm -p crates/avon-agent -o /out/ >/dev/null'
+  # The TPM provider links tpm2-tss dynamically, so the rpm has to say so or it
+  # installs onto a host where the binary cannot start. cargo-deb derives the
+  # same thing from `depends = "$auto"`.
+  cargo generate-rpm -p crates/avon-agent --auto-req auto -o /out/ >/dev/null'
 
 if [ "$(uname -s)" = "Linux" ]; then
   ( cd "$PWD" && OUT_DIR="$OUT" sh -c "${BUILD//\/out\//$OUT/}" )
@@ -28,7 +32,8 @@ else
     -v avon-linux-target:/target -v avon-rustup:/usr/local/rustup \
     -v avon-cargo-reg:/usr/local/cargo/registry -v avon-cargo-bin:/usr/local/cargo/bin \
     -e CARGO_TARGET_DIR=/target \
-    rust:1.93-bookworm bash -c "command -v protoc >/dev/null || (apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq protobuf-compiler >/dev/null 2>&1); $BUILD"
+    -e AVON_PKG_FEATURES -e CARGO_INCREMENTAL=0 \
+    rust:1.93-bookworm bash -c "command -v protoc >/dev/null && command -v rpmbuild >/dev/null || (apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq protobuf-compiler libtss2-dev pkg-config rpm >/dev/null 2>&1); $BUILD"
 fi
 
 DEB=$(ls "$OUT"/*.deb); RPM=$(ls "$OUT"/*.rpm)
