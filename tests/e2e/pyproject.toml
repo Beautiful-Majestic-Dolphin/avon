@@ -11,8 +11,11 @@ dependencies = [
     "pyyaml>=6.0.2",
 ]
 
+[project.scripts]
+avon-e2e = "runner:main"
+
 [tool.uv]
-package = false
+package = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
