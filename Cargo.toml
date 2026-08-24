@@ -52,7 +52,7 @@ subtle = "2.6"
 bytes = "1.7"
 dashmap = "6.1"
 metrics = "0.24"
-metrics-exporter-prometheus = { version = "0.16", default-features = false, features = ["http-listener"] }
+metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
 axum = "0.7"
 tonic = "0.13"
 tonic-health = "0.13"
