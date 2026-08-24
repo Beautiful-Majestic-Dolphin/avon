@@ -19,6 +19,7 @@ x-common-env: &common-env
 services:
   postgres:
     image: postgres:16-bookworm
+    profiles: ["l2", "l3", "l4", "l5", "lnet"]
     environment:
       POSTGRES_USER: avon
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
@@ -47,6 +48,7 @@ services:
   # the bind-mounted files are copied into a volume with the right ownership.
   pg-cert-init:
     image: alpine:3.20
+    profiles: ["l2", "l3", "l4", "l5", "lnet"]
     command:
       - sh
       - -c
@@ -57,6 +59,7 @@ services:
 
   redis:
     image: redis:7-bookworm
+    profiles: ["l2", "l3", "l4", "l5", "lnet"]
     command:
       - redis-server
       - --requirepass
@@ -84,6 +87,7 @@ services:
   # Named volumes are created root-owned; every AVON image runs as uid 65532.
   vol-init:
     image: alpine:3.20
+    profiles: ["l2", "l3", "l4", "l5", "lnet"]
     command:
       - sh
       - -c
@@ -94,6 +98,7 @@ services:
 
   # Migrations, CA master key, CA chain, service credentials, first owner.
   bootstrap:
+    profiles: ["l2", "l3", "l4", "l5", "lnet"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.rust
@@ -117,6 +122,7 @@ services:
         condition: service_completed_successfully
 
   ca:
+    profiles: ["l2", "l3", "l4", "l5", "lnet"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.rust
@@ -146,6 +152,7 @@ services:
       start_period: 5s
 
   control:
+    profiles: ["l2", "l3", "l4", "l5", "lnet"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.rust
@@ -178,6 +185,7 @@ services:
       start_period: 5s
 
   gateway:
+    profiles: ["l3", "l4", "l5", "lnet"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.rust
@@ -222,6 +230,7 @@ services:
       - protected
 
   admin:
+    profiles: ["l4", "l5", "lnet"]
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.admin-api
