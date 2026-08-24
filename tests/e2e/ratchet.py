@@ -18,11 +18,63 @@ BASELINE = Path(__file__).parent / "baseline.json"
 # failure above it.
 _REGRESSED_FROM_PASS = {Verdict.FAIL, Verdict.BLOCKED, Verdict.NOT_RUN}
 
+# The two keys compare()/snapshot() actually read/write. A baseline missing
+# both of these isn't a baseline at all -- see load()'s corruption check.
+_EXPECTED_KEYS = {"layers", "missing"}
 
-def load(path=BASELINE):
-    if not Path(path).exists():
+
+class BaselineError(Exception):
+    """The baseline file exists but cannot be trusted.
+
+    A *missing* baseline is a legitimate first-run bootstrap -- there is
+    nothing to compare against yet, so load() returns the empty baseline for
+    that case and says so. This is different: the file is present but either
+    not valid JSON, or valid JSON that isn't structurally a baseline (not an
+    object, or an object with neither of the two keys compare()/snapshot()
+    use). Silently treating that the same as "empty" would erase every
+    previously-recorded PASS and print the harness's most reassuring message
+    -- "no regression against baseline" -- for exactly the case that most
+    needs a loud failure instead of a quiet one.
+    """
+
+
+def load(path=None):
+    """Read the baseline, or bootstrap an empty one.
+
+    `path` defaults to the module-level BASELINE, resolved *inside* the
+    function body rather than as `def load(path=BASELINE)`. A parameter
+    default is bound once, at function-definition time (i.e. at import), so
+    a default of `path=BASELINE` would freeze in the file this module
+    happened to point at on import -- reassigning `ratchet.BASELINE`
+    afterwards (as tests do, and as any future caller reasonably expects to
+    be able to do) would silently have no effect on a no-arg load() call.
+    Resolving here keeps every no-arg load() looking at whatever BASELINE
+    currently points at, which is what main()'s --update-baseline write path
+    already does.
+    """
+    path = Path(path) if path is not None else BASELINE
+
+    if not path.exists():
+        print(f"no baseline at {path}; starting from an empty baseline "
+              "(first run, or --update-baseline has never been used)")
         return {"layers": {}, "missing": 0}
-    return json.loads(Path(path).read_text())
+
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        raise BaselineError(
+            f"baseline at {path} exists but is not valid JSON ({e}); "
+            "fix or remove it -- a corrupt baseline must not be read as an "
+            "empty one, which would silently erase every recorded PASS"
+        ) from e
+
+    if not isinstance(data, dict) or not (_EXPECTED_KEYS & data.keys()):
+        raise BaselineError(
+            f"baseline at {path} does not look like a baseline (expected a "
+            f"JSON object with a 'layers' and/or 'missing' key, got "
+            f"{data!r}); fix or remove it rather than let it be read as empty"
+        )
+    return data
 
 
 def compare(results, baseline):
