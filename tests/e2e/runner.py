@@ -161,13 +161,20 @@ def _env():
 
 
 def _bring_up(layer, timeout):
-    """docker compose --profile <p> up -d --wait.
+    """docker compose --profile <p> up -d --build --wait.
 
     --wait is only meaningful because every service has a healthcheck. This is
     what separates 'the services never became healthy' from 'the scenarios
     failed', which are different diagnoses.
+
+    --build is not optional: without it, `up -d` happily starts whatever image
+    is already cached, even when the source underneath it has since changed.
+    A harness that tests yesterday's build while reporting on today's source
+    is exactly the kind of lie this project exists to catch (see the agent-a
+    enrollment fault this masked in task 8's diagnosis). The cache makes a
+    warm rebuild cost seconds, not minutes.
     """
-    cmd = COMPOSE + ["--profile", layer.profile, "up", "-d", "--wait",
+    cmd = COMPOSE + ["--profile", layer.profile, "up", "-d", "--build", "--wait",
                      "--wait-timeout", str(timeout)]
     proc = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")

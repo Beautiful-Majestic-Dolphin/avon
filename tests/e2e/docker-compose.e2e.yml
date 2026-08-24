@@ -26,6 +26,17 @@ services:
       - public
       - protected
     # gateway already has NET_ADMIN and /dev/net/tun from base compose
+    # Dockerfile.gateway-e2e installs the binary as /usr/local/bin/avon-gateway
+    # (not /usr/local/bin/avon, the base image's convention), so the base
+    # compose's healthcheck path does not exist here. Override it rather than
+    # renaming the binary, since this Dockerfile's whole point is to add
+    # e2e-only tooling (iproute2, nftables) around the same binary.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/avon-gateway", "health-check"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
   # Four services because each breaks differently. A single nginx on port 80
   # cannot tell you whether the tunnel carries UDP, survives a rekey mid-session,
