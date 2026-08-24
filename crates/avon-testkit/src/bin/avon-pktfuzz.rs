@@ -15,8 +15,8 @@ fn main() {
 #[cfg(target_os = "linux")]
 mod imp {
     use std::collections::VecDeque;
-    use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
-    use std::os::unix::io::AsRawFd;
+    use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
+    use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
     use std::time::{Duration, Instant};
 
     use clap::Parser;
@@ -50,7 +50,12 @@ mod imp {
             return Err(std::io::Error::last_os_error());
         }
         // Bind to interface via SO_BINDTODEVICE
-        let c_iface = std::ffi::CString::new(iface).unwrap();
+        let c_iface = std::ffi::CString::new(iface).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "interface name contains a NUL",
+            )
+        })?;
         let ret = unsafe {
             libc::setsockopt(
                 fd,
@@ -66,7 +71,7 @@ mod imp {
             return Err(e);
         }
         // SAFETY: fd is owned
-        Ok(unsafe { std::os::unix::io::OwnedFd::from_raw_fd(fd) })
+        Ok(unsafe { OwnedFd::from_raw_fd(fd) })
     }
 
     fn is_udp_to_or_from_port(pkt: &[u8], port: u16) -> bool {
@@ -114,18 +119,20 @@ mod imp {
 
     pub fn run() -> anyhow::Result<()> {
         let args = Args::parse();
-        let gateway: SocketAddr = if args.gateway.contains(':') {
-            // Resolve via DNS inside container; try to parse as SocketAddr first, then lookup.
-            args.gateway.parse().unwrap_or_else(|_| {
-                // Fallback: try to resolve hostname
-                let parts: Vec<&str> = args.gateway.split(':').collect();
-                let host = parts[0];
-                let port: u16 = parts[1].parse().unwrap_or(args.port);
-                let addrs = std::net::ToSocketAddrs::to_socket_addrs((host, port)).unwrap();
-                addrs.into_iter().next().unwrap()
-            })
-        } else {
-            format!("127.0.0.1:{}", args.port).parse().unwrap()
+        // `host:port` may be a literal address or a name to resolve inside the
+        // container; a bare value is a port on the loopback.
+        let gateway: SocketAddr = match args.gateway.rsplit_once(':') {
+            Some((host, port)) => match args.gateway.parse() {
+                Ok(addr) => addr,
+                Err(_) => {
+                    let port: u16 = port.parse().unwrap_or(args.port);
+                    (host, port)
+                        .to_socket_addrs()?
+                        .next()
+                        .ok_or_else(|| anyhow::anyhow!("{host} resolved to no address"))?
+                }
+            },
+            None => SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, args.port)),
         };
 
         let mut ring: VecDeque<Vec<u8>> = VecDeque::with_capacity(32);
