@@ -58,7 +58,17 @@ class Compose:
             "Cannot connect to the Docker daemon",
             "executable file not found",
         )
-        if any(marker in combined for marker in harness_failures):
+        # 126/127 are POSIX's unambiguous "could not execute" signals (126 = found
+        # but not executable, 127 = not found), returned by both sh and docker when
+        # the probe binary itself is missing -- e.g. `bash` inside nginx:alpine. The
+        # message text for that case varies ("bash: not found", "executable file not
+        # found", ...) and cannot be enumerated exhaustively, so the exit code is the
+        # reliable signal. 124 is deliberately excluded: that is `timeout(1)` killing
+        # a probe that ran and hung, which is exactly what a filtered/dropped port
+        # looks like -- an observed negative, not a harness failure. Do not add it.
+        if result.returncode in (126, 127) or any(
+            marker in combined for marker in harness_failures
+        ):
             raise HarnessError(
                 f"harness could not run {' '.join(cmd)} in {service}: {combined.strip()}"
             )
