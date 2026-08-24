@@ -156,6 +156,35 @@ def test_load_accepts_a_valid_baseline(tmp_path):
     assert load(good) == {"layers": {"l2": "PASS"}, "missing": 2}
 
 
+# -- R12: a partial baseline (only one of the two required keys) is -----------
+# corruption, not something to silently fill in. The two keys are NOT
+# symmetric: losing "missing" defaults compare()'s was_missing to 0, which
+# fails safe (a spurious "MISSING grew" that gets investigated). Losing
+# "layers" defaults compare()'s per-layer lookup to {}, which fails silent
+# (every PASS history vanishes and compare() reports no regressions at all)
+# -- so both partial shapes must be rejected the same way, loudly.
+
+
+def test_load_raises_on_a_baseline_with_only_layers(tmp_path):
+    partial = tmp_path / "baseline.json"
+    partial.write_text(json.dumps({"layers": {"l2": "PASS"}}))
+
+    with pytest.raises(BaselineError, match=str(partial)):
+        load(partial)
+
+
+def test_load_raises_on_a_baseline_with_only_missing(tmp_path):
+    """The dangerous direction: without this check, a baseline reduced to
+    just {"missing": N} would be accepted, every layer's PASS history would
+    silently vanish (compare() finds nothing to check against), and a real
+    PASS -> FAIL regression would be reported as no regression at all."""
+    partial = tmp_path / "baseline.json"
+    partial.write_text(json.dumps({"missing": 3}))
+
+    with pytest.raises(BaselineError, match=str(partial)):
+        load(partial)
+
+
 def test_load_resolves_baseline_at_call_time_not_import_time(monkeypatch, tmp_path):
     """The bug this closes: `def load(path=BASELINE)` binds BASELINE once,
     at import, so reassigning ratchet.BASELINE afterwards would have no
