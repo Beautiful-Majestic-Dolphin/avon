@@ -138,6 +138,12 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
   control:
     build:
@@ -157,13 +163,19 @@ services:
       AVON_METRICS_ADDR: 0.0.0.0:9090
     ports:
       - "50051:50051"
-      - "8080:8080"
+      - "8090:8080"
     volumes:
       - certs:/certs:ro
       - ./deploy/compose/infra-certs:/infra:ro
     depends_on:
       ca:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
   gateway:
     build:
@@ -197,6 +209,14 @@ services:
     depends_on:
       control:
         condition: service_started
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     networks:
       - public
       - protected
