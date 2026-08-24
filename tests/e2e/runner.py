@@ -25,6 +25,17 @@ own --wait-timeout for bring-up; explicit `timeout=` for cargo, pytest
 collection, and the pytest run itself). A hung registry fetch or a scenario
 module that blocks on import must become a diagnosed FAIL, never an
 unbounded hang and never a silently-swallowed PASS.
+
+Every file this runner writes and later reads back as evidence --
+results/sidecar-<layer>.json, results/junit-<layer>.xml, and
+results/collect-<layer>.json -- is unlinked immediately before the
+subprocess that (re)writes it runs. A `timeout=` above is a controlled
+death; this guard is for the uncontrolled ones (SIGKILL, OOM, anything that
+doesn't raise TimeoutExpired) that skip pytest_sessionfinish and would
+otherwise leave a previous run's file to be read back as this run's. That
+matters most for collect-<layer>.json: its MISSING count feeds the ratchet
+Task 5 builds, which fails CI when MISSING grows, so a stale read there
+could make a newly-added gap look like no change at all.
 """
 
 import argparse
@@ -192,7 +203,18 @@ def _collect_missing(layer, sidecar):
     compose layer returns it. The sidecar is still written by conftest's
     pytest_sessionfinish regardless of the exit code, so reading it back is
     enough -- the return code itself is deliberately not checked here.
+
+    Stale-evidence guard: `sidecar` is unlinked before the subprocess runs.
+    A TimeoutExpired below is already safe (this function returns before
+    reading the file at all), but any *other* non-graceful death -- SIGKILL,
+    OOM, anything that doesn't trip `timeout=` -- skips
+    pytest_sessionfinish too, and without this unlink a leftover file from a
+    previous run would be read back and reported as this run's MISSING list.
+    That count feeds the ratchet Task 5 builds, which fails CI when MISSING
+    grows; a stale collect sidecar could make a newly-added gap look like no
+    change at all.
     """
+    Path(sidecar).unlink(missing_ok=True)
     cmd = ["uv", "run", "pytest", "-m", layer.marker,
            f"--sidecar={sidecar}", "--collect-only", "-q"]
     try:
