@@ -1,26 +1,15 @@
 """Device trust end to end: hardware-backed identity, attestation-gated policy,
 and fail-closed behaviour when the tunnel is down.
 
-Two of these are marked xfail. They describe what a real TPM provider must
-deliver, and they will start passing the day `Tpm2KeyProvider` talks to a TPM
-instead of simulating one — which is deliberately not the same day the
-simulation learns to answer challenges, because a simulated quote is a process
-vouching for itself.
+`agent-tpm` runs a binary built with the `tpm2` feature against the `swtpm`
+service, so these exercise the real provider: keys sealed under a TPM primary,
+and `TPM2_Quote` answered by a restricted attestation key that the control plane
+verifies and pins.
 """
 
 import time
 
-import pytest
 
-
-NEEDS_REAL_TPM = (
-    "the TPM provider is still the simulation described in its own header: it "
-    "seals with a key derived from the TCTI string and returns no quote, so no "
-    "device can reach `verified` yet"
-)
-
-
-@pytest.mark.xfail(reason=NEEDS_REAL_TPM, strict=False)
 def test_tpm_backed_agent_reports_its_provider_and_becomes_verified(agents, admin):
     a = agents["agent-tpm"]
     st = a.wait_connected(timeout=180)
@@ -47,7 +36,6 @@ def test_a_software_agent_never_reaches_verified(agents, admin):
     )
 
 
-@pytest.mark.xfail(reason=NEEDS_REAL_TPM, strict=False)
 def test_policy_requiring_verified_attestation_admits_only_the_tpm_agent(agents, admin):
     tpm, soft = agents["agent-tpm"], agents["agent-a"]
     tpm.wait_connected(timeout=180)
