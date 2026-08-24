@@ -4,7 +4,9 @@ mod health;
 mod metrics;
 mod tracing;
 
-pub use health::{grpc_health, serve_health, GrpcHealth, Readiness, ReadyFlag};
+pub use health::{
+    grpc_health, health_probe_from_env, serve_health, GrpcHealth, Readiness, ReadyFlag,
+};
 pub use metrics::install_metrics;
 pub use tracing::init_tracing;
 

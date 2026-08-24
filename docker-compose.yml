@@ -139,7 +139,7 @@ services:
       bootstrap:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "/usr/local/bin/avon", "health-check"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -171,7 +171,7 @@ services:
       ca:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "/usr/local/bin/avon", "health-check"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -212,7 +212,7 @@ services:
     sysctls:
       net.ipv4.ip_forward: "1"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "/usr/local/bin/avon", "health-check"]
       interval: 3s
       timeout: 3s
       retries: 20
