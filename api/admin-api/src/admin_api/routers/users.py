@@ -159,7 +159,11 @@ async def login(
 
     await UserQueries.update_last_login(db, user.id)
     await ActivityQueries.log_activity(
-        db, event_type="user.login", actor_id=user.id, actor_type="user"
+        db,
+        event_type="user.login",
+        actor_id=user.id,
+        actor_type="user",
+        tenant_id=tenant_id,
     )
     logger.info("user_logged_in", user_id=str(user.id), email=user.email)
     return TokenResponse(

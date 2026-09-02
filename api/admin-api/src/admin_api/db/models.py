@@ -190,7 +190,7 @@ class DbScimToken(BaseModel):
 class DbActivityLog(BaseModel):
     """Activity log database model."""
 
-    id: UUID
+    id: int  # activity_logs.id is BIGSERIAL, not a UUID
     event_type: str
     actor_id: UUID | None = None
     actor_type: str  # "user", "device", "system"

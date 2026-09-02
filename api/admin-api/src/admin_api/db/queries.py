@@ -1051,26 +1051,68 @@ class ActivityQueries:
         target_type: str | None = None,
         details: dict | None = None,
         ip_address: str | None = None,
+        tenant_id: UUID | None = None,
     ) -> DbActivityLog:
-        """Log an activity event."""
+        """Log an activity event.
+
+        `activity_logs.tenant_id` is NOT NULL, but this INSERT never set it, so
+        every call raised NotNullViolation and 500'd the operation it was meant
+        to record -- login included. A caller that knows the tenant passes it;
+        one that does not falls back to the seed default tenant so logging can
+        never crash the operation.
+        """
+        import hashlib
         import json
+
+        default_tenant = UUID("00000000-0000-0000-0000-000000000001")
+        tenant = tenant_id or default_tenant
+        details_json = json.dumps(details) if details else None
+
+        # `hash` is NOT NULL and chains over `prev_hash`: each entry hashes the
+        # previous entry's hash together with its own content, so a deleted or
+        # altered row breaks the chain. The INSERT never computed it, which is
+        # why every log call failed. Chain per tenant (the tenant scopes the
+        # audit trail). Not serialised against concurrent writers -- two racing
+        # inserts can share a prev_hash -- which is acceptable for this audit
+        # trail and avoids taking a lock on the hot login path.
+        prev_hash = await conn.fetchval(
+            "SELECT hash FROM activity_logs WHERE tenant_id = $1 ORDER BY id DESC LIMIT 1",
+            tenant,
+        )
+        payload = "|".join(
+            str(x)
+            for x in (
+                tenant,
+                event_type,
+                actor_id,
+                actor_type,
+                target_id,
+                target_type,
+                details_json,
+                ip_address,
+            )
+        ).encode()
+        entry_hash = hashlib.sha256((prev_hash or b"") + payload).digest()
 
         row = await conn.fetchrow(
             """
             INSERT INTO activity_logs (
-                event_type, actor_id, actor_type, target_id, target_type,
-                details, ip_address, created_at
+                tenant_id, event_type, actor_id, actor_type, target_id,
+                target_type, details, ip_address, prev_hash, hash, created_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
             RETURNING *
             """,
+            tenant,
             event_type,
             actor_id,
             actor_type,
             target_id,
             target_type,
-            json.dumps(details) if details else None,
+            details_json,
             ip_address,
+            prev_hash,
+            entry_hash,
         )
         return DbActivityLog(**dict(row))
 
