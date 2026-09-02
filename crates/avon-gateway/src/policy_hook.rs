@@ -105,12 +105,24 @@ impl CedarFlowPolicy {
     }
 
     pub fn allow(&self, ctx: &FlowContext) -> Decision {
+        // A tenant with no engine, or an engine that has loaded a snapshot
+        // carrying no policies, is unconfigured rather than deny-everything.
+        // The data plane is permissive until the first policy is authored,
+        // matching the control plane's session admission; the moment a tenant
+        // has any policy, this falls through to default-deny with explicit
+        // permits.
         let Some(engine) = self.engines.get(&ctx.tenant).map(|e| e.clone()) else {
             return Decision {
-                allow: false,
-                reason: "no policy snapshot",
+                allow: true,
+                reason: "no-policy-permissive",
             };
         };
+        if !engine.has_policies() {
+            return Decision {
+                allow: true,
+                reason: "no-policy-permissive",
+            };
+        }
         let version = engine.version();
         let key = FlowKey {
             session: ctx.session,

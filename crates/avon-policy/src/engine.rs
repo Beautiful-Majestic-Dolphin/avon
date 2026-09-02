@@ -75,6 +75,20 @@ impl Engine {
             .unwrap_or(0)
     }
 
+    /// Whether this tenant has authored any policy at all. A tenant with none
+    /// is treated as unconfigured, not as deny-everything: enforcement points
+    /// are permissive until the first policy exists (the same stance session
+    /// admission takes in the control plane), and zero-trust default-deny
+    /// begins the moment a tenant authors a policy.
+    pub fn has_policies(&self) -> bool {
+        self.inner
+            .load()
+            .as_ref()
+            .as_ref()
+            .map(|l| !l.data.policies.is_empty())
+            .unwrap_or(false)
+    }
+
     pub fn load(&self, data: SnapshotData, now: i64) -> Result<(), CompileError> {
         if data.tenant_id != self.tenant {
             return Err(CompileError::Tenant);
