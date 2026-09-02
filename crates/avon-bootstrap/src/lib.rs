@@ -16,8 +16,14 @@ use avon_crypto::hybrid::kem::HybridKemKeyPair;
 use avon_crypto::hybrid::signature::HybridSigningKeyPair;
 use sqlx::PgPool;
 
-/// Issue one TLS + AVON credential per service. Certificates that already exist
-/// on disk are reissued: this is cheap and keeps `init` idempotent.
+/// Issue one TLS + AVON credential per service. A service whose identity is
+/// already on disk is left untouched: `init` is idempotent, and re-running it
+/// (a compose `up` that re-runs the one-shot bootstrap on a layer change, say)
+/// must not rotate a service's keys. Rotating them mid-deployment invalidates
+/// every session and enrollment already established against that identity --
+/// the gateway would come back under a new id, and every connected agent would
+/// be cut off. The CA is stable across re-runs (`load_or_init`), so an existing
+/// service cert is still valid; there is nothing to reissue.
 pub async fn issue_service_certs(
     pool: &PgPool,
     keys: &CaKeys,
@@ -35,6 +41,11 @@ pub async fn issue_service_certs(
         .map(|(k, v)| (k.to_string(), v.split('+').map(String::from).collect()))
         .collect();
     for service in services {
+        // Already initialised: keep the existing identity rather than rotate it.
+        if out.join(format!("{service}.avon.crt")).exists() {
+            println!("{service} already initialised; keeping its identity");
+            continue;
+        }
         let signing = HybridSigningKeyPair::generate()?;
         let kem = HybridKemKeyPair::generate()?;
         let tls_key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ED25519)?;
