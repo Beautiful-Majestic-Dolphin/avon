@@ -12,13 +12,24 @@ COPY migrations ./migrations
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/build/target,sharing=locked \
     cargo build --release --locked --bin "${BIN}" \
- && cp "target/release/${BIN}" "/${BIN}"
+ && cargo build --release --locked -p avon-testkit --bin avon-pktfuzz \
+ && cp "target/release/${BIN}" "/${BIN}" \
+ && cp target/release/avon-pktfuzz /avon-pktfuzz
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    iproute2 nftables ca-certificates \
+    iproute2 nftables ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
+# curl is here so the harness can scrape the gateway's own metrics endpoint
+# (localhost:9090): metric() execs into this container, and the agents cannot
+# reach the endpoint from outside because their fail-closed firewall blocks
+# every off-tunnel destination.
 COPY --from=builder /avon-gateway /usr/local/bin/avon-gateway
+# The fault tests replay and corrupt packets from the gateway's own ingress,
+# where the agent-to-gateway half of a session carries the gateway's receiver
+# index -- so a replay is seen as a replay and a corruption fails auth. Captured
+# on an agent, that half is invisible (AF_PACKET sees only ingress there).
+COPY --from=builder /avon-pktfuzz /usr/local/bin/avon-pktfuzz
 COPY deploy/compose/gateway-entrypoint.sh /usr/local/bin/gateway-entrypoint.sh
 RUN chmod +x /usr/local/bin/gateway-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/gateway-entrypoint.sh"]

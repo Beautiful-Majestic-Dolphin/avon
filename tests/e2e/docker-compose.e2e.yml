@@ -16,6 +16,16 @@ services:
       - default
       - public
 
+  # The gateway lives on `public`, and session mirroring wants Redis. Redis is
+  # only on `default` in the base compose, so without this the gateway cannot
+  # resolve or reach it. The gateway now tolerates that (it connects in the
+  # background), but mirroring is part of what these layers exist to exercise,
+  # so give it the network rather than leave the feature dark.
+  redis:
+    networks:
+      - default
+      - public
+
   gateway:
     build:
       context: .
