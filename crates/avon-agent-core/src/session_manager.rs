@@ -109,10 +109,18 @@ impl SessionManager {
             &gw_cert,
         )?;
 
-        let gateway_endpoint: SocketAddr = answer
-            .responder_endpoint
-            .parse()
-            .map_err(|_| AgentError::Protocol("bad responder endpoint".into()))?;
+        // The gateway advertises a name in any real deployment; resolve it
+        // now, at connect time, with the socket's family (see `resolve`).
+        let gateway_endpoint = crate::resolve::resolve_endpoint(
+            &answer.responder_endpoint,
+            self.endpoint.local_addr(),
+        )
+        .await?;
+        tracing::info!(
+            advertised = %answer.responder_endpoint,
+            %gateway_endpoint,
+            "resolved gateway endpoint"
+        );
 
         let session = Session::new(
             session_id,

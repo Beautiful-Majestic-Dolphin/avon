@@ -358,7 +358,11 @@ impl PeerManager {
             return;
         }
 
-        // Parse candidate addresses
+        // Candidates are literal addresses by construction: `gather_candidates` builds
+        // them from this socket's bound address and the reflexive address the
+        // gateway observed, both `SocketAddr::to_string()`. Nothing here is a
+        // name, so parsing (not resolving) is correct; the hub endpoint is the
+        // one that carries a name, and `resolve::resolve_endpoint` handles it.
         let addrs: Vec<SocketAddr> = candidates
             .iter()
             .filter_map(|c| c.address.parse::<SocketAddr>().ok())

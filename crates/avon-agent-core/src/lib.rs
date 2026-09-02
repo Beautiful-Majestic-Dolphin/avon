@@ -6,6 +6,7 @@ pub mod attest;
 pub mod control;
 pub mod identity;
 pub mod peer;
+pub mod resolve;
 pub mod router;
 pub mod session_manager;
 pub mod status;
@@ -31,6 +32,8 @@ pub enum AgentError {
     Keystore(#[from] avon_keystore::KeyError),
     #[error("protocol: {0}")]
     Protocol(String),
+    #[error("gateway endpoint: {0}")]
+    Endpoint(#[from] resolve::ResolveError),
     #[error("tun: {0}")]
     Tun(String),
     #[error("io: {0}")]
