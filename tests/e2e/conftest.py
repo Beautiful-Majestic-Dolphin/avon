@@ -29,12 +29,20 @@ def pytest_configure(config):
     config.stash[WITNESS_KEY] = {}
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config, items):
     """Pull MISSING items out of the run before anything can execute them.
 
     Deliberately not implemented with pytest.skip: the skip-to-failure hook
     below would turn every MISSING into a FAIL, and exempting skips would hand
     anyone a one-word way to launder one.
+
+    trylast: pytest's own mark plugin applies `-m` deselection in this same
+    hook, and conftest hooks run before plugin hooks unless told otherwise.
+    Without this the runner's per-layer collection (`-m l2`, `-m l3`, ...)
+    saw every MISSING item in the tree on every layer, so one gap marked l3
+    was reported once per compose layer and the ratchet counted it four
+    times over.
     """
     kept = []
     for item in items:
@@ -52,6 +60,28 @@ def pytest_collection_modifyitems(config, items):
             )
         config.stash[MISSING_KEY].append({"nodeid": item.nodeid, "reason": reason})
     items[:] = kept
+
+
+@pytest.fixture(autouse=True)
+def _policy_isolation(request):
+    """Reset the tenant's policies and pods after every policy-layer scenario.
+
+    The stack and its database are shared across scenarios and across layers,
+    and policies persist. Without this, a `source: any` deny authored by one
+    scenario silently denies every later scenario's traffic, and a tenant any
+    scenario configured never returns to the permissive unconfigured state the
+    data-plane layer depends on. Runs only for scenarios in a layer whose stack
+    includes the admin API (l4, l5, lnet); l2/l3 author no policies and start no
+    admin service, so there is nothing to reset and no admin to reach.
+    """
+    yield
+    markers = {m.name for m in request.node.iter_markers()}
+    if not markers & {"l4", "l5", "lnet"}:
+        return
+    try:
+        request.getfixturevalue("admin").reset_policies_and_pods()
+    except Exception:
+        pass
 
 
 @pytest.fixture

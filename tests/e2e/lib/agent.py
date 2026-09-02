@@ -29,6 +29,25 @@ class Agent:
     def curl(self, url: str, timeout: int = 5) -> str:
         return self.compose.exec(self.service, "curl", "-fsS", "--max-time", str(timeout), url, timeout=timeout + 5)
 
+    def http_get(self, url: str, timeout: int = 5) -> tuple[int, str]:
+        """(curl exit code, body). A failed fetch is an observed negative and
+        comes back as a non-zero code; a harness failure raises."""
+        return self.compose.exec_capture(
+            self.service, "curl", "-fsS", "--max-time", str(timeout), url, timeout=timeout + 5
+        )
+
+    def try_status(self) -> dict | None:
+        """`status()` for an agent that may not be answering yet: None when the
+        status command fails (no socket, still starting), parsed JSON when it
+        answers. A harness failure raises, as everywhere."""
+        code, out = self.compose.exec_capture(self.service, "avon-agent", "status", "--json")
+        if code != 0:
+            return None
+        try:
+            return json.loads(out)
+        except json.JSONDecodeError:
+            return None
+
     def ping(self, ip: str, count: int = 3) -> bool:
         code, _ = self.compose.exec_capture(
             self.service, "ping", "-c", str(count), "-W", "2", ip, timeout=15

@@ -85,3 +85,71 @@ def test_exit_124_timeout_is_an_observed_negative_not_a_harness_failure(monkeypa
     _stub_subprocess_run(monkeypatch, 124)
     agent = Agent(Compose(), "agent-a")
     assert agent.tcp_open("10.0.0.1", 80) is False
+
+
+# Admin.wait_until used to swallow its own timeout and return None, so a
+# scenario whose only assertion was `admin.wait_until(lambda: ...)` passed
+# whether or not the condition ever held.
+class _NoCompose:
+    pass
+
+
+def _admin():
+    from lib.admin import Admin
+
+    return Admin(_NoCompose())
+
+
+def test_wait_until_returns_the_truthy_value():
+    calls = []
+
+    def predicate():
+        calls.append(1)
+        return {"ok": True} if len(calls) >= 3 else None
+
+    assert _admin().wait_until(predicate, timeout=5, interval=0.01) == {"ok": True}
+
+
+def test_wait_until_raises_on_timeout_rather_than_returning_none():
+    with pytest.raises(AssertionError, match="not met within"):
+        _admin().wait_until(lambda: False, timeout=0.05, interval=0.01)
+
+
+def test_wait_until_lets_a_harness_error_through():
+    def broken():
+        raise HarnessError("No such service: agent-typo")
+
+    with pytest.raises(HarnessError):
+        _admin().wait_until(broken, timeout=5, interval=0.01)
+
+
+def test_wait_until_polls_through_transient_errors_and_reports_the_last_one():
+    def flaky():
+        raise ConnectionError("admin api restarting")
+
+    with pytest.raises(AssertionError, match="admin api restarting"):
+        _admin().wait_until(flaky, timeout=0.05, interval=0.01)
+
+
+def test_try_status_is_none_when_the_agent_is_not_answering():
+    class NotAnswering:
+        def exec_capture(self, service, *cmd, timeout=60):
+            return 1, "connection refused: /run/avon/agent.sock"
+
+    assert Agent(NotAnswering(), "agent-c").try_status() is None
+
+
+def test_try_status_parses_an_answer():
+    class Answering:
+        def exec_capture(self, service, *cmd, timeout=60):
+            return 0, '{"state": "connecting"}'
+
+    assert Agent(Answering(), "agent-c").try_status() == {"state": "connecting"}
+
+
+def test_http_get_reports_a_failed_fetch_as_a_code_not_an_exception():
+    class Refused:
+        def exec_capture(self, service, *cmd, timeout=60):
+            return 7, "curl: (7) Failed to connect"
+
+    assert Agent(Refused(), "agent-a").http_get("http://172.30.0.10/")[0] == 7

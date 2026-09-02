@@ -49,32 +49,44 @@ mod imp {
         if fd < 0 {
             return Err(std::io::Error::last_os_error());
         }
-        // Bind to interface via SO_BINDTODEVICE
-        let c_iface = std::ffi::CString::new(iface).map_err(|_| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "interface name contains a NUL",
-            )
-        })?;
-        let ret = unsafe {
-            libc::setsockopt(
-                fd,
-                libc::SOL_SOCKET,
-                libc::SO_BINDTODEVICE,
-                c_iface.as_ptr() as *const libc::c_void,
-                c_iface.as_bytes().len() as libc::socklen_t,
-            )
-        };
-        if ret < 0 {
-            let e = std::io::Error::last_os_error();
-            unsafe { libc::close(fd) };
-            return Err(e);
+        // Bind to one interface via SO_BINDTODEVICE, unless "any": a container
+        // may not know which interface name carries the traffic (the gateway's
+        // public side is eth0 or eth1 depending on attach order), so "any"
+        // captures on every interface and the port filter does the selecting.
+        if iface != "any" {
+            let c_iface = std::ffi::CString::new(iface).map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "interface name contains a NUL",
+                )
+            })?;
+            let ret = unsafe {
+                libc::setsockopt(
+                    fd,
+                    libc::SOL_SOCKET,
+                    libc::SO_BINDTODEVICE,
+                    c_iface.as_ptr() as *const libc::c_void,
+                    c_iface.as_bytes().len() as libc::socklen_t,
+                )
+            };
+            if ret < 0 {
+                let e = std::io::Error::last_os_error();
+                unsafe { libc::close(fd) };
+                return Err(e);
+            }
         }
         // SAFETY: fd is owned
         Ok(unsafe { OwnedFd::from_raw_fd(fd) })
     }
 
-    fn is_udp_to_or_from_port(pkt: &[u8], port: u16) -> bool {
+    /// True only for packets headed TO `port` (the gateway's tunnel port), i.e.
+    /// the agent-to-gateway half of the flow. Those carry the gateway's own
+    /// receiver index and a counter the gateway has already advanced past, so
+    /// replaying one to the gateway is recognised as a replay and corrupting
+    /// one fails authentication. The return half (source port 4600) carries the
+    /// agent's index instead; replayed to the gateway it is only an unknown
+    /// index, which is not what these fault tests are exercising.
+    fn is_udp_to_port(pkt: &[u8], port: u16) -> bool {
         if pkt.len() < 14 + 20 + 8 {
             return false;
         }
@@ -93,9 +105,8 @@ mod imp {
             return false;
         }
         let udp_off = ip_off + ihl;
-        let src_port = u16::from_be_bytes([pkt[udp_off], pkt[udp_off + 1]]);
         let dst_port = u16::from_be_bytes([pkt[udp_off + 2], pkt[udp_off + 3]]);
-        src_port == port || dst_port == port
+        dst_port == port
     }
 
     fn extract_udp_payload(pkt: &[u8]) -> Option<Vec<u8>> {
@@ -168,7 +179,7 @@ mod imp {
                 };
                 if n > 0 {
                     let pkt = &buf[..n as usize];
-                    if is_udp_to_or_from_port(pkt, args.port) {
+                    if is_udp_to_port(pkt, args.port) {
                         if let Some(payload) = extract_udp_payload(pkt) {
                             if ring.len() >= 32 {
                                 ring.pop_front();
@@ -206,8 +217,16 @@ mod imp {
         if args.corrupt > 0 {
             for _ in 0..args.corrupt {
                 if let Some(mut payload) = ring.back().cloned().or_else(|| ring.front().cloned()) {
-                    if !payload.is_empty() {
-                        // Flip a random byte
+                    // Corrupt the AEAD region, never the 16-byte tunnel header.
+                    // Flipping the last byte lands in the authentication tag, so
+                    // the receiver index still routes the packet to its session
+                    // and the tag check then fails: a guaranteed auth drop, not
+                    // an unknown-index drop. A random byte could hit the index
+                    // and be counted as the wrong kind of failure.
+                    if payload.len() > 16 {
+                        let last = payload.len() - 1;
+                        payload[last] ^= 0xFF;
+                    } else if !payload.is_empty() {
                         let idx = (rand::random::<usize>()) % payload.len();
                         payload[idx] ^= 0xFF;
                     }

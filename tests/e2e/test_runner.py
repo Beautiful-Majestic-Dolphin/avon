@@ -170,3 +170,66 @@ def test_collect_missing_does_not_read_back_a_stale_sidecar(monkeypatch, tmp_pat
     assert missing == []
     assert timeout_detail is None
     assert not sidecar.exists()
+
+
+# -- fresh stack before the first compose layer ------------------------------
+#
+# Agent data volumes outlive `docker compose down`, and the entrypoint keeps
+# an existing identity rather than enrolling again. A walk that reused a
+# week-old volume had every agent exit with "certificate expired" -- a fact
+# about leftovers, reported as a FAIL of the data plane.
+
+
+def _stub_compose_walk(monkeypatch, tmp_path, calls):
+    monkeypatch.setattr(runner, "RESULTS", tmp_path)
+    monkeypatch.setattr(runner, "_collect_missing", lambda layer, sidecar: ([], None))
+
+    def fake_fresh():
+        calls.append("down")
+        return 0, ""
+
+    def fake_up(layer, timeout):
+        calls.append(f"up:{layer.name}")
+        return 0, ""
+
+    def fake_pytest(layer, sidecar):
+        calls.append(f"pytest:{layer.name}")
+        return runner.NO_TESTS_COLLECTED, ""
+
+    monkeypatch.setattr(runner, "_fresh_stack", fake_fresh)
+    monkeypatch.setattr(runner, "_bring_up", fake_up)
+    monkeypatch.setattr(runner, "_run_pytest", fake_pytest)
+
+
+def test_the_stack_is_torn_down_once_before_the_first_compose_layer(monkeypatch, tmp_path):
+    calls = []
+    _stub_compose_walk(monkeypatch, tmp_path, calls)
+    runner.run_layers(selected=["l2", "l3"])
+    assert calls[:2] == ["down", "up:l2"]
+    assert calls.count("down") == 1, "l3 stacks on l2; it must not tear l2 down"
+
+
+def test_from_reuses_the_running_stack_without_tearing_it_down(monkeypatch, tmp_path):
+    calls = []
+    _stub_compose_walk(monkeypatch, tmp_path, calls)
+    runner.run_layers(selected=["l2", "l3"], start_from="l3")
+    assert "down" not in calls
+    assert calls[0] == "up:l3"
+
+
+def test_keep_stack_skips_the_teardown(monkeypatch, tmp_path):
+    calls = []
+    _stub_compose_walk(monkeypatch, tmp_path, calls)
+    runner.run_layers(selected=["l2"], fresh=False)
+    assert calls == ["up:l2", "pytest:l2"]
+
+
+def test_a_failed_teardown_fails_the_layer_instead_of_building_on_it(monkeypatch, tmp_path):
+    calls = []
+    _stub_compose_walk(monkeypatch, tmp_path, calls)
+    monkeypatch.setattr(runner, "_fresh_stack", lambda: (1, "volume in use"))
+    results = runner.run_layers(selected=["l2", "l3"])
+    assert results["l2"].verdict is Verdict.FAIL
+    assert "tear down" in results["l2"].detail
+    assert "up:l2" not in calls
+    assert results["l3"].verdict is Verdict.BLOCKED

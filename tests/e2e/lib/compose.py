@@ -43,6 +43,16 @@ class Compose:
     def exec(self, service: str, *cmd: str, timeout: int = 60) -> str:
         return self._run("exec", "-T", service, *cmd, timeout=timeout)
 
+    def exec_detached(self, service: str, *cmd: str, timeout: int = 15) -> None:
+        """Start a command in the container and return immediately.
+
+        `docker compose exec -d` detaches, so the command keeps running after
+        this returns. Used to drive background traffic while another command
+        observes it -- a fault test needs real tunnel packets flowing during
+        the window its capture tool is listening.
+        """
+        self._run("exec", "-d", service, *cmd, timeout=timeout)
+
     def exec_capture(self, service: str, *cmd: str, timeout: int = 60) -> tuple[int, str]:
         """Run a command and return (exit code, output).
 

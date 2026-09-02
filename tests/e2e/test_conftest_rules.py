@@ -139,3 +139,46 @@ def test_missing_is_not_executed_and_is_recorded(pytester, tmp_path):
     data = json.loads(sidecar.read_text())
     assert len(data["missing"]) == 1
     assert data["missing"][0]["reason"] == "dial_peer has no production caller"
+
+
+def test_missing_is_recorded_only_for_the_selected_layer(pytester, tmp_path):
+    """The runner collects each layer with `-m <layer>`. A MISSING item marked
+    for another layer must not be recorded, or every layer's count includes
+    every gap in the tree and the ratchet multiplies them."""
+    pytester.makeconftest(CONFTEST)
+    pytester.makeini(
+        """
+        [pytest]
+        markers =
+            l2: control plane layer
+            l3: data plane layer
+            missing(reason): scenario has no executable body
+        """
+    )
+    pytester.makepyfile(
+        test_x="""
+        import pytest
+
+        @pytest.mark.l3
+        @pytest.mark.missing(reason="an l3 gap")
+        def test_l3_gap(witness):
+            raise AssertionError("must never run")
+
+        @pytest.mark.l2
+        def test_l2_real(witness):
+            witness("seen", True)
+        """
+    )
+    import json
+
+    sidecar = tmp_path / "l2.json"
+    result = pytester.runpytest(
+        "-p", "no:cacheprovider", "-m", "l2", f"--sidecar={sidecar}"
+    )
+    result.assert_outcomes(passed=1)
+    assert json.loads(sidecar.read_text())["missing"] == []
+
+    sidecar = tmp_path / "l3.json"
+    pytester.runpytest("-p", "no:cacheprovider", "-m", "l3", f"--sidecar={sidecar}")
+    recorded = json.loads(sidecar.read_text())["missing"]
+    assert [m["reason"] for m in recorded] == ["an l3 gap"]

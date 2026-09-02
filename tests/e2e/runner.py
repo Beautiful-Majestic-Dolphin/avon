@@ -160,6 +160,36 @@ def _env():
     return dict(os.environ)
 
 
+DOWN_TIMEOUT = 180  # `down -v` on a stack that is already gone is instant
+
+
+def _fresh_stack():
+    """docker compose down -v --remove-orphans, before the first compose layer.
+
+    Volumes outlive a stack. The agent data volumes in particular carry an
+    enrolled identity, and the entrypoint honours an existing identity rather
+    than enrolling again -- so a stack brought up a week later runs today's
+    binary with last week's device certificate, and the first thing every
+    agent does is exit with "certificate expired". That is a fact about the
+    harness's leftovers, not about the source under test. `--build` already
+    commits the runner to testing today's binary; this commits it to today's
+    identities and today's CA as well. `--from` skips it by design: that flag
+    means "the stack is already up, judge it as it stands".
+    Returns (code, output); a failure here is a FAIL of the first compose
+    layer, because nothing above it can be trusted either.
+    """
+    # Every service in the stack is behind a profile, and `down` without one
+    # matches nothing at all: it returns 0 having stopped no container and
+    # removed no volume. `--profile "*"` is compose's "every profile".
+    cmd = COMPOSE + ["--profile", "*", "down", "-v", "--remove-orphans"]
+    try:
+        proc = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True,
+                              timeout=DOWN_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return 1, f"docker compose down timed out after {DOWN_TIMEOUT}s"
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+
 def _bring_up(layer, timeout):
     """docker compose --profile <p> up -d --build --wait.
 
@@ -266,8 +296,10 @@ def _parse_junit(path):
     return passed, total
 
 
-def run_layers(selected=None, start_from=None, up_timeout=180):
+def run_layers(selected=None, start_from=None, up_timeout=180, fresh=True):
     RESULTS.mkdir(exist_ok=True)
+    # Only the first compose layer starts from nothing; the rest stack on it.
+    stack_is_fresh = not fresh or bool(start_from)
     order = [layer.name for layer in LAYERS]
     if selected:
         order = [n for n in order if n in selected]
@@ -315,6 +347,18 @@ def run_layers(selected=None, start_from=None, up_timeout=180):
             break
 
         started = time.time()
+        if not stack_is_fresh:
+            code, output = _fresh_stack()
+            stack_is_fresh = True
+            if code != 0:
+                results[layer.name] = LayerResult(
+                    verdict=Verdict.FAIL,
+                    duration=time.time() - started,
+                    missing=missing_by_layer.get(layer.name, 0),
+                    detail="could not tear down the previous stack: "
+                    + output.strip()[-400:],
+                )
+                break
         code, output = _bring_up(layer, up_timeout)
         if code != 0:
             results[layer.name] = LayerResult(
@@ -404,6 +448,11 @@ def main(argv=None):
     parser.add_argument("--from", dest="start_from", choices=LAYER_NAMES,
                         help="start here against an already-running stack; "
                              "lower layers are reported NOT_RUN, not PASS")
+    parser.add_argument("--keep-stack", action="store_true",
+                        help="do not `down -v` before the first compose layer; "
+                             "reuses whatever volumes and identities are left "
+                             "from the last run (faster, and exactly the stale "
+                             "state a fresh walk exists to rule out)")
     parser.add_argument("--update-baseline", action="store_true",
                         help="record the current verdicts as the new baseline "
                              "(requires a full walk -- not --layer or --from)")
@@ -428,7 +477,8 @@ def main(argv=None):
         idx = LAYER_NAMES.index(args.layer)
         selected = LAYER_NAMES[: idx + 1]
 
-    results = run_layers(selected=selected, start_from=args.start_from)
+    results = run_layers(selected=selected, start_from=args.start_from,
+                         fresh=not args.keep_stack)
     print(render(results))
 
     RESULTS.mkdir(exist_ok=True)
