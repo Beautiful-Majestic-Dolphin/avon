@@ -53,6 +53,16 @@ pub struct AgentConfig {
     /// Fail-closed is the default.
     #[serde(default)]
     pub fail_open: bool,
+    /// Seconds a session runs before a time-based rekey. The production default
+    /// is 120s; it is configurable so a test can observe a rekey inside a
+    /// bounded window rather than waiting two minutes. A rekey also fires on
+    /// the packet counter, whichever comes first.
+    #[serde(default = "default_rekey_secs")]
+    pub rekey_secs: u64,
+}
+
+fn default_rekey_secs() -> u64 {
+    120
 }
 
 fn default_allowed_routes() -> Vec<String> {
@@ -80,6 +90,7 @@ impl Default for AgentConfig {
             advertise_routes: Vec::new(),
             allowed_routes: default_allowed_routes(),
             fail_open: false,
+            rekey_secs: default_rekey_secs(),
         }
     }
 }
@@ -129,6 +140,11 @@ impl AgentConfig {
         if let Ok(v) = std::env::var("AVON_AGENT_TUN_NAME") {
             self.tun_name = v;
         }
+        if let Ok(v) = std::env::var("AVON_AGENT_REKEY_SECS") {
+            if let Ok(n) = v.parse() {
+                self.rekey_secs = n;
+            }
+        }
     }
 
     fn validate(&self) -> Result<(), ConfigLoadError> {
@@ -154,6 +170,12 @@ impl AgentConfig {
             return Err(ConfigLoadError::Invalid {
                 field: "tun_name",
                 reason: "1..=15 characters".into(),
+            });
+        }
+        if self.rekey_secs < 10 {
+            return Err(ConfigLoadError::Invalid {
+                field: "rekey_secs",
+                reason: "must be >= 10".into(),
             });
         }
         Ok(())

@@ -91,7 +91,10 @@ pub async fn run_agent(
     let agent_cfg = avon_agent_core::AgentCoreConfig {
         control,
         pulse_interval: std::time::Duration::from_secs(cfg.pulse_interval_secs),
-        timers: avon_tunnel::TimerConfig::default(),
+        timers: avon_tunnel::TimerConfig {
+            rekey_after: std::time::Duration::from_secs(cfg.rekey_secs),
+            ..avon_tunnel::TimerConfig::default()
+        },
         overlay_mtu: cfg.overlay_mtu,
         bind: std::net::SocketAddr::from(([0, 0, 0, 0], 0)),
         suites: vec![
