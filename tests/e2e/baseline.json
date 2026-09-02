@@ -3,10 +3,10 @@
     "l0": "PASS",
     "l1": "PASS",
     "l2": "PASS",
-    "l3": "FAIL",
-    "l4": "BLOCKED",
+    "l3": "PASS",
+    "l4": "FAIL",
     "l5": "BLOCKED",
     "lnet": "BLOCKED"
   },
-  "missing": 0
+  "missing": 3
 }

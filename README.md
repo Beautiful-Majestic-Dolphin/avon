@@ -93,19 +93,30 @@ cd tests/e2e && uv run python runner.py --layer l2   # one layer plus prerequisi
 | Build | Workspace compiles, images build | pass |
 | Crypto | Hybrid PQ primitives, AEAD suites, replay window, test vectors | pass |
 | Control plane | Enrollment, single-use and expiring tokens, uniform rejection | pass |
-| Data plane | Tunnel carries HTTP, SSH, Postgres, UDP; rekey; relay | under repair |
-| Policy, device trust, network | — | blocked on the data plane |
+| Data plane | Tunnel carries HTTP, SSH, Postgres, UDP; rekey; relay; replay and corrupt packets dropped | pass |
+| Policy | Cedar policy authored and enforced end to end | blocked on the admin API |
+| Device trust, network | — | blocked above |
 
 **Known gaps, stated plainly:**
 
-- **An agent cannot reach a gateway advertised by DNS name.** The responder
-  endpoint is parsed as a literal socket address and never resolved, so a gateway
-  published as `host:port` is rejected (`avon-agent-core/src/session_manager.rs`).
-  Use a literal address for the gateway's public endpoint until this is fixed.
+- **The admin API cannot author policy yet.** Its mutations never set a row's
+  `tenant_id` (the columns are `NOT NULL` and there is no default), so pod,
+  policy and device inserts fail. Login and the audit-log chain were fixed this
+  cycle; wiring `tenant_id` (and the RLS tenant context) through the mutation
+  paths is the next piece of work, and the policy e2e layer stays red until it
+  lands. The gateway's enforcement itself is proven: an unconfigured tenant is
+  permissive, and it default-denies with explicit permits once a policy exists.
 - **Peer-to-peer direct paths are not wired.** `PeerManager` exists and the
   forwarding path prefers a direct session, but nothing in the run loop dials a
   peer, so all agent-to-agent traffic relays through the gateway. The harness
   records this as `MISSING` rather than pretending otherwise.
+- **A gateway restart is not recovered from quickly.** The agent detects a dead
+  hub session only on the 180s idle timeout, then re-opens; there is no active
+  liveness check, and control is not told to close a gateway's sessions when it
+  re-registers. Recorded as `MISSING`.
+- **Posture-conditioned policy is inert.** `firewall_enabled` and the other
+  posture signals are never collected (`platform/posture/*.rs` return `None`),
+  so a policy that conditions on posture can never match. Recorded as `MISSING`.
 - **Hardware key custody is real only on Linux.** The TPM 2.0 provider seals key
   material against a real TPM and produces genuine `TPM2_Quote` attestations. The
   macOS Keychain and Windows CNG providers are currently **simulations** that do
