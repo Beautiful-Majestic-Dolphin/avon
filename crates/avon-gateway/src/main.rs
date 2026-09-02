@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
     let (state, events) = GatewayState::bootstrap(&cfg, Arc::new(AllowAll)).await?;
     udp_ready.set(true);
 
-    let tun = tun::open(&cfg.tun_name, cfg.overlay_mtu)?;
+    let tun = tun::open(&cfg.tun_name, cfg.overlay_mtu, &cfg.overlay_prefixes).await;
     if !tun.is_real {
         tracing::warn!("relay-only: packets for protected networks will be dropped");
     }

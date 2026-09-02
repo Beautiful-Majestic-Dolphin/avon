@@ -2,6 +2,7 @@
 
 use std::net::IpAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
 use avon_common::ids::{DeviceId, GatewayId, SessionId, TenantId};
@@ -132,10 +133,17 @@ impl GatewayState {
         tracing::info!(addr = %endpoint.local_addr(), gateway = %id, "tunnel listening");
 
         let chain = crate::control_link::fetch_chain(cfg).await?;
-        let redis = match cfg.redis_client() {
-            Some(c) => redis::aio::ConnectionManager::new(c).await.ok(),
-            None => None,
-        };
+        // Session mirroring is best-effort: it lets a second gateway learn a
+        // peer's roamed endpoint from Redis. The gateway forwards packets with
+        // or without it, so connecting to Redis must never delay -- let alone
+        // block -- the data plane coming up. This used to be
+        // `ConnectionManager::new(c).await.ok()` inline, which has no
+        // connection timeout: a Redis that is unreachable (a different network,
+        // an outage) wedged gateway bootstrap forever, before it ever served.
+        // Connect in the background instead and fill `redis` if and when it
+        // succeeds; `redis_client()` already logged and returned None on a bad
+        // URL, so a Some here is worth an attempt.
+        let redis_client = cfg.redis_client();
 
         let events = endpoint.clone().run();
         // Create a placeholder Cedar policy; the real decision log will be wired after the state is Arc.
@@ -157,8 +165,33 @@ impl GatewayState {
             overlay_prefixes: cfg.overlay_prefixes.clone(),
             public_endpoint: cfg.public_endpoint.clone(),
             up: RwLock::new(None),
-            redis: RwLock::new(redis),
+            redis: RwLock::new(None),
         });
+        if let Some(client) = redis_client {
+            let state_for_redis = state.clone();
+            tokio::spawn(async move {
+                // Bound the whole connect, retries included: ConnectionManager
+                // has no connection timeout of its own, so a stalled TLS
+                // handshake to an unroutable Redis would otherwise never return.
+                match tokio::time::timeout(
+                    Duration::from_secs(10),
+                    redis::aio::ConnectionManager::new(client),
+                )
+                .await
+                {
+                    Ok(Ok(conn)) => {
+                        *state_for_redis.redis.write().await = Some(conn);
+                        tracing::info!("redis connected; session mirroring enabled");
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!(error = %e, "redis connect failed; session mirroring disabled");
+                    }
+                    Err(_) => {
+                        tracing::warn!("redis connect timed out; session mirroring disabled");
+                    }
+                }
+            });
+        }
         // Now that the state is Arc, create the real decision log that forwards to the current `up` sender.
         let real_tx = decision_log::spawn_for_state(state.clone());
         let real_policy = Arc::new(CedarFlowPolicy::new(real_tx));

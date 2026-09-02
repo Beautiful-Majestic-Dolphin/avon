@@ -560,6 +560,7 @@ dependencies = [
  "avon-protocol",
  "avon-testkit",
  "avon-tls",
+ "avon-tun",
  "avon-tunnel",
  "chrono",
  "clap",
