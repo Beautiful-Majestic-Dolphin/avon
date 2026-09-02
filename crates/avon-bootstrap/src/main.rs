@@ -47,6 +47,11 @@ enum Cmd {
         password: String,
         #[arg(long, default_value = "default")]
         tenant: String,
+        /// Require the first owner to enrol MFA before a password login yields
+        /// a token. On by default; set false only where MFA cannot be driven
+        /// (the e2e stack). `--no-require-mfa` or AVON_BOOTSTRAP_REQUIRE_MFA=false.
+        #[arg(long, env = "AVON_BOOTSTRAP_REQUIRE_MFA", default_value_t = true, action = clap::ArgAction::Set)]
+        require_mfa: bool,
     },
     /// Apply the embedded schema migrations.
     MigrateUp,
@@ -78,6 +83,8 @@ enum Cmd {
         password: String,
         #[arg(long, default_value = "default")]
         tenant: String,
+        #[arg(long, env = "AVON_BOOTSTRAP_REQUIRE_MFA", default_value_t = true, action = clap::ArgAction::Set)]
+        require_mfa: bool,
     },
 }
 
@@ -104,6 +111,7 @@ async fn main() -> anyhow::Result<()> {
             email,
             password,
             tenant,
+            require_mfa,
         } => {
             let pool = avon_db::connect(&cli.db).await?;
             avon_db::migrate(&pool).await?;
@@ -119,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
             // "whichever id each function happened to look up".
             let tenant_id = resolve_tenant(&pool, &tenant).await?;
             issue_service_certs(&pool, &keys, &out, &services, &dns, tenant_id).await?;
-            let token = create_owner(&pool, &email, &password, tenant_id).await?;
+            let token = create_owner(&pool, &email, &password, tenant_id, require_mfa).await?;
             // Write enroll token for compose e2e agents.
             let token_path = out.join("enroll.token");
             let _ = std::fs::write(&token_path, &token);
@@ -149,10 +157,11 @@ async fn main() -> anyhow::Result<()> {
             email,
             password,
             tenant,
+            require_mfa,
         } => {
             let pool = avon_db::connect(&cli.db).await?;
             let tenant_id = resolve_tenant(&pool, &tenant).await?;
-            create_owner(&pool, &email, &password, tenant_id).await?;
+            create_owner(&pool, &email, &password, tenant_id, require_mfa).await?;
         }
     }
     Ok(())

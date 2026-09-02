@@ -159,6 +159,7 @@ pub async fn create_owner(
     email: &str,
     password: &str,
     tenant_id: uuid::Uuid,
+    require_mfa: bool,
 ) -> anyhow::Result<String> {
     use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
     use argon2::Argon2;
@@ -168,13 +169,18 @@ pub async fn create_owner(
         .hash_password(password.as_bytes(), &salt)
         .map_err(|e| anyhow::anyhow!(e))?
         .to_string();
+    // MFA is required by default: the first owner holds the whole tenant, so a
+    // password alone should not log in. It is switchable to false only for an
+    // automated environment that cannot drive a WebAuthn enrollment (the e2e
+    // stack); a real deployment leaves it on.
     sqlx::query(
         "INSERT INTO users (tenant_id, email, password_hash, role, mfa_required) \
-         VALUES ($1, $2, $3, 'owner', true) ON CONFLICT DO NOTHING",
+         VALUES ($1, $2, $3, 'owner', $4) ON CONFLICT DO NOTHING",
     )
     .bind(tenant_id)
     .bind(email)
     .bind(&hash)
+    .bind(require_mfa)
     .execute(pool)
     .await?;
     let token: [u8; 24] = avon_crypto::random::random_bytes_fixed()?;
