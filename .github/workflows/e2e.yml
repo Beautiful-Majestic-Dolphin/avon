@@ -8,16 +8,22 @@ jobs:
   compose-e2e:
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'e2e')
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - uses: astral-sh/setup-uv@v3
       - run: cp .env.example .env && ./deploy/compose/gen-infra-certs.sh
-      - run: docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml build
-      - run: cd tests/e2e && uv sync --frozen && uv run pytest -v --timeout=300 --junitxml=results/junit.xml
+      # The runner walks every layer, tears the stack down between the map's
+      # first compose layer and the rest, and ratchets MISSING against the
+      # baseline. It exits non-zero on a regression, which fails the job.
+      - run: cd tests/e2e && uv sync --frozen && uv run python runner.py
       - if: always()
-        run: docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml logs --no-color > tests/e2e/results/compose.log || true
+        run: docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml --profile '*' logs --no-color > tests/e2e/results/compose.log || true
       - if: always()
         uses: actions/upload-artifact@v4
-        with: { name: e2e-results, path: tests/e2e/results }
+        with:
+          name: e2e-results
+          path: |
+            tests/e2e/results
+            tests/e2e/baseline.json
