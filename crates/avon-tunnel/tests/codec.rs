@@ -81,3 +81,21 @@ proptest! {
         prop_assert_eq!(b, &body[..]);
     }
 }
+
+/// Found by the inner_decode fuzz target: a keepalive followed by any bytes
+/// decoded fine and re-encoded as a bare keepalive, so the codec accepted
+/// plaintexts it could not reproduce. Decoding is strict: what is accepted
+/// round-trips byte for byte.
+#[test]
+fn a_keepalive_with_trailing_bytes_is_refused_not_truncated() {
+    use avon_tunnel::{Inner, TunnelError};
+    assert!(matches!(
+        Inner::decode(&[Inner::KEEPALIVE, 10]),
+        Err(TunnelError::Trailing(1))
+    ));
+    let mut out = Vec::new();
+    Inner::decode(&[Inner::KEEPALIVE])
+        .unwrap()
+        .encode_into(&mut out);
+    assert_eq!(out, [Inner::KEEPALIVE]);
+}
