@@ -19,6 +19,7 @@ jobs:
   rust:
     name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -59,8 +60,11 @@ jobs:
           # supplies tpm2_startup and the tpm2_pcrextend the sealing test uses.
           sudo apt-get install -y swtpm tpm2-tools libtss2-dev
           mkdir -p /tmp/swtpm0 /tmp/swtpm1
-          swtpm socket --tpmstate dir=/tmp/swtpm0 --ctrl type=tcp,port=2321 --server type=tcp,port=2322 --flags not-need-init --tpm2 &
-          swtpm socket --tpmstate dir=/tmp/swtpm1 --ctrl type=tcp,port=2323 --server type=tcp,port=2324 --flags not-need-init --tpm2 &
+          # The simulators outlive this step. Detach them from the step's
+          # stdout/stderr, or the runner waits on those pipes until the job
+          # timeout instead of moving on to the next step.
+          setsid swtpm socket --tpmstate dir=/tmp/swtpm0 --ctrl type=tcp,port=2321 --server type=tcp,port=2322 --flags not-need-init --tpm2 >/dev/null 2>&1 < /dev/null &
+          setsid swtpm socket --tpmstate dir=/tmp/swtpm1 --ctrl type=tcp,port=2323 --server type=tcp,port=2324 --flags not-need-init --tpm2 >/dev/null 2>&1 < /dev/null &
           sleep 2
           tpm2_startup -c -T swtpm:host=127.0.0.1,port=2321 || true
           tpm2_startup -c -T swtpm:host=127.0.0.1,port=2323 || true
@@ -112,6 +116,10 @@ jobs:
         with:
           version: "25.x"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install the TPM headers the tpm2 feature links against
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libtss2-dev pkg-config
       - name: Build the deb and rpm and install them in clean containers
         run: bash deploy/linux/test-packages.sh
 
