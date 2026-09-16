@@ -41,11 +41,18 @@ async fn heartbeat_persists_posture_and_acks_with_interval() {
     })
     .await
     .unwrap();
-    let ack = down.next().await.unwrap().unwrap();
-    match ack.msg.unwrap() {
-        avon_protocol::v2::pulse_down::Msg::Ack(a) => assert_eq!(a.next_interval_secs, 30),
-        other => panic!("unexpected {other:?}"),
-    }
+    // The stream also carries attestation challenges, and the first one is
+    // issued as soon as the pulse opens; the ack is not promised to come
+    // first, only to come.
+    let ack = loop {
+        let msg = down.next().await.unwrap().unwrap().msg.unwrap();
+        match msg {
+            avon_protocol::v2::pulse_down::Msg::Ack(a) => break a,
+            avon_protocol::v2::pulse_down::Msg::Attest(_) => continue,
+            other => panic!("unexpected {other:?}"),
+        }
+    };
+    assert_eq!(ack.next_interval_secs, 30);
     let (posture, liveness): (serde_json::Value, String) =
         sqlx::query_as("SELECT posture, liveness::text FROM devices WHERE id = $1")
             .bind(dev.device_id)

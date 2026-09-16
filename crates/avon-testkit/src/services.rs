@@ -307,6 +307,14 @@ pub async fn spawn_control(
     )
     .await
     .expect("state");
+    // The binary runs these alongside the servers; without the listener no
+    // policy edit ever reaches a gateway, so anything testing push-on-change
+    // can only time out.
+    tokio::spawn(avon_control::policy_push::policy_listener(
+        state.clone(),
+        db.url().to_string(),
+    ));
+    tokio::spawn(avon_control::policy_push::window_ticker(state.clone()));
     let addr = free_tcp_addr();
     let (tx, rx) = tokio::sync::oneshot::channel();
     let server_tls = avon_tls::server_tls_config_optional_client(&server_tls_args).expect("tls");
