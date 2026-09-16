@@ -57,9 +57,26 @@ services:
       - ./deploy/compose/infra-certs:/in:ro
       - pgcerts:/out
 
+  # Same story as Postgres: the bind-mounted key is 0600 and owned by whoever
+  # ran gen-infra-certs.sh, and redis runs as uid 999. Docker Desktop hides
+  # that by mapping ownership; a Linux daemon does not, and redis exits 1.
+  redis-cert-init:
+    image: alpine:3.20
+    profiles: ["l2", "l3", "l4", "l5", "lnet"]
+    command:
+      - sh
+      - -c
+      - "cp /in/redis.crt /in/redis.key /in/ca.crt /out/ && chown 999:999 /out/* && chmod 600 /out/redis.key && chmod 644 /out/redis.crt /out/ca.crt"
+    volumes:
+      - ./deploy/compose/infra-certs:/in:ro
+      - rediscerts:/out
+
   redis:
     image: redis:7-bookworm
     profiles: ["l2", "l3", "l4", "l5", "lnet"]
+    depends_on:
+      redis-cert-init:
+        condition: service_completed_successfully
     command:
       - redis-server
       - --requirepass
@@ -77,7 +94,7 @@ services:
       - --tls-auth-clients
       - "no"
     volumes:
-      - ./deploy/compose/infra-certs:/infra:ro
+      - rediscerts:/infra:ro
     healthcheck:
       test: ["CMD", "redis-cli", "--tls", "--cacert", "/infra/ca.crt", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
@@ -285,5 +302,6 @@ networks:
 volumes:
   pgdata: {}
   pgcerts: {}
+  rediscerts: {}
   certs: {}
   cakey: {}

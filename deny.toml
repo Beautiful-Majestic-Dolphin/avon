@@ -30,6 +30,11 @@ ignore = [
   { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile is unmaintained; pulled in by redis 0.27" },
   # Transitive via many crates; no fix, unmaintained.
   { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained; transitive, no upgrade path" },
+  # Marvin timing side-channel in RSA private-key operations. No fixed release
+  # exists (0.10 is still a release candidate). avon-keystore only ever uses
+  # the crate to *verify* PSS signatures over hardware-binding messages
+  # (binding.rs); no private key is loaded, so the vulnerable path cannot run.
+  { id = "RUSTSEC-2023-0071", reason = "rsa is verification-only in avon-keystore; no private-key operations" },
 ]
 
 [licenses]

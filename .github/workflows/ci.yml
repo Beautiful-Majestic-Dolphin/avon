@@ -286,7 +286,9 @@ jobs:
         run: bash tests/compose/test_compose_up.sh
       - name: Dump logs on failure
         if: failure()
-        run: docker compose logs
+        # postgres and redis are profile-gated; without --profile their
+        # output is silently left out of the dump.
+        run: docker compose --profile '*' logs
 
   all-checks-pass:
     name: All checks pass
