@@ -85,6 +85,19 @@ jobs:
       - name: "Unit and integration tests (Linux: with Postgres/Redis)"
         if: matrix.os == 'linux'
         run: AVON_TEST_TPM=swtpm AVON_TPM_TCTI=swtpm:host=127.0.0.1,port=2321 AVON_TEST_TPM_ALT_TCTI=swtpm:host=127.0.0.1,port=2323 cargo test --workspace --locked --features avon-crypto/test-vectors,avon-keystore/tpm2
+      # avon-tun loads wintun.dll from the test executable's own directory,
+      # and the runner image does not ship it. Pinned by checksum.
+      - name: Fetch wintun.dll for the WinTun tests (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\wintun.zip"
+          Invoke-WebRequest -Uri https://www.wintun.net/builds/wintun-0.14.1.zip -OutFile $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51") { throw "wintun checksum mismatch: $hash" }
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\wintun"
+          New-Item -ItemType Directory -Force target\debug\deps | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\wintun\wintun\bin\amd64\wintun.dll" target\debug\deps\
       - name: "Unit tests (macOS/Windows: crates without database needs)"
         if: matrix.os != 'linux'
         shell: bash
@@ -256,6 +269,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: nightly-2025-12-01
+      # avon-tunnel pulls in avon-protocol, whose build script runs protoc.
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          version: "25.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo install cargo-fuzz --locked
       - name: Run each crypto target for 60 seconds
         working-directory: crates/avon-crypto
