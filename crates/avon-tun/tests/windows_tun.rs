@@ -43,26 +43,67 @@ async fn adapter_creates_sends_receives_and_is_removed() {
     assert_ne!(tun.luid(), 0);
     assert_eq!(tun.mtu(), 1280);
 
-    // A packet written into the ring comes back out of the read side: this is
-    // the loopback the driver provides for a freshly created adapter with no
-    // routes, and it exercises both halves of our wrapper.
+    // The write side: a packet handed to the driver is delivered to the
+    // OS stack as if it had arrived from the wire. Nothing echoes it back
+    // through the adapter, so the read side needs the stack to send.
     let packet = ipv4_udp([10, 90, 0, 1], [10, 90, 0, 2], b"wintun");
     tun.deliver(&packet).await.expect("write into the ring");
 
-    // Windows starts talking IPv6 (router solicitation, neighbour discovery)
-    // on a new interface at once, so our packet is rarely the first one out
-    // of the ring. Read until it shows up, within one overall bound.
-    let mut buf = Vec::new();
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
-    loop {
-        let n = tokio::time::timeout_at(deadline, tun.next_packet(&mut buf))
-            .await
-            .expect("our packet did not arrive")
-            .expect("read error");
-        if n >= 28 && buf[0] >> 4 == 4 && &buf[28..n] == b"wintun" {
-            break;
+    // The read side: give the adapter an address, then send a datagram
+    // from a socket bound to it towards an on-link neighbour. The stack
+    // routes that out through the adapter, where it lands in our ring.
+    // netsh needs the elevation adapter creation already required.
+    let status = std::process::Command::new("netsh")
+        .args([
+            "interface",
+            "ipv4",
+            "add",
+            "address",
+            "avon9",
+            "10.90.0.1",
+            "255.255.255.0",
+        ])
+        .status()
+        .expect("run netsh");
+    assert!(status.success(), "netsh add address: {status}");
+
+    // The address is tentative for a moment after it is added; binding
+    // fails until it settles.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+    let socket = loop {
+        match std::net::UdpSocket::bind("10.90.0.1:0") {
+            Ok(s) => break s,
+            Err(_) if tokio::time::Instant::now() < deadline => {
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            }
+            Err(e) => panic!("bind to the adapter's address: {e}"),
         }
-    }
+    };
+
+    // Windows also emits its own traffic (neighbour discovery, multicast)
+    // on a new interface, so read until our datagram shows up, resending
+    // in case an early one was dropped while the interface came up.
+    let mut buf = Vec::new();
+    let found = loop {
+        socket
+            .send_to(b"wintun", "10.90.0.2:4243")
+            .expect("send datagram");
+        let read = tokio::time::timeout(
+            std::time::Duration::from_millis(500),
+            tun.next_packet(&mut buf),
+        )
+        .await;
+        if let Ok(Ok(n)) = read {
+            if n >= 28 && buf[0] >> 4 == 4 && buf[9] == 17 && &buf[28..n] == b"wintun" {
+                break true;
+            }
+            continue;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            break false;
+        }
+    };
+    assert!(found, "our datagram never came out of the adapter's ring");
 
     drop(tun);
     // The session is shut down with the Tun, so the adapter can be opened again.
