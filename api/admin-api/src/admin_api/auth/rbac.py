@@ -14,6 +14,7 @@ _ORDER = {"viewer": 0, "admin": 1, "owner": 2}
 
 VIEWER_HIDDEN = {
     "fingerprint",
+    "hardware_fingerprint",
     "current_token",
     "previous_token",
     "posture",
@@ -29,10 +30,9 @@ def require_role(*roles: Role) -> Callable[..., Awaitable[CurrentUser]]:
     async def dependency(
         current: CurrentUser = Depends(get_current_user),
     ) -> CurrentUser:
-        role = getattr(current.user, "role", "viewer")
-        # Map is_admin to owner for legacy
-        if getattr(current.user, "is_admin", False):
-            role = "owner"
+        role = getattr(current.user, "role", None) or (
+            "admin" if getattr(current.user, "is_admin", False) else "viewer"
+        )
         if _ORDER.get(role, -1) < minimum:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="insufficient role"
@@ -45,9 +45,9 @@ def require_role(*roles: Role) -> Callable[..., Awaitable[CurrentUser]]:
 def redact_for(
     user: CurrentUser, payload: dict, secret_fields: set[str] = VIEWER_HIDDEN
 ) -> dict:
-    role = getattr(user.user, "role", "viewer")
-    if getattr(user.user, "is_admin", False):
-        role = "owner"
+    role = getattr(user.user, "role", None) or (
+        "admin" if getattr(user.user, "is_admin", False) else "viewer"
+    )
     if role != "viewer":
         return payload
     return {k: v for k, v in payload.items() if k not in secret_fields}

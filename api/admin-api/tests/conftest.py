@@ -146,7 +146,7 @@ async def other_tenant(db_pool):
         user_id = uuid.uuid4()
         hashed = hash_password("other-pass")
         await conn.execute(
-            "INSERT INTO users (id, tenant_id, email, password_hash, role, is_active, created_at, updated_at) VALUES ($1, $2, $3, 'owner'::user_role, true, NOW(), NOW())",
+            "INSERT INTO users (id, tenant_id, email, password_hash, role, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, 'owner'::user_role, true, NOW(), NOW())",
             user_id,
             tenant_id,
             f"other-{tenant_id.hex[:6]}@example.com",
@@ -250,6 +250,13 @@ async def enrolled_device(db_pool):
         class Enrolled:
             def __init__(self, did):
                 self.id = did
+
+            async def status(self):
+                async with db_pool.acquire() as c:
+                    row = await c.fetchrow(
+                        "SELECT status::text AS s FROM devices WHERE id = $1", self.id
+                    )
+                    return row["s"] if row else None
 
         yield Enrolled(device_id)
         import contextlib

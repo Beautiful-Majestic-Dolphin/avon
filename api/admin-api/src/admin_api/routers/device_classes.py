@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from admin_api.auth.dependencies import CurrentUser, get_current_admin, get_current_user
 from admin_api.db.connection import get_db
 from admin_api.db.queries import DeviceClassQueries
-from admin_api.services.control_client import ControlClient
+from admin_api.services import control_client
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -33,6 +33,7 @@ class DeviceClassResponse(BaseModel):
     mud_url: str | None = None
 
 
+@router.get("", response_model=list[DeviceClassResponse], include_in_schema=False)
 @router.get("/", response_model=list[DeviceClassResponse])
 async def list_device_classes(
     db: asyncpg.Connection = Depends(get_db),
@@ -143,7 +144,7 @@ async def import_mud(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="document or url required"
         )
-    client = ControlClient()
+    client = control_client.ControlClient()
     try:
         result = await client.import_mud(tenant_id, class_id, document)
     except Exception as e:

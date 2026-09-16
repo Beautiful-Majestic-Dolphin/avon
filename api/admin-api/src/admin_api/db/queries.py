@@ -7,6 +7,7 @@ from uuid import UUID
 import asyncpg
 import structlog
 
+from admin_api.audit import log_event
 from admin_api.db.models import (
     DbActivityLog,
     DbDevice,
@@ -20,6 +21,12 @@ from admin_api.db.models import (
 )
 
 logger = structlog.get_logger()
+
+
+async def _current_tenant(conn: asyncpg.Connection) -> UUID | None:
+    """The tenant this connection was scoped to (see get_current_user), if any."""
+    value = await conn.fetchval("SELECT current_setting('avon.tenant_id', true)")
+    return UUID(value) if value else None
 
 
 class DeviceQueries:
@@ -200,14 +207,20 @@ class PodQueries:
         name: str,
         parent_id: UUID | None = None,
         description: str | None = None,
+        tenant_id: UUID | None = None,
     ) -> DbPod:
-        """Create a new pod."""
+        """Create a new pod in the caller's tenant."""
+        if tenant_id is None:
+            tenant_id = await _current_tenant(conn) or await conn.fetchval(
+                "SELECT id FROM tenants LIMIT 1"
+            )
         row = await conn.fetchrow(
             """
-            INSERT INTO pods (name, parent_id, description, created_at, updated_at)
-            VALUES ($1, $2, $3, NOW(), NOW())
+            INSERT INTO pods (tenant_id, name, parent_id, description, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, NOW(), NOW())
             RETURNING *
             """,
+            tenant_id,
             name,
             parent_id,
             description,
@@ -709,8 +722,14 @@ class UserQueries:
 
     @staticmethod
     async def get_user(conn: asyncpg.Connection, user_id: UUID) -> DbUser | None:
-        """Get a user by ID."""
-        row = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+        """Get a user by ID, within the connection's tenant when it has one."""
+        tenant = await _current_tenant(conn)
+        if tenant:
+            row = await conn.fetchrow(
+                "SELECT * FROM users WHERE id = $1 AND tenant_id = $2", user_id, tenant
+            )
+        else:
+            row = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
         if row is None:
             return None
         d = dict(row)
@@ -732,14 +751,16 @@ class UserQueries:
     ) -> DbUser:
         """Create a new user."""
         if tenant_id is None:
-            # default tenant
-            tenant_id = await conn.fetchval("SELECT id FROM tenants LIMIT 1")
+            tenant_id = await _current_tenant(conn) or await conn.fetchval(
+                "SELECT id FROM tenants LIMIT 1"
+            )
         if role is None:
             role = "owner" if is_admin else "viewer"
+        # `is_admin` is derived from `role`; the users table has no such column.
         row = await conn.fetchrow(
             """
-            INSERT INTO users (tenant_id, email, password_hash, full_name, role, is_admin, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5::user_role, $6, NOW(), NOW())
+            INSERT INTO users (tenant_id, email, password_hash, full_name, role, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5::user_role, NOW(), NOW())
             RETURNING *
             """,
             tenant_id,
@@ -747,7 +768,6 @@ class UserQueries:
             hashed_password,
             full_name,
             role,
-            is_admin,
         )
         d = dict(row)
         if "role" in d and "is_admin" not in d:
@@ -854,17 +874,21 @@ class UserQueries:
         params: list = [user_id]
         idx = 2
 
+        # Column names, not model names: the table stores `password_hash` and
+        # has no `is_admin`; that flag is the `role` column.
+        role = None if is_admin is None else ("admin" if is_admin else "viewer")
         for field, value in [
             ("email", email),
             ("full_name", full_name),
             ("is_active", is_active),
-            ("is_admin", is_admin),
+            ("role", role),
             ("external_id", external_id),
             ("managed_by", managed_by),
-            ("hashed_password", hashed_password),
+            ("password_hash", hashed_password),
         ]:
             if value is not None:
-                updates.append(f"{field} = ${idx}")
+                cast = "::user_role" if field == "role" else ""
+                updates.append(f"{field} = ${idx}{cast}")
                 params.append(value)
                 idx += 1
 
@@ -911,6 +935,10 @@ class EnrollmentQueries:
         if tenant_id is None:
             tenant_id = await conn.fetchval("SELECT id FROM tenants LIMIT 1")
         token_hash = hashlib.sha256(token.encode()).digest()
+        # `device_kind` is the enrollment shape (agent, gateway, ...). The
+        # request's device_type is usually the OS the installer targets, which
+        # the enum does not know; those enrol as agents.
+        device_kind = device_type if device_type in DEVICE_KINDS else "agent"
         row = await conn.fetchrow(
             """
             INSERT INTO enrollment_tokens (
@@ -923,7 +951,7 @@ class EnrollmentQueries:
             tenant_id,
             token_hash,
             device_name,
-            device_type,
+            device_kind,
             assigned_pods,
             max_uses,
             require_approval,
@@ -1038,6 +1066,9 @@ class TunnelQueries:
         }
 
 
+DEVICE_KINDS = frozenset({"agent", "gateway", "router", "ikev2", "agentless"})
+
+
 class ActivityQueries:
     """Database queries for activity logs."""
 
@@ -1053,66 +1084,25 @@ class ActivityQueries:
         ip_address: str | None = None,
         tenant_id: UUID | None = None,
     ) -> DbActivityLog:
-        """Log an activity event.
+        """Append a hash-chained activity row.
 
-        `activity_logs.tenant_id` is NOT NULL, but this INSERT never set it, so
-        every call raised NotNullViolation and 500'd the operation it was meant
-        to record -- login included. A caller that knows the tenant passes it;
-        one that does not falls back to the seed default tenant so logging can
-        never crash the operation.
+        Every writer goes through `admin_api.audit.log_event`, so there is one
+        chain scheme for `verify_chain` to check; a second writer with its own
+        hashing here is what used to break the chain. A caller that knows the
+        tenant passes it; one that does not falls back to the seed default
+        tenant so logging can never crash the operation it records.
         """
-        import hashlib
-        import json
-
         default_tenant = UUID("00000000-0000-0000-0000-000000000001")
-        tenant = tenant_id or default_tenant
-        details_json = json.dumps(details) if details else None
-
-        # `hash` is NOT NULL and chains over `prev_hash`: each entry hashes the
-        # previous entry's hash together with its own content, so a deleted or
-        # altered row breaks the chain. The INSERT never computed it, which is
-        # why every log call failed. Chain per tenant (the tenant scopes the
-        # audit trail). Not serialised against concurrent writers -- two racing
-        # inserts can share a prev_hash -- which is acceptable for this audit
-        # trail and avoids taking a lock on the hot login path.
-        prev_hash = await conn.fetchval(
-            "SELECT hash FROM activity_logs WHERE tenant_id = $1 ORDER BY id DESC LIMIT 1",
-            tenant,
-        )
-        payload = "|".join(
-            str(x)
-            for x in (
-                tenant,
-                event_type,
-                actor_id,
-                actor_type,
-                target_id,
-                target_type,
-                details_json,
-                ip_address,
-            )
-        ).encode()
-        entry_hash = hashlib.sha256((prev_hash or b"") + payload).digest()
-
-        row = await conn.fetchrow(
-            """
-            INSERT INTO activity_logs (
-                tenant_id, event_type, actor_id, actor_type, target_id,
-                target_type, details, ip_address, prev_hash, hash, created_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-            RETURNING *
-            """,
-            tenant,
-            event_type,
-            actor_id,
-            actor_type,
-            target_id,
-            target_type,
-            details_json,
-            ip_address,
-            prev_hash,
-            entry_hash,
+        row = await log_event(
+            conn,
+            tenant_id or default_tenant,
+            actor=actor_id,
+            event=event_type,
+            target=target_id,
+            target_type=target_type,
+            details=details,
+            actor_type=actor_type,
+            ip=ip_address,
         )
         return DbActivityLog(**dict(row))
 
@@ -1300,7 +1290,7 @@ class ScimTokenQueries:
     @staticmethod
     async def create_token(
         conn: asyncpg.Connection,
-        token_hash: str,
+        token_hash: bytes,
         description: str,
         created_by: UUID,
     ) -> DbScimToken:
@@ -1317,11 +1307,12 @@ class ScimTokenQueries:
 
     @staticmethod
     async def get_active_by_hash(
-        conn: asyncpg.Connection, token_hash: str
+        conn: asyncpg.Connection, token_hash: bytes
     ) -> DbScimToken | None:
         """Get an active SCIM token by its hash."""
         row = await conn.fetchrow(
-            "SELECT * FROM scim_tokens WHERE token_hash = $1 AND is_active = TRUE",
+            """SELECT * FROM scim_tokens
+               WHERE token_hash = $1 AND is_active = TRUE AND expires_at > NOW()""",
             token_hash,
         )
         if row:

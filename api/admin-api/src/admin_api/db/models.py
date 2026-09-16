@@ -25,10 +25,9 @@ class DbDevice(BaseModel):
 
     id: UUID
     name: str
-    hardware_fingerprint: bytes
-    current_token: bytes
-    previous_token: bytes | None = None
-    token_sequence: int = 0
+    # `devices.fingerprint` is the only fingerprint column in the schema;
+    # the per-device token columns never existed in it.
+    fingerprint: bytes | None = None
     last_seen_at: datetime | None = None
     last_pulse_at: datetime | None = None
     last_known_ip: str | None = None
@@ -179,12 +178,15 @@ class DbScimToken(BaseModel):
     """SCIM Bearer token database model."""
 
     id: UUID
-    token_hash: str
+    token_hash: bytes
     description: str
     created_by: UUID
     created_at: datetime
     last_used_at: datetime | None = None
     is_active: bool = True
+    tenant_id: UUID | None = None
+    scopes: list[str] = Field(default_factory=list)
+    expires_at: datetime | None = None
 
 
 class DbActivityLog(BaseModel):
@@ -199,3 +201,14 @@ class DbActivityLog(BaseModel):
     details: dict | None = None
     ip_address: str | None = None
     created_at: datetime
+
+    @field_validator("details", mode="before")
+    @classmethod
+    def _decode_details(cls, value: Any) -> Any:
+        return _as_dict(value)
+
+    @field_validator("ip_address", mode="before")
+    @classmethod
+    def _inet_as_str(cls, value: Any) -> Any:
+        # asyncpg hands INET back as an ipaddress object.
+        return None if value is None else str(value)

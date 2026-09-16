@@ -1,7 +1,6 @@
 """Analytics data models."""
 
 from datetime import datetime
-from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -9,7 +8,7 @@ from pydantic import BaseModel
 class AnalyticsSnapshot(BaseModel):
     """Raw metric snapshot from Prometheus."""
 
-    id: UUID
+    id: int  # anomaly_events.id is BIGSERIAL
     metric_name: str
     metric_value: float
     labels: dict | None = None
@@ -19,7 +18,7 @@ class AnalyticsSnapshot(BaseModel):
 class AnalyticsHourly(BaseModel):
     """Hourly metric rollup."""
 
-    id: UUID
+    id: int  # anomaly_events.id is BIGSERIAL
     metric_name: str
     hour: datetime
     avg_value: float | None = None
@@ -31,7 +30,7 @@ class AnalyticsHourly(BaseModel):
 class AnomalyEvent(BaseModel):
     """Detected anomaly event."""
 
-    id: UUID
+    id: int  # anomaly_events.id is BIGSERIAL
     metric_name: str
     severity: str
     current_value: float

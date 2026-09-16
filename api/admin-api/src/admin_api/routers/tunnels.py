@@ -43,6 +43,7 @@ class TunnelListResponse:
         self.has_more = (skip + len(items)) < total
 
 
+@router.get("", include_in_schema=False)
 @router.get("/")
 async def list_tunnels(
     status_filter: str | None = Query(

@@ -11,6 +11,7 @@ from prometheus_client import make_asgi_app
 
 from admin_api.config import Settings, settings
 from admin_api.db.connection import DatabasePool
+from admin_api.request_context import RequestContextMiddleware
 from admin_api.routers import (
     dashboard_router,
     device_classes_router,
@@ -24,6 +25,8 @@ from admin_api.routers.analytics import router as analytics_router
 from admin_api.routers.scim_tokens import router as scim_tokens_router
 from admin_api.routers.webauthn import router as webauthn_router
 from admin_api.scim.router import router as scim_router
+from admin_api.scim.schemas import ScimErrorResponse
+from admin_api.scim.service import ScimMutabilityError
 
 logger = structlog.get_logger()
 
@@ -103,6 +106,7 @@ app = FastAPI(
 )
 
 # CORS from explicit allow-list only — no wildcard
+app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -126,6 +130,17 @@ app.include_router(
     scim_tokens_router, prefix="/api/v1/scim-tokens", tags=["scim-tokens"]
 )
 app.include_router(scim_router, prefix="/scim/v2", tags=["scim"])
+
+
+@app.exception_handler(ScimMutabilityError)
+async def _scim_mutability(_: Request, exc: ScimMutabilityError) -> JSONResponse:
+    return JSONResponse(
+        status_code=403,
+        content=ScimErrorResponse(
+            detail=str(exc), status="403", scimType="mutability"
+        ).model_dump(),
+    )
+
 
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
