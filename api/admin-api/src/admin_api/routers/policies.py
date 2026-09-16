@@ -34,9 +34,11 @@ logger = structlog.get_logger()
 # root in a checkout; parents[3] is /app in the container image, which copies
 # the file to /app/docs. The old path walked one directory above the repo, so
 # the schema was never found and every spec was accepted.
+_HERE = pathlib.Path(__file__).resolve()
 _SCHEMA_CANDIDATES = [
-    pathlib.Path(__file__).parents[5] / "docs" / "policy-schema.json",
-    pathlib.Path(__file__).parents[3] / "docs" / "policy-schema.json",
+    _HERE.parents[depth] / "docs" / "policy-schema.json"
+    for depth in (5, 3)
+    if depth < len(_HERE.parents)  # /app/src/... has no fifth ancestor
 ]
 _SCHEMA_PATH = next((c for c in _SCHEMA_CANDIDATES if c.exists()), None)
 try:
