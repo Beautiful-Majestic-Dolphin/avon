@@ -49,14 +49,20 @@ async fn adapter_creates_sends_receives_and_is_removed() {
     let packet = ipv4_udp([10, 90, 0, 1], [10, 90, 0, 2], b"wintun");
     tun.deliver(&packet).await.expect("write into the ring");
 
+    // Windows starts talking IPv6 (router solicitation, neighbour discovery)
+    // on a new interface at once, so our packet is rarely the first one out
+    // of the ring. Read until it shows up, within one overall bound.
     let mut buf = Vec::new();
-    let n = tokio::time::timeout(std::time::Duration::from_secs(5), tun.next_packet(&mut buf))
-        .await
-        .expect("packet did not arrive")
-        .expect("read error");
-    assert!(n >= 28);
-    assert_eq!(buf[0] >> 4, 4);
-    assert_eq!(&buf[28..n], b"wintun");
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let n = tokio::time::timeout_at(deadline, tun.next_packet(&mut buf))
+            .await
+            .expect("our packet did not arrive")
+            .expect("read error");
+        if n >= 28 && buf[0] >> 4 == 4 && &buf[28..n] == b"wintun" {
+            break;
+        }
+    }
 
     drop(tun);
     // The session is shut down with the Tun, so the adapter can be opened again.
