@@ -118,7 +118,14 @@ jobs:
       # the helper creates the interface and hands its descriptor to uid 65534.
       - name: "Helper privilege separation (Linux, root)"
         if: matrix.os == 'linux'
-        run: sudo -E env "PATH=$PATH" AVON_TEST_ROOT=1 cargo test -p avon-agent --test helper --locked
+        # The test re-executes its own binary as uid 65534, which must be able
+        # to traverse every directory above target/. The runner's home is not
+        # world-traversable, so open the path chain (execute bit only).
+        run: |
+          d="$PWD"
+          while [ "$d" != "/" ]; do sudo chmod o+x "$d"; d="$(dirname "$d")"; done
+          sudo -u '#65534' ls target/debug/deps >/dev/null || { echo "uid 65534 still cannot reach target/debug/deps"; namei -l "$PWD/target/debug/deps"; exit 1; }
+          sudo -E env "PATH=$PATH" AVON_TEST_ROOT=1 cargo test -p avon-agent --test helper --locked
       - name: "Keychain provider (macOS)"
         if: matrix.os == 'macos'
         run: cargo test -p avon-keystore --features keychain --locked
