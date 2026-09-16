@@ -116,20 +116,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
-        with:
-          toolchain: 1.93.0
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          key: packages
-      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
-        with:
-          version: "25.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install the TPM headers the tpm2 feature links against
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y libtss2-dev pkg-config
+      # The script builds inside a Debian 12 container so the packages'
+      # library dependencies match the images they are installed into; the
+      # runner itself needs nothing but Docker.
       - name: Build the deb and rpm and install them in clean containers
         run: bash deploy/linux/test-packages.sh
 
@@ -261,19 +250,19 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          toolchain: nightly-2025-06-01
+          toolchain: nightly-2025-12-01
       - run: cargo install cargo-fuzz --locked
       - name: Run each crypto target for 60 seconds
         working-directory: crates/avon-crypto
         run: |
           for t in cert_decode hybrid_pk_decode hybrid_sig_decode tbs_roundtrip; do
-            cargo +nightly-2025-06-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
+            cargo +nightly-2025-12-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
           done
       - name: Run each tunnel target for 60 seconds
         working-directory: crates/avon-tunnel
         run: |
           for t in header_decode inner_decode; do
-            cargo +nightly-2025-06-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
+            cargo +nightly-2025-12-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
           done
 
   compose-smoke:

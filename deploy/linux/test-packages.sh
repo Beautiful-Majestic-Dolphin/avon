@@ -5,8 +5,12 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 OUT=$(mktemp -d); trap 'rm -rf "$OUT"' EXIT
 
-# The packages must contain Linux binaries, so on a developer's Mac the build
-# half runs in a container; the install checks below always use containers.
+# The build half always runs in a Debian 12 container, whatever the host: the
+# deb's Depends and the rpm's Requires are computed from the shared libraries
+# the build links against, so a binary built on Ubuntu 24.04 asks debian:12
+# for the renamed t64 libraries it does not have and apt refuses the package.
+# Set AVON_PKG_NATIVE=1 on a Debian 12 host to build directly. The install
+# checks below always use containers.
 BUILD='set -eu
   cargo install cargo-deb --version 2.7.0 --locked >/dev/null 2>&1 || true
   cargo install cargo-generate-rpm --version 0.16.0 --locked >/dev/null 2>&1 || true
@@ -24,7 +28,7 @@ BUILD='set -eu
   # same thing from `depends = "$auto"`.
   cargo generate-rpm -p crates/avon-agent --auto-req auto -o /out/ >/dev/null'
 
-if [ "$(uname -s)" = "Linux" ]; then
+if [ "${AVON_PKG_NATIVE:-}" = "1" ]; then
   ( cd "$PWD" && OUT_DIR="$OUT" sh -c "${BUILD//\/out\//$OUT/}" )
 else
   docker run --rm \
