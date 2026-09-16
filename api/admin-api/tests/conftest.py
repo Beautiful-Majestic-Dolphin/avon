@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 import uuid
 
@@ -31,13 +30,6 @@ os.environ.setdefault(
 
 from admin_api.auth.passwords import hash_password
 from admin_api.db.connection import DatabasePool
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest_asyncio.fixture(scope="session")

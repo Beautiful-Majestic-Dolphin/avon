@@ -82,7 +82,17 @@ jobs:
         run: AVON_TEST_TPM=swtpm AVON_TPM_TCTI=swtpm:host=127.0.0.1,port=2321 AVON_TEST_TPM_ALT_TCTI=swtpm:host=127.0.0.1,port=2323 cargo test --workspace --locked --features avon-crypto/test-vectors,avon-keystore/tpm2
       - name: "Unit tests (macOS/Windows: crates without database needs)"
         if: matrix.os != 'linux'
-        run: cargo test --workspace --locked --exclude avon-db --exclude avon-testkit --exclude avon-observability --features avon-crypto/test-vectors
+        shell: bash
+        # The control-plane crates and agent-core's enrolment tests all open a
+        # Postgres through avon-testkit, which only the Linux job provides.
+        # agent-core still matters on these platforms, so its unit tests and
+        # the one integration test that needs no database run separately.
+        run: |
+          cargo test --workspace --locked --features avon-crypto/test-vectors \
+            --exclude avon-db --exclude avon-testkit --exclude avon-observability \
+            --exclude avon-bootstrap --exclude avon-ca --exclude avon-control \
+            --exclude avon-gateway --exclude avon-policy --exclude avon-agent-core
+          cargo test -p avon-agent-core --locked --lib --test attest
       # The privileged half only means anything as root with a real /dev/net/tun:
       # the helper creates the interface and hands its descriptor to uid 65534.
       - name: "Helper privilege separation (Linux, root)"

@@ -44,6 +44,11 @@ package = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# The asyncpg pool in conftest is session-scoped, so every fixture and test
+# has to share the session loop. pytest-asyncio >= 1.0 no longer honours an
+# overridden event_loop fixture; these settings replace it.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 
 [tool.setuptools.packages.find]

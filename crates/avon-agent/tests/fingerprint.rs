@@ -34,14 +34,26 @@ fn fields_are_length_prefixed_so_boundaries_cannot_be_shifted() {
 
 #[test]
 fn collect_never_uses_volatile_identifiers() {
+    // Every input the platform gatherers may emit. Anything not on this list
+    // (a MAC address, a hostname, an IP, a disk serial) is either volatile or
+    // has not been reviewed as an identity input, and fails here on purpose.
+    // A substring check is not enough: "machine-id" and "machine-guid" both
+    // contain "mac".
+    const STABLE_KINDS: &[&str] = &[
+        "cpu-model",
+        "dmi-product-uuid",
+        "machine-guid",
+        "machine-id",
+        "platform-serial",
+        "platform-uuid",
+        "system-uuid",
+        "tpm-ek",
+    ];
     let fp = collect();
     for kind in &fp.kinds {
         assert!(
-            !kind.contains("mac")
-                && !kind.contains("disk")
-                && !kind.contains("host")
-                && !kind.contains("ip"),
-            "fingerprint input {kind} is not stable enough to be an identity input"
+            STABLE_KINDS.contains(kind),
+            "fingerprint input {kind} is not a reviewed stable identity input"
         );
     }
     assert_eq!(FINGERPRINT_VERSION, 2);
