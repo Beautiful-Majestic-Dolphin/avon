@@ -16,6 +16,9 @@ class Layer:
     kind: Literal["cargo", "compose"]
     profile: str | None = None
     services: tuple[str, ...] = ()
+    # Images the scenarios run in throwaway containers, built before the
+    # scenarios start: a cold build takes minutes and a scenario has 120s.
+    prebuild: tuple[str, ...] = ()
     description: str = ""
 
 
@@ -25,6 +28,7 @@ LAYERS: list[Layer] = [
     Layer(
         "l2", "l2", "compose", profile="l2",
         services=("postgres", "redis", "ca", "control"),
+        prebuild=("agent-a",),
         description="control plane",
     ),
     Layer(

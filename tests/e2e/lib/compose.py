@@ -49,9 +49,10 @@ class Compose:
         """Build (if needed) and name the plain agent image.
 
         Layer 2 runs the agent binary in throwaway containers before any agent
-        service is up, so the image is not built by that layer's profile.
-        Naming a service explicitly enables its profile for the build. On a
-        machine that has already run layer 3 this is a cache hit.
+        service is up, so the image is not built by that layer's profile. The
+        runner prebuilds it (layers.py) because a cold build outlasts a
+        scenario's timeout; this call is then a cache hit, and keeps a direct
+        `pytest` run working.
         """
         self._run("build", "agent-a", timeout=900)
         return f"{self.project}-agent-a"
