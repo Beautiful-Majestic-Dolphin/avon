@@ -65,14 +65,17 @@ jobs:
           # supplies tpm2_startup and the tpm2_pcrextend the sealing test uses.
           sudo apt-get install -y swtpm tpm2-tools libtss2-dev
           mkdir -p /tmp/swtpm0 /tmp/swtpm1
-          # The simulators outlive this step. Detach them from the step's
-          # stdout/stderr, or the runner waits on those pipes until the job
-          # timeout instead of moving on to the next step.
-          setsid swtpm socket --tpmstate dir=/tmp/swtpm0 --ctrl type=tcp,port=2321 --server type=tcp,port=2322 --flags not-need-init --tpm2 >/dev/null 2>&1 < /dev/null &
-          setsid swtpm socket --tpmstate dir=/tmp/swtpm1 --ctrl type=tcp,port=2323 --server type=tcp,port=2324 --flags not-need-init --tpm2 >/dev/null 2>&1 < /dev/null &
+          # The swtpm TCTI ("swtpm:host=...,port=N") sends TPM commands to
+          # port N and control messages to N+1, so --server must take the
+          # lower port. With the pair reversed, tpm2_startup speaks TPM to the
+          # control channel and waits forever, which is what held this step
+          # until the 6-hour job limit. The simulators also outlive the step,
+          # so they are detached from its stdio.
+          setsid swtpm socket --tpmstate dir=/tmp/swtpm0 --server type=tcp,port=2321 --ctrl type=tcp,port=2322 --flags not-need-init --tpm2 >/dev/null 2>&1 < /dev/null &
+          setsid swtpm socket --tpmstate dir=/tmp/swtpm1 --server type=tcp,port=2323 --ctrl type=tcp,port=2324 --flags not-need-init --tpm2 >/dev/null 2>&1 < /dev/null &
           sleep 2
-          tpm2_startup -c -T swtpm:host=127.0.0.1,port=2321 || true
-          tpm2_startup -c -T swtpm:host=127.0.0.1,port=2323 || true
+          timeout 30 tpm2_startup -c -T swtpm:host=127.0.0.1,port=2321
+          timeout 30 tpm2_startup -c -T swtpm:host=127.0.0.1,port=2323
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
