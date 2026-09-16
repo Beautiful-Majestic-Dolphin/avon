@@ -104,7 +104,16 @@ impl JsonSchema for PortSet {
         "PortSet".into()
     }
     fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        serde_json::from_value(serde_json::json!({ "type": "string", "pattern": "^\\s*$|^\\d{1,5}(-\\d{1,5})?(\\s*,\\s*\\d{1,5}(-\\d{1,5})?)*$", "description": "Comma-separated ports and ranges, e.g. \"22,443,8000-8100\"; empty = all" })).unwrap_or(schemars::schema::Schema::Bool(true))
+        // A port is 0..=65535, spelled out so the contract rejects what
+        // `parse` rejects; `\d{1,5}` let 70000 through to the engine.
+        const PORT: &str = r"(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|\d{1,4})";
+        let pattern = format!(r"^\s*$|^{PORT}(-{PORT})?(\s*,\s*{PORT}(-{PORT})?)*$");
+        serde_json::from_value(serde_json::json!({
+            "type": "string",
+            "pattern": pattern,
+            "description": "Comma-separated ports and ranges, e.g. \"22,443,8000-8100\"; empty = all",
+        }))
+        .unwrap_or(schemars::schema::Schema::Bool(true))
     }
 }
 
