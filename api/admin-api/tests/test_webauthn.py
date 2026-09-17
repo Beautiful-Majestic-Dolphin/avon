@@ -151,11 +151,15 @@ async def test_a_challenge_cannot_be_replayed(client: AsyncClient, owner):
 
 
 async def test_mfa_required_user_cannot_log_in_with_a_password_alone(
-    client: AsyncClient, owner, db
+    client: AsyncClient, owner, db_pool
 ):
-    await db.execute(
-        "UPDATE users SET mfa_required = true WHERE email = $1", owner.email
-    )
+    # Through the pool, not the `db` fixture: that one holds an open
+    # transaction, and login updates the same user row, so the request would
+    # wait on the row lock until the test's transaction ends -- never.
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET mfa_required = true WHERE email = $1", owner.email
+        )
     r = await client.post(
         "/api/v1/users/login", json={"email": owner.email, "password": owner.password}
     )
@@ -165,7 +169,7 @@ async def test_mfa_required_user_cannot_log_in_with_a_password_alone(
 
 
 async def test_removing_the_last_key_of_an_mfa_required_user_is_refused(
-    client: AsyncClient, owner, db
+    client: AsyncClient, owner, db_pool
 ):
     if not HAS_SOFT:
         pytest.skip("soft_webauthn not installed")
@@ -174,9 +178,13 @@ async def test_removing_the_last_key_of_an_mfa_required_user_is_refused(
     )
     token = login.json()["access_token"]
     await register_key(client, token)
-    await db.execute(
-        "UPDATE users SET mfa_required = true WHERE email = $1", owner.email
-    )
+    # Through the pool, not the `db` fixture: that one holds an open
+    # transaction, and login updates the same user row, so the request would
+    # wait on the row lock until the test's transaction ends -- never.
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET mfa_required = true WHERE email = $1", owner.email
+        )
 
     listed = await client.get(
         "/api/v1/webauthn/credentials", headers={"Authorization": f"Bearer {token}"}

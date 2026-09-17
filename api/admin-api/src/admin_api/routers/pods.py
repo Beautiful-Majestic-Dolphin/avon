@@ -23,6 +23,7 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
+@router.get("", response_model=PodListResponse, include_in_schema=False)
 @router.get("/", response_model=PodListResponse)
 async def list_pods(
     parent_id: UUID | None = Query(None, description="Filter by parent pod"),
@@ -102,6 +103,12 @@ async def get_pod(
     )
 
 
+@router.post(
+    "",
+    response_model=PodResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 @router.post("/", response_model=PodResponse, status_code=status.HTTP_201_CREATED)
 async def create_pod(
     pod_request: PodCreateRequest,
@@ -125,6 +132,7 @@ async def create_pod(
         name=pod_request.name,
         parent_id=pod_request.parent_id,
         description=pod_request.description,
+        tenant_id=current_user.user.tenant_id,
     )
 
     await ActivityQueries.log_activity(

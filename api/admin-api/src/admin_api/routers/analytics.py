@@ -143,13 +143,13 @@ async def get_anomalies(
 
 @router.post("/anomalies/{anomaly_id}/ack")
 async def ack_anomaly(
-    anomaly_id: str,
+    anomaly_id: int,
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """Acknowledge an anomaly — records acknowledged_by/at so open_anomaly can recur."""
     await db.execute(
-        "UPDATE anomaly_events SET acknowledged_at = NOW(), acknowledged_by = $2 WHERE id = $1::uuid",
+        "UPDATE anomaly_events SET acknowledged_at = NOW(), acknowledged_by = $2 WHERE id = $1",
         anomaly_id,
         current_user.id,
     )

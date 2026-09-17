@@ -40,17 +40,24 @@ async def test_an_open_anomaly_is_not_duplicated(db, tenant_id):
 
 
 async def test_acknowledging_allows_a_later_recurrence(
-    client: AsyncClient, admin_user, db, tenant_id
+    client: AsyncClient, admin_user, db_pool, tenant_id
 ):
     anomaly = detect("auth_failure_rate", current=25.0, history=[0.0] * 48)
-    await open_anomaly(db, tenant_id, anomaly)
-    row = await db.fetchrow("SELECT id FROM anomaly_events ORDER BY id DESC LIMIT 1")
+    # The ack goes through the API on a pooled connection, so the anomaly has
+    # to be committed where the API can see it, not opened inside the `db`
+    # fixture's never-committed transaction.
+    async with db_pool.acquire() as conn:
+        await open_anomaly(conn, tenant_id, anomaly)
+        row = await conn.fetchrow(
+            "SELECT id FROM anomaly_events ORDER BY id DESC LIMIT 1"
+        )
     headers = await admin_user.auth_headers(client)
     r = await client.post(
         f"/api/v1/analytics/anomalies/{row['id']}/ack", headers=headers
     )
-    assert r.status_code == 200
-    assert await open_anomaly(db, tenant_id, anomaly) is True
+    assert r.status_code == 200, r.text
+    async with db_pool.acquire() as conn:
+        assert await open_anomaly(conn, tenant_id, anomaly) is True
 
 
 async def test_an_invalid_period_is_a_422_not_a_500(client: AsyncClient, admin_user):

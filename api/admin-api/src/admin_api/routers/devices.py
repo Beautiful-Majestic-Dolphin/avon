@@ -6,10 +6,12 @@ from uuid import UUID
 import asyncpg
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from admin_api.audit import log_event
 from admin_api.auth.dependencies import CurrentUser, get_current_admin, get_current_user
+from admin_api.auth.rbac import redact_for
 from admin_api.db.connection import get_db
 from admin_api.db.queries import ActivityQueries, DeviceQueries
 from admin_api.schemas.device import (
@@ -20,7 +22,7 @@ from admin_api.schemas.device import (
     EnrollmentTokenResponse,
     EnrollTokenRequest,
 )
-from admin_api.services.control_client import ControlClient
+from admin_api.services import control_client
 from admin_api.services.enrollment import EnrollmentService
 
 logger = structlog.get_logger()
@@ -28,6 +30,7 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
+@router.get("", response_model=DeviceListResponse, include_in_schema=False)
 @router.get("/", response_model=DeviceListResponse)
 async def list_devices(
     status: str | None = Query(None, description="Filter by device status"),
@@ -158,7 +161,7 @@ async def get_device(
     device_id: UUID,
     db: asyncpg.Connection = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
-) -> DeviceDetailResponse:
+) -> JSONResponse:
     """Get detailed information about a specific device."""
     device = await DeviceQueries.get_device(db, device_id)
     if device is None:
@@ -169,11 +172,11 @@ async def get_device(
 
     pod_ids = await DeviceQueries.get_device_pods(db, device_id)
 
-    return DeviceDetailResponse(
+    detail = DeviceDetailResponse(
         id=device.id,
         name=device.name,
         status=device.status,
-        hardware_fingerprint=device.hardware_fingerprint.hex(),
+        hardware_fingerprint=device.fingerprint.hex() if device.fingerprint else "",
         last_seen_at=device.last_seen_at,
         last_pulse_at=device.last_pulse_at,
         last_known_ip=device.last_known_ip,
@@ -186,6 +189,8 @@ async def get_device(
         attestation=device.attestation,
         key_provider=(device.posture or {}).get("key_provider"),
     )
+    # Viewers never see identity material or raw posture.
+    return JSONResponse(redact_for(current_user, detail.model_dump(mode="json")))
 
 
 @router.post("/enroll", response_model=EnrollmentTokenResponse)
@@ -372,7 +377,7 @@ async def approve_device_endpoint(
         or await db.fetchval("SELECT tenant_id FROM devices WHERE id = $1", device_id)
         or current_user.id
     )
-    client = ControlClient()
+    client = control_client.ControlClient()
     try:
         await client.approve_device(tenant_id, device_id)
     except Exception as e:
@@ -413,7 +418,7 @@ async def revoke_device_endpoint(
         or await db.fetchval("SELECT tenant_id FROM devices WHERE id = $1", device_id)
         or current_user.id
     )
-    client = ControlClient()
+    client = control_client.ControlClient()
     try:
         await client.revoke_device(tenant_id, device_id, reason)
     except Exception as e:

@@ -1,0 +1,4 @@
+# Golden files, scripts and generated schemas are compared byte-for-byte on
+# every platform, so the checkout must not translate line endings. Without
+# this, Windows runners check out CRLF and the firewall golden tests fail.
+* text=auto eol=lf

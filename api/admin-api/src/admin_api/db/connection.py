@@ -70,4 +70,7 @@ async def get_db() -> AsyncGenerator[asyncpg.Connection, None]:
     try:
         yield conn
     finally:
+        # A request may have scoped this connection to a tenant; never let
+        # that leak to whoever gets it from the pool next.
+        await conn.execute("SELECT set_config('avon.tenant_id', '', false)")
         await DatabasePool.release(conn)

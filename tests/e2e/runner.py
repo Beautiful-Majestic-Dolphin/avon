@@ -204,6 +204,13 @@ def _bring_up(layer, timeout):
     enrollment fault this masked in task 8's diagnosis). The cache makes a
     warm rebuild cost seconds, not minutes.
     """
+    # Naming a service enables its profile for the build, so this works for
+    # images whose service belongs to a later layer.
+    for service in layer.prebuild:
+        proc = subprocess.run(COMPOSE + ["build", service], cwd=REPO,
+                              capture_output=True, text=True)
+        if proc.returncode != 0:
+            return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
     cmd = COMPOSE + ["--profile", layer.profile, "up", "-d", "--build", "--wait",
                      "--wait-timeout", str(timeout)]
     proc = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)

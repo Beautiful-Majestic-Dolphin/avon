@@ -11,8 +11,29 @@ use avon_testkit::{
     services::{spawn_ca, spawn_control},
 };
 
+// Gateway metrics are process-global, so decisions one test's gateway makes
+// show up in another's counters. The tests in this file run one at a time.
+static SERIAL: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+
+/// A tenant with no policy at all is permissive (see fdf8dd2); zero-trust
+/// default-deny starts with the first authored policy. Tests that assert a
+/// deny therefore give the tenant one unrelated policy first.
+async fn author_unrelated_policy(f: &avon_testkit::services::ControlFixture) -> uuid::Uuid {
+    sqlx::query_as::<_, (uuid::Uuid,)>(
+        "INSERT INTO policies (tenant_id, name, spec) VALUES ($1, 'unrelated', $2) RETURNING id",
+    )
+    .bind(avon_db::DEFAULT_TENANT_ID)
+    .bind(serde_json::json!({"version":2,"effect":"allow","source":{"any":true},"destination":{"cidrs":["10.99.0.0/16"]}}))
+    .fetch_one(f.db.pool())
+    .await
+    .unwrap()
+    .0
+}
+
 #[tokio::test]
 async fn default_deny_then_allow_by_port_then_deny_again_within_two_seconds() {
+    let _serial = SERIAL.lock().await;
     let db = TestDb::new().await;
     let pki = TestPki::new();
     let dir = tempfile::tempdir().unwrap();
@@ -22,8 +43,11 @@ async fn default_deny_then_allow_by_port_then_deny_again_within_two_seconds() {
     let gw = spawn_gateway(&f, gw_tun.clone(), vec!["10.20.0.0/16".parse().unwrap()]).await;
     let a = TestAgentCore::enroll_and_connect(&f, "tok").await;
     let ip = a.overlay_v4().addr();
+    let unrelated = author_unrelated_policy(&f).await;
+    gw.wait_for_snapshot_containing(unrelated, Duration::from_secs(5))
+        .await;
 
-    // No policy: denied.
+    // No matching policy: denied.
     a.tun
         .inject(udp_v4(ip, "10.20.0.5".parse().unwrap(), 53, b"q"))
         .await;
@@ -99,15 +123,19 @@ async fn default_deny_then_allow_by_port_then_deny_again_within_two_seconds() {
 
 #[tokio::test]
 async fn decisions_are_batched_back_to_control() {
+    let _serial = SERIAL.lock().await;
     let db = TestDb::new().await;
     let pki = TestPki::new();
     let dir = tempfile::tempdir().unwrap();
     let ca = spawn_ca(&db, &pki, dir.path()).await;
     let f = spawn_control(db, pki, dir, ca).await;
     let gw_tun = MemoryTun::new();
-    let _gw = spawn_gateway(&f, gw_tun.clone(), vec!["10.20.0.0/16".parse().unwrap()]).await;
+    let gw = spawn_gateway(&f, gw_tun.clone(), vec!["10.20.0.0/16".parse().unwrap()]).await;
     let a = TestAgentCore::enroll_and_connect(&f, "tok").await;
     let ip = a.overlay_v4().addr();
+    let unrelated = author_unrelated_policy(&f).await;
+    gw.wait_for_snapshot_containing(unrelated, Duration::from_secs(5))
+        .await;
     for port in [53u16, 80, 443] {
         a.tun
             .inject(udp_v4(ip, "10.20.0.5".parse().unwrap(), port, b"x"))
@@ -124,6 +152,7 @@ async fn decisions_are_batched_back_to_control() {
 
 #[tokio::test]
 async fn the_cache_serves_repeat_flows_without_re_deciding() {
+    let _serial = SERIAL.lock().await;
     let db = TestDb::new().await;
     let pki = TestPki::new();
     let dir = tempfile::tempdir().unwrap();
@@ -133,13 +162,14 @@ async fn the_cache_serves_repeat_flows_without_re_deciding() {
     let gw = spawn_gateway(&f, gw_tun.clone(), vec!["10.20.0.0/16".parse().unwrap()]).await;
     let a = TestAgentCore::enroll_and_connect(&f, "tok").await;
     let ip = a.overlay_v4().addr();
+    let before = gw.metric("avon_policy_decisions_total", &[("effect", "deny")]);
     for _ in 0..20 {
         a.tun
             .inject(udp_v4(ip, "10.20.0.9".parse().unwrap(), 53, b"x"))
             .await;
     }
     tokio::time::sleep(Duration::from_millis(500)).await;
-    let decisions = gw.metric("avon_policy_decisions_total", &[("effect", "deny")]);
+    let decisions = gw.metric("avon_policy_decisions_total", &[("effect", "deny")]) - before;
     assert!(
         decisions <= 3.0,
         "20 identical flows should not produce {decisions} decisions"

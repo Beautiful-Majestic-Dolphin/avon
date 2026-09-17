@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch supersedes the run in flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -19,6 +24,7 @@ jobs:
   rust:
     name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -59,11 +65,17 @@ jobs:
           # supplies tpm2_startup and the tpm2_pcrextend the sealing test uses.
           sudo apt-get install -y swtpm tpm2-tools libtss2-dev
           mkdir -p /tmp/swtpm0 /tmp/swtpm1
-          swtpm socket --tpmstate dir=/tmp/swtpm0 --ctrl type=tcp,port=2321 --server type=tcp,port=2322 --flags not-need-init --tpm2 &
-          swtpm socket --tpmstate dir=/tmp/swtpm1 --ctrl type=tcp,port=2323 --server type=tcp,port=2324 --flags not-need-init --tpm2 &
+          # The swtpm TCTI ("swtpm:host=...,port=N") sends TPM commands to
+          # port N and control messages to N+1, so --server must take the
+          # lower port. With the pair reversed, tpm2_startup speaks TPM to the
+          # control channel and waits forever, which is what held this step
+          # until the 6-hour job limit. The simulators also outlive the step,
+          # so they are detached from its stdio.
+          setsid swtpm socket --tpmstate dir=/tmp/swtpm0 --server type=tcp,port=2321 --ctrl type=tcp,port=2322 --flags not-need-init --tpm2 >/dev/null 2>&1 < /dev/null &
+          setsid swtpm socket --tpmstate dir=/tmp/swtpm1 --server type=tcp,port=2323 --ctrl type=tcp,port=2324 --flags not-need-init --tpm2 >/dev/null 2>&1 < /dev/null &
           sleep 2
-          tpm2_startup -c -T swtpm:host=127.0.0.1,port=2321 || true
-          tpm2_startup -c -T swtpm:host=127.0.0.1,port=2323 || true
+          timeout 30 tpm2_startup -c -T swtpm:host=127.0.0.1,port=2321
+          timeout 30 tpm2_startup -c -T swtpm:host=127.0.0.1,port=2323
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -76,14 +88,44 @@ jobs:
       - name: "Unit and integration tests (Linux: with Postgres/Redis)"
         if: matrix.os == 'linux'
         run: AVON_TEST_TPM=swtpm AVON_TPM_TCTI=swtpm:host=127.0.0.1,port=2321 AVON_TEST_TPM_ALT_TCTI=swtpm:host=127.0.0.1,port=2323 cargo test --workspace --locked --features avon-crypto/test-vectors,avon-keystore/tpm2
+      # avon-tun loads wintun.dll from the test executable's own directory,
+      # and the runner image does not ship it. Pinned by checksum.
+      - name: Fetch wintun.dll for the WinTun tests (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\wintun.zip"
+          Invoke-WebRequest -Uri https://www.wintun.net/builds/wintun-0.14.1.zip -OutFile $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51") { throw "wintun checksum mismatch: $hash" }
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\wintun"
+          New-Item -ItemType Directory -Force target\debug\deps | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\wintun\wintun\bin\amd64\wintun.dll" target\debug\deps\
       - name: "Unit tests (macOS/Windows: crates without database needs)"
         if: matrix.os != 'linux'
-        run: cargo test --workspace --locked --exclude avon-db --exclude avon-testkit --exclude avon-observability --features avon-crypto/test-vectors
+        shell: bash
+        # The control-plane crates and agent-core's enrolment tests all open a
+        # Postgres through avon-testkit, which only the Linux job provides.
+        # agent-core still matters on these platforms, so its unit tests and
+        # the one integration test that needs no database run separately.
+        run: |
+          cargo test --workspace --locked --features avon-crypto/test-vectors \
+            --exclude avon-db --exclude avon-testkit --exclude avon-observability \
+            --exclude avon-bootstrap --exclude avon-ca --exclude avon-control \
+            --exclude avon-gateway --exclude avon-policy --exclude avon-agent-core
+          cargo test -p avon-agent-core --locked --lib --test attest
       # The privileged half only means anything as root with a real /dev/net/tun:
       # the helper creates the interface and hands its descriptor to uid 65534.
       - name: "Helper privilege separation (Linux, root)"
         if: matrix.os == 'linux'
-        run: sudo -E env "PATH=$PATH" AVON_TEST_ROOT=1 cargo test -p avon-agent --test helper --locked
+        # The test re-executes its own binary as uid 65534, which must be able
+        # to traverse every directory above target/. The runner's home is not
+        # world-traversable, so open the path chain (execute bit only).
+        run: |
+          d="$PWD"
+          while [ "$d" != "/" ]; do sudo chmod o+x "$d"; d="$(dirname "$d")"; done
+          sudo -u '#65534' ls target/debug/deps >/dev/null || { echo "uid 65534 still cannot reach target/debug/deps"; namei -l "$PWD/target/debug/deps"; exit 1; }
+          sudo -E env "PATH=$PATH" AVON_TEST_ROOT=1 cargo test -p avon-agent --test helper --locked
       - name: "Keychain provider (macOS)"
         if: matrix.os == 'macos'
         run: cargo test -p avon-keystore --features keychain --locked
@@ -102,16 +144,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
-        with:
-          toolchain: 1.93.0
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          key: packages
-      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
-        with:
-          version: "25.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # The script builds inside a Debian 12 container so the packages'
+      # library dependencies match the images they are installed into; the
+      # runner itself needs nothing but Docker.
       - name: Build the deb and rpm and install them in clean containers
         run: bash deploy/linux/test-packages.sh
 
@@ -243,19 +278,24 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          toolchain: nightly-2025-06-01
+          toolchain: nightly-2025-12-01
+      # avon-tunnel pulls in avon-protocol, whose build script runs protoc.
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          version: "25.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo install cargo-fuzz --locked
       - name: Run each crypto target for 60 seconds
         working-directory: crates/avon-crypto
         run: |
           for t in cert_decode hybrid_pk_decode hybrid_sig_decode tbs_roundtrip; do
-            cargo +nightly-2025-06-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
+            cargo +nightly-2025-12-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
           done
       - name: Run each tunnel target for 60 seconds
         working-directory: crates/avon-tunnel
         run: |
           for t in header_decode inner_decode; do
-            cargo +nightly-2025-06-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
+            cargo +nightly-2025-12-01 fuzz run "$t" -- -max_total_time=60 -rss_limit_mb=4096
           done
 
   compose-smoke:
@@ -268,7 +308,9 @@ jobs:
         run: bash tests/compose/test_compose_up.sh
       - name: Dump logs on failure
         if: failure()
-        run: docker compose logs
+        # postgres and redis are profile-gated; without --profile their
+        # output is silently left out of the dump.
+        run: docker compose --profile '*' logs
 
   all-checks-pass:
     name: All checks pass

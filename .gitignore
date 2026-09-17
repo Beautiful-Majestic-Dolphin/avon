@@ -87,3 +87,6 @@ crates/avon-crypto/fuzz/corpus/
 
 # Locally generated TLS material for the compose stack
 deploy/compose/infra-certs/
+
+# The fuzz crates are their own workspaces, so /target/ above does not cover them.
+crates/*/fuzz/target/

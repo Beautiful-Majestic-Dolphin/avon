@@ -92,6 +92,7 @@ async def create_scim_token(
     )
 
 
+@router.get("", response_model=list[ScimTokenResponse], include_in_schema=False)
 @router.get("/", response_model=list[ScimTokenResponse])
 async def list_scim_tokens(
     db: asyncpg.Connection = Depends(get_db),

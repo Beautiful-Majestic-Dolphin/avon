@@ -35,6 +35,8 @@ pub enum TunnelError {
     BadType(u8),
     #[error("bad inner type {0}")]
     BadInner(u8),
+    #[error("{0} trailing bytes after a keepalive")]
+    Trailing(usize),
     #[error("crypto: {0}")]
     Crypto(#[from] avon_crypto::CryptoError),
     #[error("unknown receiver index {0}")]

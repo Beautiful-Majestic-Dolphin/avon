@@ -8,22 +8,21 @@ import pytest
 
 pytestmark = pytest.mark.l2
 
-AGENT_IMAGE = "avons-corners-agent-tpm:latest"
-CERTS = {"avons-corners_certs": "/certs"}
-NETWORK = "avons-corners_public"
-
 
 def _enrol(compose, token, data_dir, provider="software"):
+    # Image, network and volume names all carry the compose project name,
+    # which is the checkout directory unless overridden; ask the harness
+    # rather than assuming a developer's clone name.
     return compose.run_in_new_container(
-        AGENT_IMAGE,
+        compose.agent_image(),
         "avon-agent", "enroll",
         "--control", "https://control:50051",
         "--token", token,
         "--ca-file", "/certs/trust-ca.crt",
         "--data-dir", data_dir,
         "--key-provider", provider,
-        network=NETWORK,
-        volumes=CERTS,
+        network=compose.network("public"),
+        volumes={compose.volume("certs"): "/certs"},
         env={},
     )
 

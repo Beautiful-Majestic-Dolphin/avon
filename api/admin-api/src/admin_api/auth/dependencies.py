@@ -78,6 +78,14 @@ async def get_current_user(
             detail="User account is disabled",
         )
 
+    # FastAPI hands this same connection to the handler, so scoping it here
+    # scopes every query the request runs: the tenant-aware queries and the
+    # RLS policies both read avon.tenant_id. get_db clears it on release.
+    if user.tenant_id is not None:
+        await db.execute(
+            "SELECT set_config('avon.tenant_id', $1, false)", str(user.tenant_id)
+        )
+
     return CurrentUser(user=user, token_data=token_data)
 
 

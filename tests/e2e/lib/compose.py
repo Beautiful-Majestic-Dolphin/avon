@@ -23,6 +23,39 @@ class HarnessError(RuntimeError):
 class Compose:
     def __init__(self, project: str = ""):
         self.base = ["docker", "compose", "-f", "docker-compose.yml", "-f", "tests/e2e/docker-compose.e2e.yml"]
+        self._project = project or None
+
+    @property
+    def project(self) -> str:
+        """The compose project name, which prefixes every image, network and
+        volume compose creates. It is the checkout directory's name unless
+        COMPOSE_PROJECT_NAME says otherwise, so it differs between a developer
+        clone and CI; nothing may hard-code it."""
+        if self._project is None:
+            import json
+            try:
+                self._project = json.loads(self._run("config", "--format", "json"))["name"]
+            except Exception:
+                self._project = REPO.name.lower()
+        return self._project
+
+    def network(self, name: str) -> str:
+        return f"{self.project}_{name}"
+
+    def volume(self, name: str) -> str:
+        return f"{self.project}_{name}"
+
+    def agent_image(self) -> str:
+        """Build (if needed) and name the plain agent image.
+
+        Layer 2 runs the agent binary in throwaway containers before any agent
+        service is up, so the image is not built by that layer's profile. The
+        runner prebuilds it (layers.py) because a cold build outlasts a
+        scenario's timeout; this call is then a cache hit, and keeps a direct
+        `pytest` run working.
+        """
+        self._run("build", "agent-a", timeout=900)
+        return f"{self.project}-agent-a"
 
     def _run(self, *args: str, timeout: int = 60) -> str:
         cmd = self.base + list(args)

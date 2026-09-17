@@ -137,7 +137,10 @@ pub async fn request_peer_session(
                 admission: true,
             };
             let res = engine.decide(&req);
-            if !res.allow {
+            // Same contract as open_session and the gateway's flow policy: a
+            // tenant that has authored no policy is permissive, so only an
+            // explicit forbid refuses the session, never "no matching permit".
+            if !res.allow && res.reason == "forbid" {
                 return Err(Status::permission_denied(res.reason));
             }
             let _ = cert_bytes;

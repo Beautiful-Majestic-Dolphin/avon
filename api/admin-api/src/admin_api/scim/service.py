@@ -30,6 +30,10 @@ from admin_api.scim.schemas import (
 logger = structlog.get_logger()
 
 
+class ScimMutabilityError(Exception):
+    """The identity provider tried to change a user it does not manage."""
+
+
 def _user_to_scim(
     user: DbUser, groups: list[ScimGroupRef] | None = None
 ) -> ScimUserResponse:
@@ -160,6 +164,8 @@ class ScimService:
         user = await UserQueries.get_user(self.db, user_id)
         if user is None:
             return None
+        if user.managed_by != "scim":
+            raise ScimMutabilityError("user is managed locally, not by the IdP")
 
         # Detect deprovisioning
         if active is False and user.is_active:
@@ -184,6 +190,8 @@ class ScimService:
         user = await UserQueries.get_user(self.db, user_id)
         if user is None:
             return False
+        if user.managed_by != "scim":
+            raise ScimMutabilityError("user is managed locally, not by the IdP")
 
         await self._deprovision_user(user_id)
 

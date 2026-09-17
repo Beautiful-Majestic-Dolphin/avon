@@ -32,7 +32,11 @@ impl Inner<'_> {
         match t {
             Self::IP => Ok(Inner::Ip(rest)),
             Self::CONTROL => Ok(Inner::Control(rest)),
-            Self::KEEPALIVE => Ok(Inner::Keepalive),
+            // A keepalive carries nothing. Accepting trailing bytes here
+            // would mean decoding plaintexts that do not re-encode to
+            // themselves, which the fuzz target rightly treats as a bug.
+            Self::KEEPALIVE if rest.is_empty() => Ok(Inner::Keepalive),
+            Self::KEEPALIVE => Err(TunnelError::Trailing(rest.len())),
             other => Err(TunnelError::BadInner(other)),
         }
     }

@@ -130,10 +130,14 @@ async fn rapid_changes_are_debounced_into_few_pushes() {
             .bind(serde_json::json!({"version":2,"effect":"allow","source":{"any":true},"destination":{"any":true}}))
             .execute(f.db.pool()).await.unwrap();
     }
+    // The listener drains on a 250 ms tick and only once a tenant has been
+    // quiet for 250 ms, so the first push lands up to half a second after
+    // the last insert; the per-message wait has to outlast that or the loop
+    // gives up before anything arrives.
     let mut versions = Vec::new();
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
     while tokio::time::Instant::now() < deadline {
-        match tokio::time::timeout(Duration::from_millis(300), down.next()).await {
+        match tokio::time::timeout(Duration::from_secs(1), down.next()).await {
             Ok(Some(Ok(msg))) => {
                 if let Some(gateway_down::Msg::Policy(p)) = msg.msg {
                     versions.push(

@@ -24,23 +24,29 @@ from admin_api.schemas.policy import (
     PolicyResponse,
     PolicyUpdateRequest,
 )
-from admin_api.services.control_client import ControlClient
+from admin_api.services import control_client
 
-logger = structlog.get_logger()
 router = APIRouter()
 
-_SCHEMA_PATH = (
-    pathlib.Path(__file__).parents[3].parent.parent.parent
-    / "docs"
-    / "policy-schema.json"
-)
-# Fallback for installed layout
-if not _SCHEMA_PATH.exists():
-    _SCHEMA_PATH = pathlib.Path(__file__).parents[4] / "docs" / "policy-schema.json"
+logger = structlog.get_logger()
+
+# The contract lives at docs/policy-schema.json. parents[5] is the repository
+# root in a checkout; parents[3] is /app in the container image, which copies
+# the file to /app/docs. The old path walked one directory above the repo, so
+# the schema was never found and every spec was accepted.
+_HERE = pathlib.Path(__file__).resolve()
+_SCHEMA_CANDIDATES = [
+    _HERE.parents[depth] / "docs" / "policy-schema.json"
+    for depth in (5, 3)
+    if depth < len(_HERE.parents)  # /app/src/... has no fifth ancestor
+]
+_SCHEMA_PATH = next((c for c in _SCHEMA_CANDIDATES if c.exists()), None)
 try:
-    _SCHEMA = json.loads(_SCHEMA_PATH.read_text()) if _SCHEMA_PATH.exists() else None
+    _SCHEMA = json.loads(_SCHEMA_PATH.read_text()) if _SCHEMA_PATH else None
 except Exception:
     _SCHEMA = None
+if _SCHEMA is None:
+    logger.warning("policy_schema_missing", tried=[str(c) for c in _SCHEMA_CANDIDATES])
 
 
 def _validate_spec(spec: dict) -> None:
@@ -74,6 +80,7 @@ def _row_to_response(row) -> PolicyResponse:
     )
 
 
+@router.get("", response_model=PolicyListResponse, include_in_schema=False)
 @router.get("/", response_model=PolicyListResponse)
 async def list_policies(
     enabled: bool | None = Query(None, description="Filter by enabled status"),
@@ -103,7 +110,7 @@ async def explain_policy(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> ExplainResponse:
     tenant_id = getattr(current_user.user, "tenant_id", None) or current_user.id
-    client = ControlClient()
+    client = control_client.ControlClient()
     try:
         result = await client.explain(
             tenant_id, req.device_id, req.destination, req.protocol, req.port
@@ -142,7 +149,7 @@ async def get_policy_cedar(
             status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found"
         )
     tenant_id = getattr(current_user.user, "tenant_id", None) or current_user.id
-    client = ControlClient()
+    client = control_client.ControlClient()
     try:
         result = await client.explain(tenant_id, policy_id, "0.0.0.0", "tcp", 80)
         cedar = ""
@@ -183,6 +190,12 @@ async def get_policy(
     )
 
 
+@router.post(
+    "",
+    response_model=PolicyResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 @router.post("/", response_model=PolicyResponse, status_code=status.HTTP_201_CREATED)
 async def create_policy(
     policy_request: PolicyCreateRequest,

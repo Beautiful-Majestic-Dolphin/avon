@@ -7,6 +7,10 @@ edition = "2021"
 [package.metadata]
 cargo-fuzz = true
 
+# Listed in the root manifest's `workspace.exclude`, but cargo still walks up
+# and refuses a manifest that has no `[workspace]` of its own.
+[workspace]
+
 [dependencies]
 libfuzzer-sys = "0.4"
 avon-tunnel = { path = ".." }
