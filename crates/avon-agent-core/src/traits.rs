@@ -36,8 +36,13 @@ pub trait Enforcement: Send + Sync {
 }
 
 /// Snapshot of the device's health, sent on every pulse.
+///
+/// Collecting is async because the real probes read the local system — files
+/// under `/proc` today, `fdesetup` and friends on the platforms still to come —
+/// and the pulse loop must not block its reactor waiting for them.
+#[async_trait]
 pub trait PostureProvider: Send + Sync {
-    fn collect(&self) -> DevicePosture;
+    async fn collect(&self) -> DevicePosture;
 }
 
 /// Stable hardware fingerprint, sent at enrollment and refreshed on pulse.
@@ -48,8 +53,9 @@ pub trait FingerprintProvider: Send + Sync {
 /// No-op posture: phase 5 replaces it with real collectors.
 pub struct NoopPosture;
 
+#[async_trait]
 impl PostureProvider for NoopPosture {
-    fn collect(&self) -> DevicePosture {
+    async fn collect(&self) -> DevicePosture {
         DevicePosture {
             os_name: std::env::consts::OS.to_string(),
             os_version: "unknown".into(),

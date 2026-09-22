@@ -85,8 +85,11 @@ pub async fn run_agent(
             .context("create tun")?,
     );
 
+    // The device's key provider is fixed once it is enrolled, so the collector
+    // reports the one identity actually opened rather than assuming software.
     let posture = Arc::new(crate::platform::posture::PostureCollector::new(
         std::time::Duration::from_secs(60),
+        identity.provider.kind(),
     ));
     let agent_cfg = avon_agent_core::AgentCoreConfig {
         control,

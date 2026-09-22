@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::Posture;
 use std::path::Path;
 
@@ -110,11 +108,9 @@ pub(super) fn probe() -> Posture {
     Posture {
         os_name,
         os_version,
-        agent_version: "",
         firewall_enabled,
         disk_encrypted,
         screen_lock_enabled: None,
         last_update_unix,
-        collected_at_unix: 0,
     }
 }
