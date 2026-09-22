@@ -294,7 +294,6 @@ dependencies = [
  "avon-tun",
  "avon-tunnel",
  "base64ct",
- "chrono",
  "clap",
  "ctap-hid-fido2",
  "dashmap",
