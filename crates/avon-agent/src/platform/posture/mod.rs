@@ -35,14 +35,23 @@ pub struct Posture {
 pub struct PostureCollector {
     ttl: Duration,
     provider: ProviderKind,
+    probe: fn() -> Posture,
     cached: Mutex<Option<(Instant, DevicePosture)>>,
 }
 
 impl PostureCollector {
     pub fn new(ttl: Duration, provider: ProviderKind) -> Self {
+        Self::with_probe(ttl, provider, probe)
+    }
+
+    /// A collector that runs `probe` in place of the platform's own. Tests use
+    /// it to stand in for a probe the host cannot exercise, such as one that
+    /// panics.
+    pub fn with_probe(ttl: Duration, provider: ProviderKind, probe: fn() -> Posture) -> Self {
         Self {
             ttl,
             provider,
+            probe,
             cached: Mutex::new(None),
         }
     }
@@ -51,8 +60,30 @@ impl PostureCollector {
         if let Some(fresh) = self.fresh() {
             return fresh;
         }
-        let probed = tokio::task::spawn_blocking(probe).await.unwrap_or_default();
-        let posture = DevicePosture {
+        match tokio::task::spawn_blocking(self.probe).await {
+            Ok(probed) => {
+                let posture = self.assemble(probed);
+                *lock_recovering(&self.cached) = Some((Instant::now(), posture.clone()));
+                posture
+            }
+            Err(e) => {
+                // The probe panicked. Say so, send the little that is known for
+                // certain, and leave the cache empty so the next pulse probes
+                // again instead of repeating a blank posture for the whole TTL.
+                tracing::warn!(error = %e, "posture probe panicked; sending a minimal posture");
+                self.assemble(Posture {
+                    os_name: std::env::consts::OS.to_string(),
+                    os_version: "unknown".to_string(),
+                    ..Posture::default()
+                })
+            }
+        }
+    }
+
+    /// Stamps a probe result with what the collector knows and the probe does
+    /// not: the agent's version, the key provider, and the time.
+    fn assemble(&self, probed: Posture) -> DevicePosture {
+        DevicePosture {
             os_name: probed.os_name,
             os_version: probed.os_version,
             agent_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -65,21 +96,23 @@ impl PostureCollector {
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_secs() as i64)
                 .unwrap_or(0),
-        };
-        if let Ok(mut guard) = self.cached.lock() {
-            *guard = Some((Instant::now(), posture.clone()));
         }
-        posture
     }
 
-    /// The cached posture, if it is still inside the TTL. A poisoned lock is
-    /// treated as a miss: re-probing costs a few file reads, and serving a
-    /// stale signal is the thing worth avoiding.
+    /// The cached posture, if it is still inside the TTL.
     fn fresh(&self) -> Option<DevicePosture> {
-        let guard = self.cached.lock().ok()?;
+        let guard = lock_recovering(&self.cached);
         let (at, posture) = guard.as_ref()?;
         (at.elapsed() < self.ttl).then(|| posture.clone())
     }
+}
+
+/// The cache only ever holds a value that was fully built before the lock was
+/// taken, so a poisoned lock means some thread panicked while cloning or
+/// storing one, not that the entry is half-written. Recover the guard rather
+/// than treating every later pulse as a cache miss.
+fn lock_recovering<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[async_trait::async_trait]
