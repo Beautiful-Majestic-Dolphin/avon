@@ -39,6 +39,8 @@ class DbDevice(BaseModel):
     attestation_state: str = "none"
     attestation: dict | None = None
     posture: dict | None = None
+    # Which keystore holds the device key, as verified at enrollment.
+    key_provider: str = "software"
     risk_score: int | None = None
     created_at: datetime
     updated_at: datetime

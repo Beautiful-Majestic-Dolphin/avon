@@ -187,7 +187,9 @@ async def get_device(
         pod_ids=pod_ids,
         attestation_state=device.attestation_state,
         attestation=device.attestation,
-        key_provider=(device.posture or {}).get("key_provider"),
+        # The column is what avon-control wrote at enrollment from the verified
+        # hardware binding. The copy inside `posture` is agent-asserted.
+        key_provider=device.key_provider,
     )
     # Viewers never see identity material or raw posture.
     return JSONResponse(redact_for(current_user, detail.model_dump(mode="json")))
