@@ -44,8 +44,9 @@ impl FingerprintProvider for TestFingerprint {
 
 struct TestPosture;
 
+#[async_trait]
 impl PostureProvider for TestPosture {
-    fn collect(&self) -> DevicePosture {
+    async fn collect(&self) -> DevicePosture {
         DevicePosture {
             os_name: "test".into(),
             os_version: "1.0".into(),
@@ -65,23 +66,13 @@ struct MutablePosture {
     inner: Arc<Mutex<DevicePosture>>,
 }
 
+#[async_trait]
 impl PostureProvider for MutablePosture {
-    fn collect(&self) -> DevicePosture {
-        // Try to block on the async mutex; for tests we can use try_lock.
-        self.inner
-            .try_lock()
-            .map(|p| p.clone())
-            .unwrap_or_else(|_| DevicePosture {
-                os_name: "test".into(),
-                os_version: "1.0".into(),
-                agent_version: "0.2.0".into(),
-                firewall_enabled: None,
-                disk_encrypted: None,
-                screen_lock_enabled: None,
-                last_update_unix: None,
-                key_provider: "software".into(),
-                collected_at_unix: Utc::now().timestamp(),
-            })
+    async fn collect(&self) -> DevicePosture {
+        // Now that collecting is async this can take the lock properly. The
+        // old try_lock fell back to a default posture under contention, which
+        // silently discarded whatever a test had just set.
+        self.inner.lock().await.clone()
     }
 }
 

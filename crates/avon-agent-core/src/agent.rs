@@ -207,7 +207,7 @@ impl Agent {
                                                 // Send initial heartbeat.
                                                 if let Some(tx) = pulse_tx.as_ref() {
                                                     let hb = PulseHeartbeat {
-                                                        posture: Some(posture.collect()),
+                                                        posture: Some(posture.collect().await),
                                                         sessions: vec![],
                                                     };
                                                     let _ = tx
@@ -447,7 +447,7 @@ impl Agent {
                 // Pulse heartbeat tick
                 _ = pulse_interval.tick(), if pulse_tx.is_some() => {
                     let hb = PulseHeartbeat {
-                        posture: Some(posture.collect()),
+                        posture: Some(posture.collect().await),
                         sessions: {
                             let hub = session_mgr.hub.read().await.clone();
                             if let Some(h) = hub {
@@ -494,7 +494,7 @@ impl Agent {
                             // Send heartbeat.
                             if let Some(tx) = pulse_tx.as_ref() {
                                 let hb = PulseHeartbeat {
-                                    posture: Some(posture.collect()),
+                                    posture: Some(posture.collect().await),
                                     sessions: vec![],
                                 };
                                 let _ = tx
